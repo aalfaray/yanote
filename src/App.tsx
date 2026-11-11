@@ -425,46 +425,46 @@ export const App: React.FC = () => {
       </div>
 
       {/* 4. Bottom Neubrutalist Status Bar */}
-      <div className="h-6 w-full bg-[#FAF8F5] dark:bg-[#18181B] border-t-2 border-black dark:border-zinc-700 flex items-center justify-between px-2 text-[10px] select-none shrink-0 font-bold z-20 text-black dark:text-zinc-200 transition-colors">
-        <div className="flex items-center gap-2">
+      <div className="h-6 w-full bg-[#FAF8F5] dark:bg-[#18181B] border-t-2 border-black dark:border-zinc-700 flex items-center justify-between px-2 text-[10px] select-none shrink-0 font-bold z-20 text-black dark:text-zinc-200 transition-colors whitespace-nowrap overflow-hidden">
+        <div className="flex items-center gap-1.5 min-w-0 shrink">
           {/* Active Tab filename & dirty state */}
-          <span className="truncate max-w-[160px] flex items-center gap-1">
-            <span className="text-black/60 dark:text-zinc-400">Nota:</span>
-            <span className="text-black dark:text-white font-black">{activeTab?.title}</span>
+          <span className="truncate max-w-[80px] min-[420px]:max-w-[140px] flex items-center gap-1 shrink">
+            <span className="text-black/60 dark:text-zinc-400 hidden min-[360px]:inline">Nota:</span>
+            <span className="text-black dark:text-white font-black truncate">{activeTab?.title}</span>
             {activeTab?.isDirty && (
-              <span className="text-[#FF6B6B] font-black">*sin guardar</span>
+              <span className="text-[#FF6B6B] font-black shrink-0">*sin guardar</span>
             )}
           </span>
 
-          <div className="h-3 w-[1px] bg-black/30 dark:bg-zinc-600" />
+          <div className="h-3 w-[1px] bg-black/30 dark:bg-zinc-600 shrink-0" />
 
           {/* Quick Save Button */}
           <button
             onClick={handleSaveActiveTab}
-            className="flex items-center gap-1 px-1.5 py-0.5 bg-[#FFE500] hover:bg-[#FFD700] text-black border border-black rounded shadow-[1px_1px_0px_#000] active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer font-black"
+            className="flex items-center gap-1 px-1.5 py-0.5 bg-[#FFE500] hover:bg-[#FFD700] text-black border border-black rounded shadow-[1px_1px_0px_#000] active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer font-black whitespace-nowrap shrink-0"
             title="Guardar nota y confirmar en Git (Ctrl + S)"
           >
-            <Save size={10} strokeWidth={2.8} />
-            <span>Guardar (Ctrl+S)</span>
+            <Save size={10} strokeWidth={2.8} className="shrink-0" />
+            <span className="whitespace-nowrap">Guardar (Ctrl+S)</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0 ml-1">
           {/* Git Branch & Quick Sync */}
           <button
             onClick={handleQuickSync}
             disabled={isSyncing}
-            className="flex items-center gap-1 px-1.5 py-0.5 bg-white dark:bg-zinc-800 hover:bg-neutral-100 dark:hover:bg-zinc-700 border border-black dark:border-zinc-600 rounded shadow-[1px_1px_0px_#000] active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer"
+            className="flex items-center gap-1 px-1.5 py-0.5 bg-white dark:bg-zinc-800 hover:bg-neutral-100 dark:hover:bg-zinc-700 border border-black dark:border-zinc-600 rounded shadow-[1px_1px_0px_#000] active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer shrink-0 whitespace-nowrap"
             title="Sincronizar cambios con GitHub"
           >
-            <GitBranch size={10} strokeWidth={2.5} />
-            <span>{gitStatus?.currentBranch || 'main'}</span>
-            <RefreshCw size={9} strokeWidth={2.5} className={isSyncing ? 'animate-spin' : ''} />
+            <GitBranch size={10} strokeWidth={2.5} className="shrink-0" />
+            <span className="max-w-[40px] min-[400px]:max-w-[80px] truncate">{gitStatus?.currentBranch || 'main'}</span>
+            <RefreshCw size={9} strokeWidth={2.5} className={`shrink-0 ${isSyncing ? 'animate-spin' : ''}`} />
           </button>
 
           {/* Superposición Status Badge */}
           <span
-            className={`px-1.5 py-0.2 rounded border border-black dark:border-zinc-600 font-black text-[9px] ${
+            className={`px-1.5 py-0.2 rounded border border-black dark:border-zinc-600 font-black text-[9px] shrink-0 hidden min-[440px]:inline-block ${
               isAlwaysOnTop ? 'bg-[#78E08F] text-black' : 'bg-neutral-200 dark:bg-zinc-700 text-neutral-600 dark:text-zinc-300'
             }`}
           >

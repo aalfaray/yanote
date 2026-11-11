@@ -112,9 +112,21 @@ body {
 .mdxeditor-toolbar {
   background: #faf8f5 !important;
   border-bottom: 2px solid #000 !important;
-  padding: 4px 8px !important;
+  padding: 3px 6px !important;
   gap: 4px !important;
-  flex-wrap: wrap;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.mdxeditor-toolbar::-webkit-scrollbar {
+  display: none !important;
 }
 
 .mdxeditor-toolbar button {
@@ -318,6 +330,9 @@ div[data-radix-popover-content] {
   margin-left: auto !important;
   gap: 4px !important;
   height: 28px !important;
+  flex-shrink: 0 !important;
+  flex-wrap: nowrap !important;
+  padding-left: 6px !important;
 }
 
 [class*="_diffSourceToggle"] {

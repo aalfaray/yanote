@@ -29,8 +29,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 520,
     height: 680,
-    minWidth: 420,
-    minHeight: 480,
+    minWidth: 340,
+    minHeight: 400,
     frame: false, // Custom Boldkit Neubrutalist window frame
     alwaysOnTop: appConfig.alwaysOnTop || false,
     backgroundColor: '#FAF8F5',

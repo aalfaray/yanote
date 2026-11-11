@@ -54,6 +54,23 @@ export const Editor: React.FC<EditorProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onSave]);
 
+  // Convert vertical mouse wheel into horizontal scroll on the toolbar for narrow windows
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const toolbar = document.querySelector('.mdxeditor-toolbar');
+      if (!toolbar) return;
+      const handleWheel = (e: Event) => {
+        const wheelEv = e as WheelEvent;
+        if (toolbar.scrollWidth > toolbar.clientWidth) {
+          toolbar.scrollLeft += wheelEv.deltaY || wheelEv.deltaX;
+        }
+      };
+      toolbar.addEventListener('wheel', handleWheel, { passive: true });
+      return () => toolbar.removeEventListener('wheel', handleWheel);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [tabId, isDarkMode]);
+
   return (
     <div className={`flex-1 w-full h-full flex flex-col overflow-hidden relative ${isDarkMode ? 'bg-[#121212]' : 'bg-white'}`}>
       <MDXEditor
@@ -93,10 +110,10 @@ export const Editor: React.FC<EditorProps> = ({
             diffMarkdown: '',
           }),
           toolbarPlugin({
-            toolbarClassName: 'mdxeditor-toolbar border-b-2 border-black dark:border-zinc-700 bg-[#FAF8F5] dark:bg-[#1E1E24] px-2 py-1.5 flex items-center justify-between gap-1 shrink-0 overflow-x-auto transition-colors',
+            toolbarClassName: 'mdxeditor-toolbar border-b-2 border-black dark:border-zinc-700 bg-[#FAF8F5] dark:bg-[#1E1E24] px-1.5 py-1 flex items-center justify-between gap-1 shrink-0 overflow-x-auto no-scrollbar flex-nowrap transition-colors',
             toolbarContents: () => (
               <DiffSourceToggleWrapper options={['rich-text', 'source']}>
-                <div className="flex items-center gap-1 flex-wrap">
+                <div className="flex items-center gap-1 flex-nowrap shrink-0">
                   <UndoRedo />
                   <div className="h-4 w-[1px] bg-black/30 dark:bg-zinc-600 mx-1" />
                   <BlockTypeSelect />
