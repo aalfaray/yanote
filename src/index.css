@@ -118,12 +118,18 @@ body {
 }
 
 .mdxeditor-toolbar button {
+  height: 28px !important;
+  min-width: 28px !important;
+  padding: 0 4px !important;
   border: 1.5px solid #000 !important;
   border-radius: 4px !important;
   background: #ffffff !important;
   box-shadow: 1.5px 1.5px 0px #000 !important;
   transition: all 0.1s ease !important;
   color: #000 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .mdxeditor-toolbar button:hover {
@@ -149,15 +155,18 @@ body {
 [class*="_selectTrigger"],
 [class*="_toolbarNodeKindSelectTrigger"],
 button[role="combobox"] {
+  height: 28px !important;
   border: 1.5px solid #000 !important;
   border-radius: 4px !important;
   background: #ffffff !important;
   box-shadow: 1.5px 1.5px 0px #000 !important;
   font-weight: 700 !important;
   color: #000000 !important;
-  padding: 3px 8px !important;
+  padding: 0 8px !important;
   transition: all 0.1s ease !important;
   cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
 }
 
 [class*="_selectTrigger"]:hover,
@@ -232,42 +241,75 @@ div[data-radix-popover-content] {
   color: #000 !important;
 }
 
-/* View Mode Toggles (Rich-text and Markdown Source Mode) in Neubrutalism style */
-[class*="_diffSourceToggle"] {
-  border: 2px solid #000000 !important;
-  background: #ffffff !important;
-  border-radius: 4px !important;
-  box-shadow: 2px 2px 0px #000000 !important;
+/* View Mode Toggles (Rich-text and Markdown Source Mode) matching the exact size of other toolbar buttons */
+[class*="_diffSourceToggleWrapper"] {
   display: flex !important;
-  overflow: hidden !important;
+  align-items: center !important;
+  margin-left: auto !important;
+  gap: 4px !important;
+  height: 28px !important;
+}
+
+[class*="_diffSourceToggle"] {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
 [class*="_diffSourceToggle"] button {
-  border: none !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+  border: 1.5px solid #000000 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  box-shadow: 1.5px 1.5px 0px #000000 !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  max-width: 28px !important;
+  max-height: 28px !important;
+  padding: 0 !important;
   margin: 0 !important;
-  padding: 4px 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   transition: all 0.1s ease !important;
+  color: #000000 !important;
 }
 
-[class*="_diffSourceToggle"] button:not(:last-child) {
-  border-right: 1.5px solid #000000 !important;
+[class*="_diffSourceToggle"] button > span {
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+[class*="_diffSourceToggle"] button svg {
+  width: 14px !important;
+  height: 14px !important;
 }
 
 [class*="_diffSourceToggle"] button:hover {
-  background: #FFF9D2 !important;
-  transform: none !important;
-  box-shadow: none !important;
+  background: #ffe500 !important;
+  transform: translate(-0.5px, -0.5px) !important;
+  box-shadow: 2px 2px 0px #000000 !important;
 }
 
 [class*="_diffSourceToggle"] button[data-state="on"],
 [class*="_diffSourceToggle"] button[aria-checked="true"] {
-  background: #FFE500 !important;
+  background: #ffe500 !important;
   color: #000000 !important;
   font-weight: 800 !important;
-  transform: none !important;
-  box-shadow: none !important;
+  box-shadow: 1px 1px 0px #000000 !important;
+  transform: translate(1px, 1px) !important;
 }
 
 .mdxeditor-content {
