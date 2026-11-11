@@ -29,6 +29,7 @@ export interface GitCommitItem {
 export interface AppConfig {
   notesPath: string;
   alwaysOnTop: boolean;
+  darkMode?: boolean;
   githubRepo: string;
   githubBranch: string;
   githubToken: string;

@@ -22,6 +22,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [githubToken, setGithubToken] = useState('');
   const [autoSyncOnSave, setAutoSyncOnSave] = useState(false);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -34,6 +35,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setGithubToken(cfg.githubToken || '');
         setAutoSyncOnSave(cfg.autoSyncOnSave || false);
         setAlwaysOnTop(cfg.alwaysOnTop || false);
+        setIsDarkMode(Boolean(cfg.darkMode));
       });
       setStatusMessage(null);
     }
@@ -60,7 +62,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         githubToken: githubToken.trim(),
         autoSyncOnSave,
         alwaysOnTop,
+        darkMode: isDarkMode,
       };
+
+      if (isDarkMode) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
 
       await window.electronAPI.saveAppConfig(updated);
 
@@ -105,8 +114,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
 
         {/* Section: Notes Directory */}
-        <div className="flex flex-col gap-1.5 p-3 bg-white border-2 border-black rounded shadow-[2px_2px_0px_#000]">
-          <span className="font-black flex items-center gap-1.5 uppercase text-black">
+        <div className="flex flex-col gap-1.5 p-3 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded shadow-[2px_2px_0px_#000]">
+          <span className="font-black flex items-center gap-1.5 uppercase text-black dark:text-zinc-200">
             <Folder size={14} strokeWidth={2.5} /> Carpeta del Repositorio de Notas
           </span>
           <div className="flex items-center gap-2">
@@ -114,20 +123,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               type="text"
               readOnly
               value={notesPath}
-              className="flex-1 bg-neutral-100 border border-black px-2 py-1.5 text-xs font-mono rounded truncate"
+              className="flex-1 bg-neutral-100 dark:bg-zinc-700 text-black dark:text-zinc-200 border border-black dark:border-zinc-600 px-2 py-1.5 text-xs font-mono rounded truncate"
             />
-            <Button variant="secondary" size="sm" onClick={handleSelectFolder}>
+            <Button variant="secondary" size="sm" onClick={handleSelectFolder} className="dark:bg-zinc-700 dark:text-zinc-200 dark:border-zinc-500">
               Examinar
             </Button>
           </div>
-          <span className="text-[10px] text-neutral-500 font-medium">
+          <span className="text-[10px] text-neutral-500 dark:text-zinc-400 font-medium">
             Aquí se almacenan los archivos .md y el historial local de Git. Puedes seleccionar una carpeta existente o un repositorio ya clonado.
           </span>
         </div>
 
         {/* Section: GitHub Configuration */}
-        <div className="flex flex-col gap-2.5 p-3 bg-white border-2 border-black rounded shadow-[2px_2px_0px_#000]">
-          <span className="font-black flex items-center gap-1.5 uppercase text-black">
+        <div className="flex flex-col gap-2.5 p-3 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded shadow-[2px_2px_0px_#000]">
+          <span className="font-black flex items-center gap-1.5 uppercase text-black dark:text-zinc-200">
             <GitFork size={14} strokeWidth={2.5} /> Vinculación con GitHub
           </span>
 
@@ -155,16 +164,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
           </div>
 
-          <span className="text-[10px] text-neutral-500 font-medium">
+          <span className="text-[10px] text-neutral-500 dark:text-zinc-400 font-medium">
             El token de acceso personal (PAT de GitHub con permisos <code>repo</code>) permite hacer push/pull automático sin requerir configurar SSH globalmente.
           </span>
         </div>
 
         {/* Section: Options & Portability */}
-        <div className="flex flex-col gap-2 p-3 bg-white border-2 border-black rounded shadow-[2px_2px_0px_#000]">
-          <span className="font-black flex items-center gap-1.5 uppercase text-black">
-            <Shield size={14} strokeWidth={2.5} /> Opciones del Editor
+        <div className="flex flex-col gap-2 p-3 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded shadow-[2px_2px_0px_#000]">
+          <span className="font-black flex items-center gap-1.5 uppercase text-black dark:text-zinc-200">
+            <Shield size={14} strokeWidth={2.5} /> Opciones del Editor & Apariencia
           </span>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={isDarkMode}
+              onChange={(e) => setIsDarkMode(e.target.checked)}
+              className="w-4 h-4 rounded border-2 border-black text-[#FFE500] focus:ring-0 cursor-pointer accent-[#FFE500]"
+            />
+            <span className="font-bold text-black dark:text-zinc-200">
+              🌙 Modo Oscuro (Tema Neubrutalista Nocturno)
+            </span>
+          </label>
 
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -173,7 +194,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChange={(e) => setAutoSyncOnSave(e.target.checked)}
               className="w-4 h-4 rounded border-2 border-black text-[#FFE500] focus:ring-0 cursor-pointer accent-[#FFE500]"
             />
-            <span className="font-bold">
+            <span className="font-bold text-black dark:text-zinc-200">
               Auto-guardar y enviar a GitHub (Commit & Push al guardar con Ctrl+S)
             </span>
           </label>
@@ -185,7 +206,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               onChange={(e) => setAlwaysOnTop(e.target.checked)}
               className="w-4 h-4 rounded border-2 border-black text-[#FFE500] focus:ring-0 cursor-pointer accent-[#FFE500]"
             />
-            <span className="font-bold">
+            <span className="font-bold text-black dark:text-zinc-200">
               Iniciar siempre en modo superposición (Always on Top)
             </span>
           </label>

@@ -30,6 +30,7 @@ interface EditorProps {
   markdown: string;
   onChange: (content: string) => void;
   onSave?: () => void;
+  isDarkMode?: boolean;
 }
 
 export const Editor: React.FC<EditorProps> = ({
@@ -37,6 +38,7 @@ export const Editor: React.FC<EditorProps> = ({
   markdown,
   onChange,
   onSave,
+  isDarkMode = false,
 }) => {
   const editorRef = useRef<MDXEditorMethods>(null);
 
@@ -53,13 +55,13 @@ export const Editor: React.FC<EditorProps> = ({
   }, [onSave]);
 
   return (
-    <div className="flex-1 w-full h-full flex flex-col bg-white overflow-hidden relative">
+    <div className={`flex-1 w-full h-full flex flex-col overflow-hidden relative ${isDarkMode ? 'bg-[#121212]' : 'bg-white'}`}>
       <MDXEditor
-        key={tabId}
+        key={`${tabId}-${isDarkMode ? 'dark' : 'light'}`}
         ref={editorRef}
         markdown={markdown}
         onChange={onChange}
-        className="w-full h-full flex flex-col font-sans"
+        className={`w-full h-full flex flex-col font-sans ${isDarkMode ? 'dark-theme' : ''}`}
         contentEditableClassName="mdxeditor-content outline-none min-h-full flex-1"
         plugins={[
           headingsPlugin(),
@@ -91,16 +93,16 @@ export const Editor: React.FC<EditorProps> = ({
             diffMarkdown: '',
           }),
           toolbarPlugin({
-            toolbarClassName: 'mdxeditor-toolbar border-b-2 border-black bg-[#FAF8F5] px-2 py-1.5 flex items-center justify-between gap-1 shrink-0 overflow-x-auto',
+            toolbarClassName: 'mdxeditor-toolbar border-b-2 border-black dark:border-zinc-700 bg-[#FAF8F5] dark:bg-[#1E1E24] px-2 py-1.5 flex items-center justify-between gap-1 shrink-0 overflow-x-auto transition-colors',
             toolbarContents: () => (
               <DiffSourceToggleWrapper options={['rich-text', 'source']}>
                 <div className="flex items-center gap-1 flex-wrap">
                   <UndoRedo />
-                  <div className="h-4 w-[1px] bg-black/30 mx-1" />
+                  <div className="h-4 w-[1px] bg-black/30 dark:bg-zinc-600 mx-1" />
                   <BlockTypeSelect />
                   <BoldItalicUnderlineToggles />
                   <CodeToggle />
-                  <div className="h-4 w-[1px] bg-black/30 mx-1" />
+                  <div className="h-4 w-[1px] bg-black/30 dark:bg-zinc-600 mx-1" />
                   <ListsToggle />
                   <InsertTable />
                   <InsertThematicBreak />

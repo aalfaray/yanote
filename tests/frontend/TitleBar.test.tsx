@@ -30,7 +30,7 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
     expect(screen.getByTitle(/Activar superposición/i)).toBeInTheDocument();
   });
 
-  it('[HAPPY 2/2] clicking superposición button triggers onToggleAlwaysOnTop callback', () => {
+  it('[HAPPY 2/3] clicking superposición button triggers onToggleAlwaysOnTop callback', () => {
     const onToggle = vi.fn();
     render(
       <TitleBar
@@ -45,6 +45,27 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
     const pinBtn = screen.getByTitle(/Activar superposición/i);
     fireEvent.click(pinBtn);
     expect(onToggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('[HAPPY 3/3] renders dark mode toggle button and triggers onToggleDarkMode callback', () => {
+    const onToggleDark = vi.fn();
+    render(
+      <TitleBar
+        isAlwaysOnTop={false}
+        onToggleAlwaysOnTop={vi.fn()}
+        isDarkMode={false}
+        onToggleDarkMode={onToggleDark}
+        onOpenSettings={vi.fn()}
+        onOpenFiles={vi.fn()}
+        onOpenGit={vi.fn()}
+      />
+    );
+
+    const darkBtn = screen.getByTitle(/Cambiar a modo oscuro/i);
+    expect(darkBtn).toBeInTheDocument();
+    expect(screen.getByText('OSCURO')).toBeInTheDocument();
+    fireEvent.click(darkBtn);
+    expect(onToggleDark).toHaveBeenCalledTimes(1);
   });
 
   // --- 80% DESTRUCTIVE / CHAOS / ADVERSARIAL TESTS ---
@@ -152,7 +173,7 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
     expect(screen.getByText(longBranch)).toBeInTheDocument();
   });
 
-  it('[CHAOS 7/7] rapid toggling of superposición button (stress test)', () => {
+  it('[CHAOS 7/11] rapid toggling of superposición button (stress test)', () => {
     const onToggle = vi.fn();
     render(
       <TitleBar
@@ -169,5 +190,73 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
       fireEvent.click(pinBtn);
     }
     expect(onToggle).toHaveBeenCalledTimes(40);
+  });
+
+  it('[CHAOS 8/11] displays CLARO label when isDarkMode is true', () => {
+    render(
+      <TitleBar
+        isAlwaysOnTop={false}
+        onToggleAlwaysOnTop={vi.fn()}
+        isDarkMode={true}
+        onToggleDarkMode={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onOpenFiles={vi.fn()}
+        onOpenGit={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('CLARO')).toBeInTheDocument();
+    expect(screen.getByTitle(/Cambiar a modo claro/i)).toBeInTheDocument();
+  });
+
+  it('[CHAOS 9/11] rapid toggling of dark mode button (stress test 50 clicks)', () => {
+    const onToggleDark = vi.fn();
+    render(
+      <TitleBar
+        isAlwaysOnTop={false}
+        onToggleAlwaysOnTop={vi.fn()}
+        isDarkMode={false}
+        onToggleDarkMode={onToggleDark}
+        onOpenSettings={vi.fn()}
+        onOpenFiles={vi.fn()}
+        onOpenGit={vi.fn()}
+      />
+    );
+
+    const darkBtn = screen.getByTitle(/Cambiar a modo oscuro/i);
+    for (let i = 0; i < 50; i++) {
+      fireEvent.click(darkBtn);
+    }
+    expect(onToggleDark).toHaveBeenCalledTimes(50);
+  });
+
+  it('[CHAOS 10/11] clicking dark mode button with undefined onToggleDarkMode does not throw', () => {
+    render(
+      <TitleBar
+        isAlwaysOnTop={false}
+        onToggleAlwaysOnTop={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onOpenFiles={vi.fn()}
+        onOpenGit={vi.fn()}
+      />
+    );
+
+    const darkBtn = screen.getByTitle(/Cambiar a modo oscuro/i);
+    expect(() => fireEvent.click(darkBtn)).not.toThrow();
+  });
+
+  it('[CHAOS 11/11] handles weird / non-boolean isDarkMode values without crashing', () => {
+    expect(() => {
+      render(
+        <TitleBar
+          isAlwaysOnTop={false}
+          onToggleAlwaysOnTop={vi.fn()}
+          isDarkMode={'not-a-bool' as any}
+          onOpenSettings={vi.fn()}
+          onOpenFiles={vi.fn()}
+          onOpenGit={vi.fn()}
+        />
+      );
+    }).not.toThrow();
   });
 });

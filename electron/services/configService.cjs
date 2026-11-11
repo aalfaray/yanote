@@ -26,6 +26,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
       return {
         notesPath: parsed.notesPath || defaultNotesPath,
         alwaysOnTop: Boolean(parsed.alwaysOnTop),
+        darkMode: Boolean(parsed.darkMode),
         githubRepo: parsed.githubRepo || '',
         githubBranch: parsed.githubBranch || 'main',
         githubToken: parsed.githubToken || '',
@@ -42,6 +43,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
   return {
     notesPath: defaultNotesPath,
     alwaysOnTop: false,
+    darkMode: false,
     githubRepo: '',
     githubBranch: 'main',
     githubToken: '',

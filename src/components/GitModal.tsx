@@ -192,18 +192,18 @@ export const GitModal: React.FC<GitModalProps> = ({
         {activeTab === 'sync' && (
           <div className="flex flex-col gap-3">
             {/* Status overview card */}
-            <div className="bg-white border-2 border-black rounded p-3 shadow-[2px_2px_0px_#000] flex flex-col gap-2">
+            <div className="bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded p-3 shadow-[2px_2px_0px_#000] flex flex-col gap-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-black flex items-center gap-1">
+                <span className="font-black flex items-center gap-1 text-black dark:text-zinc-200">
                   <GitBranch size={14} strokeWidth={2.5} /> Rama actual:
                 </span>
-                <span className="font-mono bg-[#FFE500] px-1.5 py-0.5 rounded border border-black font-black text-[11px]">
+                <span className="font-mono bg-[#FFE500] text-black px-1.5 py-0.5 rounded border border-black font-black text-[11px]">
                   {status?.currentBranch || 'main'}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-xs">
-                <span className="font-bold">Estado del repositorio:</span>
+                <span className="font-bold text-black dark:text-zinc-200">Estado del repositorio:</span>
                 <span
                   className={`font-black text-xs px-1.5 py-0.5 rounded border border-black ${
                     modifiedCount === 0
@@ -217,16 +217,16 @@ export const GitModal: React.FC<GitModalProps> = ({
 
               {/* Changes preview list */}
               {modifiedCount > 0 && (
-                <div className="mt-1 pt-2 border-t border-dashed border-black/40 text-[11px] max-h-24 overflow-y-auto">
-                  <span className="font-black text-neutral-600 block mb-1">Archivos modificados:</span>
+                <div className="mt-1 pt-2 border-t border-dashed border-black/40 dark:border-zinc-600 text-[11px] max-h-24 overflow-y-auto">
+                  <span className="font-black text-neutral-600 dark:text-zinc-400 block mb-1">Archivos modificados:</span>
                   {status?.modified?.map((f) => (
-                    <div key={f} className="text-[#c05621] font-mono truncate">~ {f}</div>
+                    <div key={f} className="text-[#c05621] dark:text-[#F6AD55] font-mono truncate">~ {f}</div>
                   ))}
                   {status?.not_added?.map((f) => (
-                    <div key={f} className="text-[#2b6cb0] font-mono truncate">+ {f}</div>
+                    <div key={f} className="text-[#2b6cb0] dark:text-[#63B3ED] font-mono truncate">+ {f}</div>
                   ))}
                   {status?.staged?.map((f) => (
-                    <div key={f} className="text-[#2f855a] font-mono truncate">✓ {f}</div>
+                    <div key={f} className="text-[#2f855a] dark:text-[#68D391] font-mono truncate">✓ {f}</div>
                   ))}
                 </div>
               )}
@@ -285,12 +285,12 @@ export const GitModal: React.FC<GitModalProps> = ({
 
         {activeTab === 'history' && (
           <div className="flex flex-col gap-2">
-            <span className="text-xs font-black uppercase text-neutral-600">
+            <span className="text-xs font-black uppercase text-neutral-600 dark:text-zinc-400">
               Últimas 20 revisiones guardadas:
             </span>
 
             {history.length === 0 ? (
-              <div className="p-4 bg-white border-2 border-black rounded text-center text-xs font-medium">
+              <div className="p-4 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded text-center text-xs font-medium text-neutral-500 dark:text-zinc-400">
                 No hay historial de commits registrado todavía.
               </div>
             ) : (
@@ -298,17 +298,17 @@ export const GitModal: React.FC<GitModalProps> = ({
                 {history.map((c) => (
                   <div
                     key={c.hash}
-                    className="p-2 bg-white border-2 border-black rounded shadow-[1.5px_1.5px_0px_#000] text-xs flex flex-col gap-1"
+                    className="p-2 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded shadow-[1.5px_1.5px_0px_#000] text-xs flex flex-col gap-1"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-black text-black truncate flex-1 mr-2">
+                      <span className="font-black text-black dark:text-zinc-100 truncate flex-1 mr-2">
                         {c.message}
                       </span>
-                      <span className="font-mono text-[10px] bg-neutral-100 border border-black px-1 rounded">
+                      <span className="font-mono text-[10px] bg-neutral-100 dark:bg-zinc-700 text-black dark:text-zinc-200 border border-black dark:border-zinc-600 px-1 rounded">
                         {c.hash.substring(0, 7)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-neutral-500 font-medium">
+                    <div className="flex items-center justify-between text-[10px] text-neutral-500 dark:text-zinc-400 font-medium">
                       <span>{c.author_name || 'Tú'}</span>
                       <span>{new Date(c.date).toLocaleString()}</span>
                     </div>

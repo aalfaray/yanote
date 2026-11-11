@@ -108,13 +108,13 @@ export const TabBar: React.FC<TabBarProps> = ({
   };
 
   return (
-    <div className="h-10 w-full bg-[#EFECE6] border-b-2 border-black flex items-center px-1 select-none gap-0.5 overflow-hidden shrink-0">
+    <div className="h-10 w-full bg-[#EFECE6] dark:bg-[#1C1C20] border-b-2 border-black dark:border-zinc-700 flex items-center px-1 select-none gap-0.5 overflow-hidden shrink-0 transition-colors">
       {/* Scroll Left Button (appears when overflowing) */}
       {canScrollLeft && (
         <button
           onClick={handleScrollLeft}
           title="Desplazar pestañas a la izquierda"
-          className="h-6 w-5 flex items-center justify-center bg-white border border-black rounded shadow-[1px_1px_0px_#000] hover:bg-[#FFE500] shrink-0 cursor-pointer z-10 mr-0.5"
+          className="h-6 w-5 flex items-center justify-center bg-white dark:bg-zinc-800 dark:text-zinc-200 border border-black dark:border-zinc-600 rounded shadow-[1px_1px_0px_#000] hover:bg-[#FFE500] dark:hover:bg-[#FFE500] dark:hover:text-black shrink-0 cursor-pointer z-10 mr-0.5"
         >
           <ChevronLeft size={13} strokeWidth={3} />
         </button>
@@ -137,13 +137,13 @@ export const TabBar: React.FC<TabBarProps> = ({
               data-tab-id={tab.id}
               onClick={() => onSelectTab(tab.id)}
               onDoubleClick={(e) => handleStartRename(tab, e)}
-              className={`group flex items-center gap-1.5 px-2.5 h-7 text-xs font-bold border-2 border-black rounded transition-all cursor-pointer max-w-[170px] min-w-[90px] shrink-0 select-none ${
+              className={`group flex items-center gap-1.5 px-2.5 h-7 text-xs font-bold border-2 rounded transition-all cursor-pointer max-w-[170px] min-w-[90px] shrink-0 select-none ${
                 isActive
-                  ? 'bg-white shadow-[2px_2px_0px_#000] text-black border-black'
-                  : 'bg-[#E3DFD5] hover:bg-[#D9D5CB] text-neutral-800 opacity-80 hover:opacity-100 shadow-[1px_1px_0px_#000]'
+                  ? 'bg-white dark:bg-[#121212] shadow-[2px_2px_0px_#000] dark:shadow-[2px_2px_0px_#FFE500] text-black dark:text-white border-black dark:border-[#FFE500]'
+                  : 'bg-[#E3DFD5] dark:bg-[#27272A] hover:bg-[#D9D5CB] dark:hover:bg-[#323238] text-neutral-800 dark:text-zinc-300 opacity-80 hover:opacity-100 shadow-[1px_1px_0px_#000] border-black dark:border-zinc-700'
               }`}
             >
-              <FileText size={12} strokeWidth={2.5} className="shrink-0 text-black/70" />
+              <FileText size={12} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400" />
 
               {/* Title or Edit Input */}
               {isEditing ? (
@@ -161,11 +161,11 @@ export const TabBar: React.FC<TabBarProps> = ({
                       if (e.key === 'Escape') setEditingTabId(null);
                     }}
                     onBlur={() => handleFinishRename(tab.id)}
-                    className="w-full text-xs font-bold bg-white border border-black px-1 py-0 rounded focus:outline-none"
+                    className="w-full text-xs font-bold bg-white dark:bg-zinc-800 dark:text-white border border-black dark:border-zinc-500 px-1 py-0 rounded focus:outline-none"
                   />
                   <button
                     onClick={() => handleFinishRename(tab.id)}
-                    className="p-0.5 hover:bg-neutral-200 rounded"
+                    className="p-0.5 hover:bg-neutral-200 dark:hover:bg-zinc-700 rounded"
                   >
                     <Check size={11} strokeWidth={3} />
                   </button>
@@ -194,7 +194,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                     e.stopPropagation();
                     onCloseTab(tab.id);
                   }}
-                  className="w-4 h-4 rounded flex items-center justify-center opacity-40 group-hover:opacity-100 hover:bg-[#FF6B6B] hover:text-white transition-all shrink-0 cursor-pointer"
+                  className="w-4 h-4 rounded flex items-center justify-center opacity-40 group-hover:opacity-100 hover:bg-[#FF6B6B] hover:text-white transition-all shrink-0 cursor-pointer dark:text-zinc-300"
                   title="Cerrar pestaña"
                 >
                   <X size={10} strokeWidth={3} />
@@ -210,7 +210,7 @@ export const TabBar: React.FC<TabBarProps> = ({
         <button
           onClick={handleScrollRight}
           title="Desplazar pestañas a la derecha"
-          className="h-6 w-5 flex items-center justify-center bg-white border border-black rounded shadow-[1px_1px_0px_#000] hover:bg-[#FFE500] shrink-0 cursor-pointer z-10 ml-0.5"
+          className="h-6 w-5 flex items-center justify-center bg-white dark:bg-zinc-800 dark:text-zinc-200 border border-black dark:border-zinc-600 rounded shadow-[1px_1px_0px_#000] hover:bg-[#FFE500] dark:hover:bg-[#FFE500] dark:hover:text-black shrink-0 cursor-pointer z-10 ml-0.5"
         >
           <ChevronRight size={13} strokeWidth={3} />
         </button>

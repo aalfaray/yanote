@@ -31,7 +31,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-100">
-      <div className="w-full max-w-sm bg-[#FAF8F5] border-3 border-black rounded-lg shadow-[6px_6px_0px_#000] overflow-hidden flex flex-col">
+      <div className="w-full max-w-sm bg-[#FAF8F5] dark:bg-[#18181B] border-3 border-black dark:border-zinc-700 rounded-lg shadow-[6px_6px_0px_#000] overflow-hidden flex flex-col transition-colors">
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 bg-[#FF6B6B] border-b-2 border-black text-white">
           <div className="flex items-center gap-2">
@@ -51,11 +51,11 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
         {/* Content */}
         <div className="p-4 flex flex-col gap-2">
-          <p className="font-black text-sm text-black leading-snug">
+          <p className="font-black text-sm text-black dark:text-zinc-100 leading-snug">
             {message}
           </p>
           {subMessage && (
-            <p className="text-xs text-neutral-600 font-medium leading-relaxed">
+            <p className="text-xs text-neutral-600 dark:text-zinc-400 font-medium leading-relaxed">
               {subMessage}
             </p>
           )}
@@ -78,7 +78,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 variant="secondary"
                 size="sm"
                 onClick={onCancel}
-                className="flex-1 py-1.5 font-bold"
+                className="flex-1 py-1.5 font-bold dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600"
               >
                 {cancelText}
               </Button>

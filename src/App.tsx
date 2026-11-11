@@ -39,6 +39,7 @@ export const App: React.FC = () => {
 
   // App & Window State
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [notes, setNotes] = useState<NoteFile[]>([]);
   const [notesDir, setNotesDir] = useState<string>('');
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
@@ -84,6 +85,13 @@ export const App: React.FC = () => {
         try {
           const config = await window.electronAPI.getAppConfig();
           setIsAlwaysOnTop(config.alwaysOnTop || false);
+          const dark = Boolean(config.darkMode);
+          setIsDarkMode(dark);
+          if (dark) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
 
           const res = await window.electronAPI.listNotes();
           if (res.success && res.notes.length > 0) {
@@ -121,6 +129,40 @@ export const App: React.FC = () => {
     };
     initApp();
   }, []);
+
+  // Dark Mode Toggle
+  const handleToggleDarkMode = useCallback(async () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      if (next) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      if (window.electronAPI) {
+        window.electronAPI.saveAppConfig({ darkMode: next }).catch((err) => {
+          console.error('Error saving darkMode setting:', err);
+        });
+      }
+      setNotification({
+        type: 'info',
+        text: next ? '🌙 Modo Oscuro Activado' : '☀️ Modo Claro Activado',
+      });
+      return next;
+    });
+  }, []);
+
+  // Global keyboard shortcuts (Ctrl+Shift+D to toggle dark mode)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        handleToggleDarkMode();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [handleToggleDarkMode]);
 
   // Superposición / Always on Top Toggle
   const handleToggleAlwaysOnTop = async () => {
@@ -320,11 +362,13 @@ export const App: React.FC = () => {
   const hasChanges = (gitStatus?.modified?.length || 0) + (gitStatus?.not_added?.length || 0) > 0;
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-[#FAF8F5] overflow-hidden border-2 border-black">
+    <div className="w-screen h-screen flex flex-col bg-[#FAF8F5] dark:bg-[#121212] overflow-hidden border-2 border-black dark:border-zinc-700 transition-colors">
       {/* 1. Custom Frameless Titlebar with Superposición Toggle */}
       <TitleBar
         isAlwaysOnTop={isAlwaysOnTop}
         onToggleAlwaysOnTop={handleToggleAlwaysOnTop}
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={handleToggleDarkMode}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenFiles={() => setIsFilesDrawerOpen(true)}
         onOpenGit={() => setIsGitModalOpen(true)}
@@ -351,6 +395,7 @@ export const App: React.FC = () => {
             markdown={activeTab.content}
             onChange={handleContentChange}
             onSave={handleSaveActiveTab}
+            isDarkMode={isDarkMode}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-xs font-bold text-neutral-500">
@@ -380,23 +425,23 @@ export const App: React.FC = () => {
       </div>
 
       {/* 4. Bottom Neubrutalist Status Bar */}
-      <div className="h-6 w-full bg-[#FAF8F5] border-t-2 border-black flex items-center justify-between px-2 text-[10px] select-none shrink-0 font-bold z-20">
+      <div className="h-6 w-full bg-[#FAF8F5] dark:bg-[#18181B] border-t-2 border-black dark:border-zinc-700 flex items-center justify-between px-2 text-[10px] select-none shrink-0 font-bold z-20 text-black dark:text-zinc-200 transition-colors">
         <div className="flex items-center gap-2">
           {/* Active Tab filename & dirty state */}
           <span className="truncate max-w-[160px] flex items-center gap-1">
-            <span className="text-black/60">Nota:</span>
-            <span className="text-black font-black">{activeTab?.title}</span>
+            <span className="text-black/60 dark:text-zinc-400">Nota:</span>
+            <span className="text-black dark:text-white font-black">{activeTab?.title}</span>
             {activeTab?.isDirty && (
               <span className="text-[#FF6B6B] font-black">*sin guardar</span>
             )}
           </span>
 
-          <div className="h-3 w-[1px] bg-black/30" />
+          <div className="h-3 w-[1px] bg-black/30 dark:bg-zinc-600" />
 
           {/* Quick Save Button */}
           <button
             onClick={handleSaveActiveTab}
-            className="flex items-center gap-1 px-1.5 py-0.5 bg-[#FFE500] hover:bg-[#FFD700] border border-black rounded shadow-[1px_1px_0px_#000] active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer"
+            className="flex items-center gap-1 px-1.5 py-0.5 bg-[#FFE500] hover:bg-[#FFD700] text-black border border-black rounded shadow-[1px_1px_0px_#000] active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer font-black"
             title="Guardar nota y confirmar en Git (Ctrl + S)"
           >
             <Save size={10} strokeWidth={2.8} />
@@ -409,7 +454,7 @@ export const App: React.FC = () => {
           <button
             onClick={handleQuickSync}
             disabled={isSyncing}
-            className="flex items-center gap-1 px-1.5 py-0.5 bg-white hover:bg-neutral-100 border border-black rounded shadow-[1px_1px_0px_#000] active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer"
+            className="flex items-center gap-1 px-1.5 py-0.5 bg-white dark:bg-zinc-800 hover:bg-neutral-100 dark:hover:bg-zinc-700 border border-black dark:border-zinc-600 rounded shadow-[1px_1px_0px_#000] active:translate-x-[0.5px] active:translate-y-[0.5px] cursor-pointer"
             title="Sincronizar cambios con GitHub"
           >
             <GitBranch size={10} strokeWidth={2.5} />
@@ -419,8 +464,8 @@ export const App: React.FC = () => {
 
           {/* Superposición Status Badge */}
           <span
-            className={`px-1.5 py-0.2 rounded border border-black font-black text-[9px] ${
-              isAlwaysOnTop ? 'bg-[#78E08F] text-black' : 'bg-neutral-200 text-neutral-600'
+            className={`px-1.5 py-0.2 rounded border border-black dark:border-zinc-600 font-black text-[9px] ${
+              isAlwaysOnTop ? 'bg-[#78E08F] text-black' : 'bg-neutral-200 dark:bg-zinc-700 text-neutral-600 dark:text-zinc-300'
             }`}
           >
             {isAlwaysOnTop ? 'PINNED' : 'NORMAL'}

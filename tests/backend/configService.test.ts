@@ -33,7 +33,7 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     expect(config.autoSyncOnSave).toBe(false);
   });
 
-  it('[HAPPY 2/2] saves and loads valid config changes correctly', () => {
+  it('[HAPPY 2/3] saves and loads valid config changes correctly', () => {
     const current = loadConfig(configPath, notesPath);
     const updated = saveConfig(configPath, current, {
       alwaysOnTop: true,
@@ -50,6 +50,18 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     const reloaded = loadConfig(configPath, notesPath);
     expect(reloaded.alwaysOnTop).toBe(true);
     expect(reloaded.githubRepo).toBe('https://github.com/test/repo.git');
+  });
+
+  it('[HAPPY 3/3] saves and loads darkMode setting accurately across restarts', () => {
+    const current = loadConfig(configPath, notesPath);
+    const updated = saveConfig(configPath, current, {
+      darkMode: true,
+    });
+
+    expect(updated.darkMode).toBe(true);
+
+    const reloaded = loadConfig(configPath, notesPath);
+    expect(reloaded.darkMode).toBe(true);
   });
 
   // --- 80% DESTRUCTIVE / CHAOS / ADVERSARIAL TESTS ---
@@ -116,10 +128,46 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     expect(updated.alwaysOnTop).toBe(true);
   });
 
-  it('[CHAOS 8/8] resolves portable directory correctly with PORTABLE_EXECUTABLE_DIR environment variable', () => {
+  it('[CHAOS 8/12] resolves portable directory correctly with PORTABLE_EXECUTABLE_DIR environment variable', () => {
     const fakePortableDir = path.join(tempDir, 'portable-root');
     const env = { PORTABLE_EXECUTABLE_DIR: fakePortableDir };
     const baseDir = getBaseDataDir(env, '/dummy/exec', '/dummy/userData');
     expect(baseDir).toBe(path.join(fakePortableDir, 'data'));
+  });
+
+  it('[CHAOS 9/12] handles darkMode with falsy and truthy values cleanly', () => {
+    const current = loadConfig(configPath, notesPath);
+    const updated1 = saveConfig(configPath, current, { darkMode: true });
+    expect(updated1.darkMode).toBe(true);
+
+    const updated2 = saveConfig(configPath, updated1, { darkMode: false });
+    expect(updated2.darkMode).toBe(false);
+  });
+
+  it('[CHAOS 10/12] handles non-boolean values for darkMode without crashing', () => {
+    const current = loadConfig(configPath, notesPath);
+    expect(() => {
+      saveConfig(configPath, current, { darkMode: 'yes' as any });
+    }).not.toThrow();
+  });
+
+  it('[CHAOS 11/12] retains darkMode across multiple subsequent updates without resetting', () => {
+    let cfg = loadConfig(configPath, notesPath);
+    cfg = saveConfig(configPath, cfg, { darkMode: true });
+    cfg = saveConfig(configPath, cfg, { alwaysOnTop: true });
+    cfg = saveConfig(configPath, cfg, { githubBranch: 'prod' });
+
+    expect(cfg.darkMode).toBe(true);
+    expect(cfg.alwaysOnTop).toBe(true);
+    expect(cfg.githubBranch).toBe('prod');
+
+    const reloaded = loadConfig(configPath, notesPath);
+    expect(reloaded.darkMode).toBe(true);
+  });
+
+  it('[CHAOS 12/12] defaults darkMode to false when absent in corrupted config', () => {
+    fs.writeFileSync(configPath, '{"githubBranch": "main"}', 'utf8');
+    const cfg = loadConfig(configPath, notesPath);
+    expect(cfg.darkMode).toBe(false);
   });
 });

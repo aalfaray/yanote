@@ -124,6 +124,24 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     });
   });
 
+  it('[HAPPY E2E 3/3] Dark Mode Toggle Workflow: toggles dark mode, adds "dark" class to html, and persists config', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const darkBtn = screen.getByTitle(/Cambiar a modo oscuro/i);
+    fireEvent.click(darkBtn);
+
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains('dark')).toBe(true);
+      expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith({ darkMode: true });
+      expect(screen.getByText(/Modo Oscuro Activado/i)).toBeInTheDocument();
+      expect(screen.getByText('CLARO')).toBeInTheDocument();
+    });
+  });
+
   // --- 80% DESTRUCTIVE / CHAOS / STRESS E2E TESTS ---
   it('[CHAOS E2E 1/8] Rapid tab spamming (creates 20 scratch tabs in succession without collision)', async () => {
     render(<App />);
@@ -294,6 +312,78 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
 
     await waitFor(() => {
       expect(window.electronAPI?.writeFile).toHaveBeenCalled();
+    });
+  });
+
+  it('[CHAOS E2E 9/12] toggling dark mode via Ctrl+Shift+D keyboard shortcut works reliably', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    fireEvent.keyDown(window, { key: 'd', ctrlKey: true, shiftKey: true });
+
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains('dark')).toBe(true);
+    });
+
+    // Toggle back with keyboard
+    fireEvent.keyDown(window, { key: 'd', ctrlKey: true, shiftKey: true });
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains('dark')).toBe(false);
+    });
+  });
+
+  it('[CHAOS E2E 10/12] rapid toggling between light and dark modes preserves tab content and active state', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const textarea = screen.getByTestId('mock-markdown-textarea');
+    fireEvent.change(textarea, { target: { value: 'Preserved notes content' } });
+
+    // Spam 10 dark mode toggles
+    for (let i = 0; i < 10; i++) {
+      fireEvent.keyDown(window, { key: 'd', ctrlKey: true, shiftKey: true });
+    }
+
+    expect((screen.getByTestId('mock-markdown-textarea') as HTMLTextAreaElement).value).toBe(
+      'Preserved notes content'
+    );
+  });
+
+  it('[CHAOS E2E 11/12] initial load respects darkMode: true from stored app-config.json', async () => {
+    (window.electronAPI?.getAppConfig as any).mockResolvedValueOnce({
+      notesPath: '/notes',
+      alwaysOnTop: false,
+      darkMode: true,
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(document.documentElement.classList.contains('dark')).toBe(true);
+      expect(screen.getByText('CLARO')).toBeInTheDocument();
+    });
+  });
+
+  it('[CHAOS E2E 12/12] saving dark mode when saveAppConfig fails rejects safely without unmounting editor', async () => {
+    (window.electronAPI?.saveAppConfig as any).mockRejectedValueOnce(new Error('Disk write error'));
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const darkBtn = screen.getByTitle(/Cambiar a modo oscuro/i);
+    expect(() => fireEvent.click(darkBtn)).not.toThrow();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-markdown-textarea')).toBeInTheDocument();
     });
   });
 });
