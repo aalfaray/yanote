@@ -224,4 +224,51 @@ describe('Frontend: TabBar (Orca Style) (20% Happy / 80% Destructive)', () => {
     // React escapes text content safely
     expect(screen.getByText('<script>alert(1)</script>.md')).toBeInTheDocument();
   });
+
+  it('[CHAOS 9/10] mouse wheel triggers horizontal scroll without throwing', () => {
+    const { container } = render(
+      <TabBar
+        tabs={sampleTabs}
+        activeTabId="1"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onNewTab={vi.fn()}
+        onRenameTab={vi.fn()}
+      />
+    );
+
+    const scrollContainer = container.querySelector('.overflow-x-auto');
+    expect(scrollContainer).toBeInTheDocument();
+
+    if (scrollContainer) {
+      expect(() => {
+        fireEvent.wheel(scrollContainer, { deltaY: 100 });
+        fireEvent.wheel(scrollContainer, { deltaY: -50 });
+        fireEvent.wheel(scrollContainer, { deltaX: 30 });
+        fireEvent.wheel(scrollContainer, { deltaY: 0, deltaX: 0 });
+      }).not.toThrow();
+    }
+  });
+
+  it('[CHAOS 10/10] handles wheel events with extreme delta values and empty deltas safely', () => {
+    const { container } = render(
+      <TabBar
+        tabs={sampleTabs}
+        activeTabId="1"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onNewTab={vi.fn()}
+        onRenameTab={vi.fn()}
+      />
+    );
+
+    const scrollContainer = container.querySelector('.overflow-x-auto');
+    if (scrollContainer) {
+      expect(() => {
+        fireEvent.wheel(scrollContainer, { deltaY: 999999 });
+        fireEvent.wheel(scrollContainer, { deltaY: -999999 });
+        fireEvent.wheel(scrollContainer, {});
+      }).not.toThrow();
+    }
+  });
 });

@@ -19,4 +19,10 @@ if (typeof window !== 'undefined') {
   // Mock confirm and alert
   window.confirm = () => true;
   window.alert = () => {};
+
+  // Mock DOM scroll methods for JSDOM
+  if (typeof Element !== 'undefined') {
+    Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || function () {};
+    Element.prototype.scrollBy = Element.prototype.scrollBy || function () {};
+  }
 }
