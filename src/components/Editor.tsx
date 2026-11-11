@@ -11,6 +11,7 @@ import {
   linkDialogPlugin,
   codeBlockPlugin,
   codeMirrorPlugin,
+  diffSourcePlugin,
   toolbarPlugin,
   UndoRedo,
   BoldItalicUnderlineToggles,
@@ -20,6 +21,7 @@ import {
   InsertThematicBreak,
   ListsToggle,
   BlockTypeSelect,
+  DiffSourceToggleWrapper,
 } from '@mdxeditor/editor';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
 
@@ -84,21 +86,27 @@ export const Editor: React.FC<EditorProps> = ({
               sql: 'SQL',
             },
           }),
+          diffSourcePlugin({
+            viewMode: 'rich-text',
+            diffMarkdown: '',
+          }),
           toolbarPlugin({
-            toolbarClassName: 'mdxeditor-toolbar border-b-2 border-black bg-[#FAF8F5] px-2 py-1.5 flex items-center gap-1 shrink-0 overflow-x-auto',
+            toolbarClassName: 'mdxeditor-toolbar border-b-2 border-black bg-[#FAF8F5] px-2 py-1.5 flex items-center justify-between gap-1 shrink-0 overflow-x-auto',
             toolbarContents: () => (
-              <div className="flex items-center gap-1 flex-wrap">
-                <UndoRedo />
-                <div className="h-4 w-[1px] bg-black/30 mx-1" />
-                <BlockTypeSelect />
-                <BoldItalicUnderlineToggles />
-                <CodeToggle />
-                <div className="h-4 w-[1px] bg-black/30 mx-1" />
-                <ListsToggle />
-                <InsertTable />
-                <InsertThematicBreak />
-                <CreateLink />
-              </div>
+              <DiffSourceToggleWrapper options={['rich-text', 'source']}>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <UndoRedo />
+                  <div className="h-4 w-[1px] bg-black/30 mx-1" />
+                  <BlockTypeSelect />
+                  <BoldItalicUnderlineToggles />
+                  <CodeToggle />
+                  <div className="h-4 w-[1px] bg-black/30 mx-1" />
+                  <ListsToggle />
+                  <InsertTable />
+                  <InsertThematicBreak />
+                  <CreateLink />
+                </div>
+              </DiffSourceToggleWrapper>
             ),
           }),
         ]}

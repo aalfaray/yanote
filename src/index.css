@@ -232,6 +232,44 @@ div[data-radix-popover-content] {
   color: #000 !important;
 }
 
+/* View Mode Toggles (Rich-text and Markdown Source Mode) in Neubrutalism style */
+[class*="_diffSourceToggle"] {
+  border: 2px solid #000000 !important;
+  background: #ffffff !important;
+  border-radius: 4px !important;
+  box-shadow: 2px 2px 0px #000000 !important;
+  display: flex !important;
+  overflow: hidden !important;
+}
+
+[class*="_diffSourceToggle"] button {
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 4px 8px !important;
+  transition: all 0.1s ease !important;
+}
+
+[class*="_diffSourceToggle"] button:not(:last-child) {
+  border-right: 1.5px solid #000000 !important;
+}
+
+[class*="_diffSourceToggle"] button:hover {
+  background: #FFF9D2 !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+[class*="_diffSourceToggle"] button[data-state="on"],
+[class*="_diffSourceToggle"] button[aria-checked="true"] {
+  background: #FFE500 !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
 .mdxeditor-content {
   padding: 16px 20px !important;
   user-select: text !important;
