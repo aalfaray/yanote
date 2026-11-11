@@ -1,0 +1,210 @@
+@import "tailwindcss";
+@import "@mdxeditor/editor/style.css";
+
+:root {
+  --color-border: #000000;
+  --bg-canvas: #faf8f5;
+  --color-accent: #ffe500;
+  --color-coral: #ff6b6b;
+  --color-mint: #78e08f;
+  --color-lilac: #d8b4fe;
+  --color-cyan: #7df9ff;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-canvas);
+  color: #1a1a1a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* Neubrutalist utility classes (Boldkit style) */
+.shadow-brutal-sm {
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.shadow-brutal {
+  box-shadow: 3px 3px 0px #000000;
+}
+
+.shadow-brutal-lg {
+  box-shadow: 5px 5px 0px #000000;
+}
+
+.shadow-brutal-pressed {
+  box-shadow: 1px 1px 0px #000000;
+  transform: translate(2px, 2px);
+}
+
+.brutal-border {
+  border: 2px solid #000000;
+}
+
+.brutal-border-b {
+  border-bottom: 2px solid #000000;
+}
+
+.brutal-border-t {
+  border-top: 2px solid #000000;
+}
+
+.brutal-border-r {
+  border-right: 2px solid #000000;
+}
+
+.brutal-border-l {
+  border-left: 2px solid #000000;
+}
+
+/* Electron Window Drag Regions */
+.titlebar-drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Custom Neubrutalist Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1ede4;
+  border-left: 1.5px solid #000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #000;
+  border: 1px solid #000;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333;
+}
+
+/* Overrides for MDXEditor to match Neubrutalism */
+.mdxeditor {
+  background: #ffffff !important;
+  color: #111111 !important;
+  font-family: inherit;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.mdxeditor-toolbar {
+  background: #faf8f5 !important;
+  border-bottom: 2px solid #000 !important;
+  padding: 4px 8px !important;
+  gap: 4px !important;
+  flex-wrap: wrap;
+}
+
+.mdxeditor-toolbar button {
+  border: 1.5px solid #000 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  box-shadow: 1.5px 1.5px 0px #000 !important;
+  transition: all 0.1s ease !important;
+  color: #000 !important;
+}
+
+.mdxeditor-toolbar button:hover {
+  background: #ffe500 !important;
+  transform: translate(-0.5px, -0.5px) !important;
+  box-shadow: 2px 2px 0px #000 !important;
+}
+
+.mdxeditor-toolbar button[data-state="on"],
+.mdxeditor-toolbar button[aria-pressed="true"] {
+  background: #ffe500 !important;
+  box-shadow: 1px 1px 0px #000 !important;
+  transform: translate(1px, 1px) !important;
+  font-weight: bold !important;
+}
+
+.mdxeditor-toolbar button:disabled {
+  opacity: 0.4 !important;
+  box-shadow: none !important;
+}
+
+.mdxeditor-content {
+  padding: 16px 20px !important;
+  user-select: text !important;
+  cursor: text;
+}
+
+/* Rich text headings */
+.mdxeditor h1 {
+  font-size: 1.75rem !important;
+  font-weight: 800 !important;
+  border-bottom: 2px solid #000 !important;
+  padding-bottom: 4px !important;
+  margin-top: 1rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.mdxeditor h2 {
+  font-size: 1.4rem !important;
+  font-weight: 700 !important;
+  margin-top: 0.8rem !important;
+  margin-bottom: 0.4rem !important;
+}
+
+.mdxeditor h3 {
+  font-size: 1.15rem !important;
+  font-weight: 700 !important;
+  margin-top: 0.6rem !important;
+  margin-bottom: 0.3rem !important;
+}
+
+.mdxeditor blockquote {
+  border-left: 4px solid #000 !important;
+  background: #fff8d6 !important;
+  padding: 8px 12px !important;
+  margin: 8px 0 !important;
+  border-radius: 0 4px 4px 0 !important;
+  font-style: italic;
+}
+
+.mdxeditor code:not(pre code) {
+  background: #f0ede6 !important;
+  border: 1px solid #000 !important;
+  padding: 2px 5px !important;
+  border-radius: 3px !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 0.9em !important;
+  color: #c7254e !important;
+}
+
+.mdxeditor pre {
+  background: #1e1e1e !important;
+  color: #f8f8f2 !important;
+  border: 2px solid #000 !important;
+  border-radius: 6px !important;
+  box-shadow: 3px 3px 0px #000 !important;
+  padding: 12px !important;
+  margin: 12px 0 !important;
+}
+
+.mdxeditor table {
+  border-collapse: collapse !important;
+  border: 2px solid #000 !important;
+  margin: 12px 0 !important;
+  width: 100% !important;
+}
+
+.mdxeditor th, .mdxeditor td {
+  border: 1.5px solid #000 !important;
+  padding: 6px 10px !important;
+}
+
+.mdxeditor th {
+  background: #ffe500 !important;
+  font-weight: bold !important;
+}

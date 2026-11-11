@@ -1,0 +1,22 @@
+import '@testing-library/jest-dom';
+
+// Global mocks for JSDOM
+if (typeof window !== 'undefined') {
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+
+  window.matchMedia = window.matchMedia || function () {
+    return {
+      matches: false,
+      addListener: function () {},
+      removeListener: function () {},
+    };
+  };
+
+  // Mock confirm and alert
+  window.confirm = () => true;
+  window.alert = () => {};
+}
