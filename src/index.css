@@ -145,6 +145,93 @@ body {
   box-shadow: none !important;
 }
 
+/* Neubrutalist styling for MDXEditor Dropdowns & Select Menus (Block Type, Code Languages, etc.) */
+[class*="_selectTrigger"],
+[class*="_toolbarNodeKindSelectTrigger"],
+button[role="combobox"] {
+  border: 1.5px solid #000 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  box-shadow: 1.5px 1.5px 0px #000 !important;
+  font-weight: 700 !important;
+  color: #000000 !important;
+  padding: 3px 8px !important;
+  transition: all 0.1s ease !important;
+  cursor: pointer !important;
+}
+
+[class*="_selectTrigger"]:hover,
+[class*="_toolbarNodeKindSelectTrigger"]:hover,
+button[role="combobox"]:hover {
+  background: #ffe500 !important;
+  transform: translate(-0.5px, -0.5px) !important;
+  box-shadow: 2px 2px 0px #000 !important;
+}
+
+[class*="_selectContainer"],
+[class*="_toolbarNodeKindSelectContainer"],
+[role="listbox"],
+div[data-radix-select-content],
+div[data-radix-select-viewport] {
+  background: #FAF8F5 !important;
+  border: 2px solid #000000 !important;
+  border-radius: 5px !important;
+  box-shadow: 4px 4px 0px #000000 !important;
+  padding: 4px !important;
+  z-index: 9999 !important;
+}
+
+[class*="_selectItem"],
+[class*="_toolbarNodeKindSelectItem"],
+[role="option"] {
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  color: #000000 !important;
+  border: 1px solid transparent !important;
+  border-radius: 3px !important;
+  padding: 5px 9px !important;
+  margin: 1px 0 !important;
+  cursor: pointer !important;
+  transition: all 0.08s ease !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+[class*="_selectItem"]:hover,
+[class*="_selectItem"][data-highlighted],
+[class*="_toolbarNodeKindSelectItem"]:hover,
+[class*="_toolbarNodeKindSelectItem"][data-highlighted],
+[role="option"]:hover,
+[role="option"][data-highlighted] {
+  background-color: #FFE500 !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+  border: 1px solid #000000 !important;
+  transform: translate(0.5px, 0.5px) !important;
+  box-shadow: 1px 1px 0px #000000 !important;
+}
+
+[class*="_selectItem"][data-state="checked"],
+[class*="_toolbarNodeKindSelectItem"][data-state="checked"],
+[role="option"][data-state="checked"] {
+  background-color: #FFE500 !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+  border: 1px solid #000000 !important;
+}
+
+/* Link and Table Popovers in MDXEditor */
+div[data-radix-popper-content-wrapper] [role="dialog"],
+div[data-radix-popper-content-wrapper] [role="tooltip"],
+div[data-radix-popover-content] {
+  background: #FAF8F5 !important;
+  border: 2px solid #000000 !important;
+  border-radius: 6px !important;
+  box-shadow: 4px 4px 0px #000000 !important;
+  padding: 8px !important;
+  color: #000 !important;
+}
+
 .mdxeditor-content {
   padding: 16px 20px !important;
   user-select: text !important;

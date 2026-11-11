@@ -131,7 +131,6 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
 
   it('[CHAOS 2/8] NotesDrawer delete note button confirms and deletes on accept', () => {
     const onDeleteNote = vi.fn();
-    window.confirm = () => true;
 
     const { container } = render(
       <NotesDrawer
@@ -148,12 +147,14 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     expect(deleteBtns.length).toBe(2);
     fireEvent.click(deleteBtns[0]);
 
+    expect(screen.getByText('Eliminar Nota')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Eliminar Archivo'));
+
     expect(onDeleteNote).toHaveBeenCalledWith(sampleNotes[0].path);
   });
 
   it('[CHAOS 3/8] NotesDrawer delete note cancelled if user declines confirm prompt', () => {
     const onDeleteNote = vi.fn();
-    window.confirm = () => false;
 
     const { container } = render(
       <NotesDrawer
@@ -168,6 +169,9 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
 
     const deleteBtns = container.querySelectorAll('button[title="Eliminar archivo"]');
     fireEvent.click(deleteBtns[0]);
+
+    expect(screen.getByText('Eliminar Nota')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Cancelar'));
 
     expect(onDeleteNote).not.toHaveBeenCalled();
   });

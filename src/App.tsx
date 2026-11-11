@@ -5,6 +5,7 @@ import { Editor } from './components/Editor';
 import { GitModal } from './components/GitModal';
 import { SettingsModal } from './components/SettingsModal';
 import { NotesDrawer } from './components/NotesDrawer';
+import { ConfirmModal } from './components/ui/ConfirmModal';
 import type { TabItem, NoteFile, GitStatus } from './types/electron';
 import { Save, GitBranch, RefreshCw, Check, AlertCircle } from 'lucide-react';
 
@@ -48,6 +49,7 @@ export const App: React.FC = () => {
   const [isGitModalOpen, setIsGitModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFilesDrawerOpen, setIsFilesDrawerOpen] = useState(false);
+  const [closingTab, setClosingTab] = useState<TabItem | null>(null);
 
   // Auto-hide notification
   useEffect(() => {
@@ -157,19 +159,25 @@ export const App: React.FC = () => {
     setActiveTabId(id);
   };
 
+  const executeCloseTab = (id: string) => {
+    setTabs((prev) => {
+      const nextTabs = prev.filter((t) => t.id !== id);
+      if (activeTabId === id && nextTabs.length > 0) {
+        setActiveTabId(nextTabs[nextTabs.length - 1].id);
+      }
+      return nextTabs;
+    });
+    setClosingTab(null);
+  };
+
   const handleCloseTab = (id: string) => {
     if (tabs.length <= 1) return;
     const tabToClose = tabs.find((t) => t.id === id);
     if (tabToClose?.isDirty) {
-      if (!confirm(`La nota "${tabToClose.title}" tiene cambios sin guardar. ¿Deseas cerrarla de todos modos?`)) {
-        return;
-      }
+      setClosingTab(tabToClose);
+      return;
     }
-    const nextTabs = tabs.filter((t) => t.id !== id);
-    setTabs(nextTabs);
-    if (activeTabId === id) {
-      setActiveTabId(nextTabs[nextTabs.length - 1].id);
-    }
+    executeCloseTab(id);
   };
 
   const handleRenameTab = async (id: string, newTitle: string) => {
@@ -441,6 +449,27 @@ export const App: React.FC = () => {
         onOpenNote={handleOpenNote}
         onNewNote={handleNewTab}
         onDeleteNote={handleDeleteNote}
+      />
+
+      {/* Neubrutalist Confirmation Modal for Closing Unsaved Tab */}
+      <ConfirmModal
+        isOpen={Boolean(closingTab)}
+        title="Cambios sin guardar"
+        message={`La nota "${closingTab?.title}" tiene cambios sin guardar.`}
+        subMessage="¿Deseas descartar los cambios y cerrar esta pestaña de todos modos?"
+        confirmText="Descartar y Cerrar"
+        cancelText="Cancelar"
+        saveAndCloseText="Guardar y Cerrar"
+        onConfirm={() => {
+          if (closingTab) executeCloseTab(closingTab.id);
+        }}
+        onCancel={() => setClosingTab(null)}
+        onSaveAndConfirm={async () => {
+          if (closingTab) {
+            await handleSaveActiveTab();
+            executeCloseTab(closingTab.id);
+          }
+        }}
       />
     </div>
   );

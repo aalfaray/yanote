@@ -166,8 +166,6 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
   });
 
   it('[CHAOS E2E 3/8] Closing dirty tab and declining prompt aborts closure', async () => {
-    window.confirm = vi.fn().mockReturnValue(false); // User clicks "Cancel"
-
     render(<App />);
 
     // Wait for initial note to load
@@ -184,14 +182,19 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     const closeButtons = screen.getAllByTitle('Cerrar pestaña');
     fireEvent.click(closeButtons[closeButtons.length - 1]);
 
-    expect(window.confirm).toHaveBeenCalled();
+    // Verify Neubrutalist ConfirmModal is shown
+    await waitFor(() => {
+      expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument();
+    });
+
+    // Click "Cancelar"
+    fireEvent.click(screen.getByText('Cancelar'));
+
     // Tab must still exist
     expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1);
   });
 
   it('[CHAOS E2E 4/8] Closing dirty tab and accepting prompt closes tab and activates neighbor', async () => {
-    window.confirm = vi.fn().mockReturnValue(true); // User clicks "OK"
-
     render(<App />);
 
     // Wait for initial note to load
@@ -206,7 +209,14 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     const closeButtons = screen.getAllByTitle('Cerrar pestaña');
     fireEvent.click(closeButtons[closeButtons.length - 1]);
 
-    expect(window.confirm).toHaveBeenCalled();
+    // Verify Neubrutalist ConfirmModal is shown
+    await waitFor(() => {
+      expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument();
+    });
+
+    // Click "Descartar y Cerrar"
+    fireEvent.click(screen.getByText('Descartar y Cerrar'));
+
     // Tab scratch-1.md should be gone, and Bienvenido.md should be active
     await waitFor(() => {
       expect(screen.queryByText('scratch-1.md')).not.toBeInTheDocument();
