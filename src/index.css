@@ -207,24 +207,27 @@ button[role="combobox"]:hover {
   box-shadow: 2px 2px 0px #000000 !important;
 }
 
-/* Outer select dropdown card ONLY - Neubrutalist Card */
+/* Outer select dropdown card ONLY - Neubrutalist Solid Card */
 .mdxeditor-select-content,
 [class*="_selectContainer"],
 [class*="_toolbarNodeKindSelectContainer"],
-div[data-radix-select-content] {
+div[data-radix-select-content],
+div[role="listbox"],
+[role="listbox"] {
+  background-color: #FAF8F5 !important;
   background: #FAF8F5 !important;
   border: 2.5px solid #000000 !important;
   border-radius: 6px !important;
   box-shadow: 4px 4px 0px #000000 !important;
   padding: 6px !important;
   min-width: 155px !important;
-  z-index: 99999 !important;
+  z-index: 999999 !important;
+  opacity: 1 !important;
 }
 
-/* Inner elements must have no borders or nested shadows */
+/* Inner viewport elements must have no borders or nested shadows */
 div[data-radix-select-viewport],
-[data-editor-dropdown],
-[role="listbox"] {
+[data-editor-dropdown] {
   border: none !important;
   box-shadow: none !important;
   background: transparent !important;
@@ -534,10 +537,14 @@ div[data-radix-popover-content] {
 .dark .mdxeditor-select-content,
 .dark [class*="_selectContainer"],
 .dark [class*="_toolbarNodeKindSelectContainer"],
-.dark div[data-radix-select-content] {
+.dark div[data-radix-select-content],
+.dark div[role="listbox"],
+.dark [role="listbox"] {
+  background-color: #18181B !important;
   background: #18181B !important;
   border: 2.5px solid #3F3F46 !important;
   box-shadow: 4px 4px 0px #000000 !important;
+  opacity: 1 !important;
 }
 
 /* Dark Mode: Select Items */
