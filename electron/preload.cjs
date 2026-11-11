@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   renameFile: (oldPath, newPath) => ipcRenderer.invoke('fs:renameFile', oldPath, newPath),
   getAppConfig: () => ipcRenderer.invoke('fs:getAppConfig'),
   saveAppConfig: (config) => ipcRenderer.invoke('fs:saveAppConfig', config),
+  revealInExplorer: (filePath) => ipcRenderer.invoke('app:revealInExplorer', filePath),
 
   // Git & GitHub
   gitStatus: () => ipcRenderer.invoke('git:status'),

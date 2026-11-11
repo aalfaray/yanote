@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, FileText, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, FileText, Check, ChevronLeft, ChevronRight, Pin } from 'lucide-react';
 import type { TabItem } from '../types/electron';
+import { TabContextMenu } from './ui/TabContextMenu';
 
 interface TabBarProps {
   tabs: TabItem[];
@@ -9,6 +10,14 @@ interface TabBarProps {
   onCloseTab: (id: string) => void;
   onNewTab: () => void;
   onRenameTab: (id: string, newTitle: string) => void;
+  onTogglePinTab?: (id: string) => void;
+  onCloseOthers?: (id: string) => void;
+  onCloseAll?: () => void;
+  onTogglePreview?: () => void;
+  onCopyPath?: (tab: TabItem) => void;
+  onCopyRelativePath?: (tab: TabItem) => void;
+  onCopyId?: (tab: TabItem) => void;
+  onRevealInExplorer?: (tab: TabItem) => void;
 }
 
 export const TabBar: React.FC<TabBarProps> = ({
@@ -18,6 +27,14 @@ export const TabBar: React.FC<TabBarProps> = ({
   onCloseTab,
   onNewTab,
   onRenameTab,
+  onTogglePinTab,
+  onCloseOthers,
+  onCloseAll,
+  onTogglePreview,
+  onCopyPath,
+  onCopyRelativePath,
+  onCopyId,
+  onRevealInExplorer,
 }) => {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -25,6 +42,19 @@ export const TabBar: React.FC<TabBarProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    x: number;
+    y: number;
+    tab: TabItem | null;
+  }>({
+    isOpen: false,
+    x: 0,
+    y: 0,
+    tab: null,
+  });
 
   // Check overflow state to show scroll buttons if needed
   const checkScroll = useCallback(() => {
@@ -90,8 +120,8 @@ export const TabBar: React.FC<TabBarProps> = ({
     }
   };
 
-  const handleStartRename = (tab: TabItem, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleStartRename = (tab: TabItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     setEditingTabId(tab.id);
     setEditTitle(tab.title);
   };
@@ -107,8 +137,34 @@ export const TabBar: React.FC<TabBarProps> = ({
     setEditingTabId(null);
   };
 
+  const handleCopyId = (targetTab: TabItem) => {
+    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(targetTab.id).catch(() => {});
+    }
+    onCopyId?.(targetTab);
+  };
+
+  const handleCopyPath = (targetTab: TabItem) => {
+    const pathToCopy = targetTab.path || targetTab.title;
+    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(pathToCopy).catch(() => {});
+    }
+    onCopyPath?.(targetTab);
+  };
+
+  const handleCopyRelativePath = (targetTab: TabItem) => {
+    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(targetTab.title).catch(() => {});
+    }
+    onCopyRelativePath?.(targetTab);
+  };
+
+  const canCloseOthers = contextMenu.tab
+    ? tabs.filter((t) => t.id !== contextMenu.tab?.id && !t.isPinned).length > 0
+    : false;
+
   return (
-    <div className="h-10 w-full bg-[#EFECE6] dark:bg-[#1C1C20] border-b-2 border-black dark:border-zinc-700 flex items-center px-1 select-none gap-0.5 overflow-hidden shrink-0 transition-colors">
+    <div className="h-10 w-full bg-[#EFECE6] dark:bg-[#1C1C20] border-b-2 border-black dark:border-zinc-700 flex items-center px-1 select-none gap-0.5 overflow-hidden shrink-0 transition-colors relative">
       {/* Scroll Left Button (appears when overflowing) */}
       {canScrollLeft && (
         <button
@@ -137,13 +193,33 @@ export const TabBar: React.FC<TabBarProps> = ({
               data-tab-id={tab.id}
               onClick={() => onSelectTab(tab.id)}
               onDoubleClick={(e) => handleStartRename(tab, e)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setContextMenu({
+                  isOpen: true,
+                  x: e.clientX,
+                  y: e.clientY,
+                  tab,
+                });
+              }}
               className={`group flex items-center gap-1.5 px-2.5 h-7 text-xs font-bold border-2 rounded transition-all cursor-pointer max-w-[170px] min-w-[90px] shrink-0 select-none ${
                 isActive
                   ? 'bg-white dark:bg-[#121212] shadow-[2px_2px_0px_#000] dark:shadow-[2px_2px_0px_#FFE500] text-black dark:text-white border-black dark:border-[#FFE500]'
                   : 'bg-[#E3DFD5] dark:bg-[#27272A] hover:bg-[#D9D5CB] dark:hover:bg-[#323238] text-neutral-800 dark:text-zinc-300 opacity-80 hover:opacity-100 shadow-[1px_1px_0px_#000] border-black dark:border-zinc-700'
               }`}
             >
-              <FileText size={12} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400" />
+              {tab.isPinned ? (
+                <span title="Pestaña fijada" className="shrink-0 flex items-center">
+                  <Pin
+                    size={11}
+                    strokeWidth={2.8}
+                    className="text-[#FFB800] dark:text-[#FFE500]"
+                  />
+                </span>
+              ) : (
+                <FileText size={12} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400" />
+              )}
 
               {/* Title or Edit Input */}
               {isEditing ? (
@@ -173,7 +249,7 @@ export const TabBar: React.FC<TabBarProps> = ({
               ) : (
                 <span
                   className="truncate flex-1 min-w-0"
-                  title={`${tab.title} (Doble clic para renombrar)`}
+                  title={`${tab.title}${tab.isPinned ? ' (Fijada)' : ''} (Doble clic para renombrar, clic derecho para opciones)`}
                 >
                   {tab.title}
                 </span>
@@ -187,8 +263,8 @@ export const TabBar: React.FC<TabBarProps> = ({
                 />
               )}
 
-              {/* Close Button */}
-              {tabs.length > 1 && !isEditing && (
+              {/* Close Button: Hidden if tab is pinned or only 1 tab */}
+              {tabs.length > 1 && !tab.isPinned && !isEditing && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -225,6 +301,27 @@ export const TabBar: React.FC<TabBarProps> = ({
         <Plus size={14} strokeWidth={3} />
         <span className="hidden sm:inline">NUEVA</span>
       </button>
+
+      {/* Tab Context Menu */}
+      <TabContextMenu
+        isOpen={contextMenu.isOpen}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        tab={contextMenu.tab}
+        tabsCount={tabs.length}
+        canCloseOthers={canCloseOthers}
+        onCloseMenu={() => setContextMenu((prev) => ({ ...prev, isOpen: false }))}
+        onRename={(targetTab) => handleStartRename(targetTab)}
+        onTogglePin={(targetTab) => onTogglePinTab?.(targetTab.id)}
+        onCopyId={(targetTab) => handleCopyId(targetTab)}
+        onCloseTab={(targetTab) => onCloseTab(targetTab.id)}
+        onCloseOthers={(targetTab) => onCloseOthers?.(targetTab.id)}
+        onCloseAll={() => onCloseAll?.()}
+        onTogglePreview={() => onTogglePreview?.()}
+        onCopyPath={(targetTab) => handleCopyPath(targetTab)}
+        onCopyRelativePath={(targetTab) => handleCopyRelativePath(targetTab)}
+        onRevealInExplorer={(targetTab) => onRevealInExplorer?.(targetTab)}
+      />
     </div>
   );
 };

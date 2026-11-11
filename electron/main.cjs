@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -185,6 +185,22 @@ ipcMain.handle('fs:getAppConfig', () => {
 
 ipcMain.handle('fs:saveAppConfig', (_, config) => {
   return updateConfig(config);
+});
+
+// IPC - Shell & Explorer
+ipcMain.handle('app:revealInExplorer', async (_, filePath) => {
+  try {
+    if (filePath && typeof filePath === 'string' && fs.existsSync(filePath)) {
+      shell.showItemInFolder(filePath);
+      return { success: true };
+    } else if (appConfig.notesPath && fs.existsSync(appConfig.notesPath)) {
+      await shell.openPath(appConfig.notesPath);
+      return { success: true };
+    }
+    return { success: false, error: 'Path not found' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 // IPC - Git & GitHub

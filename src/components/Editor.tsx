@@ -31,6 +31,7 @@ interface EditorProps {
   onChange: (content: string) => void;
   onSave?: () => void;
   isDarkMode?: boolean;
+  viewMode?: 'rich-text' | 'source';
 }
 
 export const Editor: React.FC<EditorProps> = ({
@@ -39,6 +40,7 @@ export const Editor: React.FC<EditorProps> = ({
   onChange,
   onSave,
   isDarkMode = false,
+  viewMode = 'rich-text',
 }) => {
   const editorRef = useRef<MDXEditorMethods>(null);
 
@@ -74,7 +76,7 @@ export const Editor: React.FC<EditorProps> = ({
   return (
     <div className={`flex-1 w-full h-full flex flex-col overflow-hidden relative ${isDarkMode ? 'bg-[#121212]' : 'bg-white'}`}>
       <MDXEditor
-        key={`${tabId}-${isDarkMode ? 'dark' : 'light'}`}
+        key={`${tabId}-${isDarkMode ? 'dark' : 'light'}-${viewMode}`}
         ref={editorRef}
         markdown={markdown}
         onChange={onChange}
@@ -106,7 +108,7 @@ export const Editor: React.FC<EditorProps> = ({
             },
           }),
           diffSourcePlugin({
-            viewMode: 'rich-text',
+            viewMode,
             diffMarkdown: '',
           }),
           toolbarPlugin({

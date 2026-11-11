@@ -19,7 +19,7 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
   });
 
   // --- 20% HAPPY PATH TESTS ---
-  it('[HAPPY 1/3] ensureNotesDir creates folder and default Bienvenido.md', () => {
+  it('[HAPPY 1/4] ensureNotesDir creates folder and default Bienvenido.md', () => {
     const notesDir = path.join(tempDir, 'notes');
     fileService.ensureNotesDir(notesDir);
 
@@ -30,7 +30,7 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
     expect(content).toContain('Bienvenido a tu Editor Markdown Neubrutalista');
   });
 
-  it('[HAPPY 2/3] writes and reads markdown files successfully', () => {
+  it('[HAPPY 2/4] writes and reads markdown files successfully', () => {
     const testFile = path.join(tempDir, 'test-note.md');
     const mdContent = '# Mi Nota\n\nTexto con **negrita** y [enlace](https://example.com)';
 
@@ -42,7 +42,7 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
     expect(readRes.content).toBe(mdContent);
   });
 
-  it('[HAPPY 3/3] lists markdown notes sorted by last modified date', () => {
+  it('[HAPPY 3/4] lists markdown notes sorted by last modified date', () => {
     const notesDir = path.join(tempDir, 'notes');
     fileService.ensureNotesDir(notesDir);
 
@@ -54,6 +54,15 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
     expect(res.notes.length).toBeGreaterThanOrEqual(2);
     expect(res.notes.some((n: any) => n.name === 'Nota1.md')).toBe(true);
     expect(res.notes.some((n: any) => n.name === 'Nota2.md')).toBe(true);
+  });
+
+  it('[HAPPY 4/4] resolveNotePath safely resolves note paths within base directory', () => {
+    const notesDir = path.join(tempDir, 'notes');
+    const resolved = fileService.resolveNotePath(notesDir, 'scratch-1.md');
+    expect(resolved).toBe(path.join(notesDir, 'scratch-1.md'));
+
+    const rel = fileService.getRelativeNotePath(notesDir, resolved);
+    expect(rel).toBe('scratch-1.md');
   });
 
   // --- 80% DESTRUCTIVE / CHAOS / ADVERSARIAL TESTS ---
@@ -167,11 +176,42 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
     expect(names).not.toContain('image.png');
   });
 
-  it('[CHAOS 12/12] handles invalid input types (numbers, objects, nulls) across all file methods', () => {
+  it('[CHAOS 12/16] handles invalid input types (numbers, objects, nulls) across all file methods', () => {
     expect(fileService.readFile(null as any).success).toBe(false);
     expect(fileService.readFile(12345 as any).success).toBe(false);
     expect(fileService.writeFile(null as any, 'text').success).toBe(false);
     expect(fileService.deleteFile({} as any).success).toBe(false);
     expect(fileService.renameFile(null as any, 'target').success).toBe(false);
+  });
+
+  it('[CHAOS 13/16] resolveNotePath strips directory traversal attacks (../../etc/passwd) safely', () => {
+    const notesDir = path.join(tempDir, 'notes');
+    const traversal = '../../../../windows/system32/cmd.exe';
+    const safeResolved = fileService.resolveNotePath(notesDir, traversal);
+    // path.basename strips all directory traversal segments
+    expect(safeResolved).toBe(path.join(notesDir, 'cmd.exe'));
+    expect(safeResolved).not.toContain('system32');
+  });
+
+  it('[CHAOS 14/16] resolveNotePath handles null, undefined, non-string and empty filename safely', () => {
+    const notesDir = path.join(tempDir, 'notes');
+    expect(fileService.resolveNotePath(null, 'file.md')).toBeNull();
+    expect(fileService.resolveNotePath(undefined as any, 'file.md')).toBeNull();
+    expect(fileService.resolveNotePath(notesDir, '')).toBe(path.resolve(notesDir));
+    expect(fileService.resolveNotePath(notesDir, null as any)).toBe(path.resolve(notesDir));
+  });
+
+  it('[CHAOS 15/16] getRelativeNotePath handles external absolute path or nested path safely without crashing', () => {
+    const notesDir = path.join(tempDir, 'notes');
+    const externalFile = 'C:\\Some\\Other\\Dir\\outside.md';
+    const rel = fileService.getRelativeNotePath(notesDir, externalFile);
+    // Should safely fall back to the basename
+    expect(rel).toBe('outside.md');
+  });
+
+  it('[CHAOS 16/16] getRelativeNotePath handles malicious input types (symbols, numbers, objects) safely', () => {
+    expect(fileService.getRelativeNotePath(null as any, null as any)).toBe('');
+    expect(fileService.getRelativeNotePath(1234 as any, {} as any)).toBe('');
+    expect(fileService.getRelativeNotePath('notes', 9999 as any)).toBe('');
   });
 });

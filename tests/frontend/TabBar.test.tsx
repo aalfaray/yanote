@@ -11,7 +11,7 @@ describe('Frontend: TabBar (Orca Style) (20% Happy / 80% Destructive)', () => {
   ];
 
   // --- 20% HAPPY PATH TESTS ---
-  it('[HAPPY 1/2] renders tabs with titles and active tab highlighted', () => {
+  it('[HAPPY 1/3] renders tabs with titles and active tab highlighted', () => {
     const onSelectTab = vi.fn();
     render(
       <TabBar
@@ -31,7 +31,7 @@ describe('Frontend: TabBar (Orca Style) (20% Happy / 80% Destructive)', () => {
     expect(onSelectTab).toHaveBeenCalledWith('2');
   });
 
-  it('[HAPPY 2/2] clicking NUEVA button triggers onNewTab (Orca quick scratchpad creation)', () => {
+  it('[HAPPY 2/3] clicking NUEVA button triggers onNewTab (Orca quick scratchpad creation)', () => {
     const onNewTab = vi.fn();
     render(
       <TabBar
@@ -47,6 +47,28 @@ describe('Frontend: TabBar (Orca Style) (20% Happy / 80% Destructive)', () => {
     const newBtn = screen.getByTitle(/Nueva nota Markdown/i);
     fireEvent.click(newBtn);
     expect(onNewTab).toHaveBeenCalledTimes(1);
+  });
+
+  it('[HAPPY 3/3] right-clicking on a tab opens the context menu with all tab actions', () => {
+    render(
+      <TabBar
+        tabs={sampleTabs}
+        activeTabId="1"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onNewTab={vi.fn()}
+        onRenameTab={vi.fn()}
+      />
+    );
+
+    const tabEl = screen.getByText('Bienvenido.md');
+    fireEvent.contextMenu(tabEl, { clientX: 200, clientY: 100 });
+
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(screen.getByText('Renombrar')).toBeInTheDocument();
+    expect(screen.getByText('Fijar pestaña')).toBeInTheDocument();
+    expect(screen.getByText('Cerrar')).toBeInTheDocument();
+    expect(screen.getByText('Revelar en el Explorador de archivos')).toBeInTheDocument();
   });
 
   // --- 80% DESTRUCTIVE / CHAOS / ADVERSARIAL TESTS ---
@@ -250,7 +272,7 @@ describe('Frontend: TabBar (Orca Style) (20% Happy / 80% Destructive)', () => {
     }
   });
 
-  it('[CHAOS 10/10] handles wheel events with extreme delta values and empty deltas safely', () => {
+  it('[CHAOS 10/12] handles wheel events with extreme delta values and empty deltas safely', () => {
     const { container } = render(
       <TabBar
         tabs={sampleTabs}
@@ -270,5 +292,57 @@ describe('Frontend: TabBar (Orca Style) (20% Happy / 80% Destructive)', () => {
         fireEvent.wheel(scrollContainer, {});
       }).not.toThrow();
     }
+  });
+
+  it('[CHAOS 11/12] pinned tab displays Pin icon and conceals close button X', () => {
+    const tabsWithPinned: TabItem[] = [
+      { id: 'pin-1', title: 'Fijada.md', path: null, content: '', isDirty: false, isPinned: true },
+      { id: 'unpin-2', title: 'Normal.md', path: null, content: '', isDirty: false, isPinned: false },
+    ];
+
+    const { container } = render(
+      <TabBar
+        tabs={tabsWithPinned}
+        activeTabId="pin-1"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onNewTab={vi.fn()}
+        onRenameTab={vi.fn()}
+      />
+    );
+
+    // Pin icon has title "Pestaña fijada"
+    expect(screen.getByTitle('Pestaña fijada')).toBeInTheDocument();
+
+    // Pinned tab shouldn't have close button
+    const pinnedTabEl = container.querySelector('[data-tab-id="pin-1"]');
+    expect(pinnedTabEl?.querySelector('button[title="Cerrar pestaña"]')).toBeNull();
+
+    // Normal tab has close button
+    const normalTabEl = container.querySelector('[data-tab-id="unpin-2"]');
+    expect(normalTabEl?.querySelector('button[title="Cerrar pestaña"]')).not.toBeNull();
+  });
+
+  it('[CHAOS 12/12] rapid right-clicks across multiple tabs switch context menu target without duplicate menus', () => {
+    render(
+      <TabBar
+        tabs={sampleTabs}
+        activeTabId="1"
+        onSelectTab={vi.fn()}
+        onCloseTab={vi.fn()}
+        onNewTab={vi.fn()}
+        onRenameTab={vi.fn()}
+      />
+    );
+
+    const tab1 = screen.getByText('Bienvenido.md');
+    const tab2 = screen.getByText('scratch-1.md');
+
+    fireEvent.contextMenu(tab1, { clientX: 100, clientY: 100 });
+    fireEvent.contextMenu(tab2, { clientX: 250, clientY: 100 });
+    fireEvent.contextMenu(tab1, { clientX: 120, clientY: 100 });
+
+    const menus = screen.getAllByRole('menu');
+    expect(menus.length).toBe(1);
   });
 });

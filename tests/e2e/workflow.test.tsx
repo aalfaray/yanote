@@ -74,11 +74,12 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       gitSetRemote: vi.fn().mockResolvedValue({ success: true }),
       gitInit: vi.fn().mockResolvedValue({ success: true, isRepo: true }),
       selectFolder: vi.fn().mockResolvedValue('/notes'),
+      revealInExplorer: vi.fn().mockResolvedValue({ success: true }),
     } as any;
   });
 
   // --- 20% HAPPY PATH E2E TESTS ---
-  it('[HAPPY E2E 1/2] Full Note Lifecycle: creates new tab (Orca style), writes content, saves with Ctrl+S, commits to Git', async () => {
+  it('[HAPPY E2E 1/4] Full Note Lifecycle: creates new tab (Orca style), writes content, saves with Ctrl+S, commits to Git', async () => {
     render(<App />);
 
     await waitFor(() => {
@@ -111,7 +112,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     });
   });
 
-  it('[HAPPY E2E 2/2] Superposición (Always on Top) toggle flow', async () => {
+  it('[HAPPY E2E 2/4] Superposición (Always on Top) toggle flow', async () => {
     render(<App />);
 
     const pinBtn = screen.getByTitle(/Activar superposición/i);
@@ -124,7 +125,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     });
   });
 
-  it('[HAPPY E2E 3/3] Dark Mode Toggle Workflow: toggles dark mode, adds "dark" class to html, and persists config', async () => {
+  it('[HAPPY E2E 3/4] Dark Mode Toggle Workflow: toggles dark mode, adds "dark" class to html, and persists config', async () => {
     render(<App />);
 
     await waitFor(() => {
@@ -139,6 +140,57 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith({ darkMode: true });
       expect(screen.getByText(/Modo Oscuro Activado/i)).toBeInTheDocument();
       expect(screen.getByText('CLARO')).toBeInTheDocument();
+    });
+  });
+
+  it('[HAPPY E2E 4/4] Tab Context Menu Complete Workflow: right-click tab, pin tab, and close other tabs', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Open second tab
+    const newTabBtn = screen.getByTitle(/Nueva nota Markdown/i);
+    fireEvent.click(newTabBtn);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Right-click on Bienvenido.md tab
+    const bienvenidoTab = screen.getAllByText('Bienvenido.md')[0];
+    fireEvent.contextMenu(bienvenidoTab, { clientX: 100, clientY: 100 });
+
+    // Verify context menu opened
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    expect(screen.getByText('Fijar pestaña')).toBeInTheDocument();
+
+    // Click "Fijar pestaña"
+    fireEvent.click(screen.getByText('Fijar pestaña'));
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Pestaña fijada')).toBeInTheDocument();
+      expect(screen.getByText(/Pestaña fijada/i)).toBeInTheDocument();
+    });
+
+    // Right-click again on Bienvenido.md to verify menu now shows "Desfijar pestaña"
+    fireEvent.contextMenu(bienvenidoTab, { clientX: 100, clientY: 100 });
+    expect(screen.getByText('Desfijar pestaña')).toBeInTheDocument();
+
+    // Close other unpinned tabs
+    const closeOthersBtn = screen.getByText('Cerrar otras');
+    fireEvent.click(closeOthersBtn);
+
+    // Because scratch-1.md has unsaved changes, ConfirmModal appears to protect user data
+    await waitFor(() => {
+      expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Descartar y Cerrar'));
+
+    await waitFor(() => {
+      expect(screen.queryByText('scratch-1.md')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -370,7 +422,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     });
   });
 
-  it('[CHAOS E2E 12/12] saving dark mode when saveAppConfig fails rejects safely without unmounting editor', async () => {
+  it('[CHAOS E2E 12/16] saving dark mode when saveAppConfig fails rejects safely without unmounting editor', async () => {
     (window.electronAPI?.saveAppConfig as any).mockRejectedValueOnce(new Error('Disk write error'));
 
     render(<App />);
@@ -384,6 +436,109 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
 
     await waitFor(() => {
       expect(screen.getByTestId('mock-markdown-textarea')).toBeInTheDocument();
+    });
+  });
+
+  it('[CHAOS E2E 13/16] Close All tabs via shortcut Ctrl+Alt+W triggers ConfirmModal if any tab has unsaved changes', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Make active tab dirty
+    const textarea = screen.getByTestId('mock-markdown-textarea');
+    fireEvent.change(textarea, { target: { value: 'Contenido no guardado para probar modal' } });
+
+    // Press Ctrl+Alt+W
+    fireEvent.keyDown(window, { key: 'w', ctrlKey: true, altKey: true });
+
+    // ConfirmModal should appear
+    await waitFor(() => {
+      expect(screen.getByText('Cambios sin guardar')).toBeInTheDocument();
+      expect(screen.getByText(/tiene cambios sin guardar/i)).toBeInTheDocument();
+    });
+
+    // Cancel modal
+    const cancelBtn = screen.getByText('Cancelar');
+    fireEvent.click(cancelBtn);
+
+    // Tab must still be present with content intact
+    expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    expect((screen.getByTestId('mock-markdown-textarea') as HTMLTextAreaElement).value).toBe(
+      'Contenido no guardado para probar modal'
+    );
+  });
+
+  it('[CHAOS E2E 14/16] Close active tab via shortcut Ctrl+W prevents closing pinned tab', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Right-click and pin Bienvenido.md
+    const tabEl = screen.getAllByText('Bienvenido.md')[0];
+    fireEvent.contextMenu(tabEl, { clientX: 100, clientY: 100 });
+    fireEvent.click(screen.getByText('Fijar pestaña'));
+
+    await waitFor(() => {
+      expect(screen.getByTitle('Pestaña fijada')).toBeInTheDocument();
+    });
+
+    // Try pressing Ctrl+W to close it
+    fireEvent.keyDown(window, { key: 'w', ctrlKey: true });
+
+    // Should NOT close - Bienvenido.md remains open
+    expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('[CHAOS E2E 15/16] Reveal in explorer IPC call handles failure safely without crashing app', async () => {
+    (window.electronAPI?.revealInExplorer as any).mockResolvedValueOnce({
+      success: false,
+      error: 'Archivo no encontrado en disco',
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const tabEl = screen.getAllByText('Bienvenido.md')[0];
+    fireEvent.contextMenu(tabEl, { clientX: 100, clientY: 100 });
+
+    const revealBtn = screen.getByText('Revelar en el Explorador de archivos');
+    expect(() => fireEvent.click(revealBtn)).not.toThrow();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Archivo no encontrado en disco/i)).toBeInTheDocument();
+    });
+  });
+
+  it('[CHAOS E2E 16/16] Toggle preview mode via context menu switches editor viewMode and shows notification', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    });
+
+    const tabEl = screen.getAllByText('Bienvenido.md')[0];
+    fireEvent.contextMenu(tabEl, { clientX: 100, clientY: 100 });
+
+    const togglePreviewBtn = screen.getByText('Abrir vista previa de Markdown');
+    fireEvent.click(togglePreviewBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Modo Código Fuente Markdown/i)).toBeInTheDocument();
+    });
+
+    // Toggle back to rich preview
+    fireEvent.contextMenu(tabEl, { clientX: 100, clientY: 100 });
+    fireEvent.click(screen.getByText('Abrir vista previa de Markdown'));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Modo Vista Previa Enriquecida/i)).toBeInTheDocument();
     });
   });
 });

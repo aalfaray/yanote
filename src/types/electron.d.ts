@@ -44,6 +44,7 @@ export interface TabItem {
   path: string | null; // null if scratchpad
   content: string;
   isDirty?: boolean;
+  isPinned?: boolean;
 }
 
 export interface ElectronAPI {
@@ -66,6 +67,7 @@ export interface ElectronAPI {
   renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
   getAppConfig: () => Promise<AppConfig>;
   saveAppConfig: (config: Partial<AppConfig>) => Promise<AppConfig>;
+  revealInExplorer: (filePath?: string) => Promise<{ success: boolean; error?: string }>;
 
   // Git & GitHub
   gitStatus: () => Promise<GitStatus>;

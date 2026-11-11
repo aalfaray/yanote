@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TitleBar } from './components/TitleBar';
 import { TabBar } from './components/TabBar';
 import { Editor } from './components/Editor';
@@ -51,6 +51,12 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFilesDrawerOpen, setIsFilesDrawerOpen] = useState(false);
   const [closingTab, setClosingTab] = useState<TabItem | null>(null);
+  const [editorViewMode, setEditorViewMode] = useState<'rich-text' | 'source'>('rich-text');
+
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
 
   // Auto-hide notification
   useEffect(() => {
@@ -152,18 +158,6 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  // Global keyboard shortcuts (Ctrl+Shift+D to toggle dark mode)
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
-        e.preventDefault();
-        handleToggleDarkMode();
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [handleToggleDarkMode]);
-
   // Superposición / Always on Top Toggle
   const handleToggleAlwaysOnTop = async () => {
     if (window.electronAPI) {
@@ -201,26 +195,182 @@ export const App: React.FC = () => {
     setActiveTabId(id);
   };
 
-  const executeCloseTab = (id: string) => {
+  const executeCloseTab = useCallback((id: string) => {
     setTabs((prev) => {
       const nextTabs = prev.filter((t) => t.id !== id);
-      if (activeTabId === id && nextTabs.length > 0) {
+      if (activeTabIdRef.current === id && nextTabs.length > 0) {
         setActiveTabId(nextTabs[nextTabs.length - 1].id);
       }
       return nextTabs;
     });
     setClosingTab(null);
-  };
+  }, []);
 
-  const handleCloseTab = (id: string) => {
-    if (tabs.length <= 1) return;
-    const tabToClose = tabs.find((t) => t.id === id);
-    if (tabToClose?.isDirty) {
+  const handleCloseTab = useCallback((id: string) => {
+    const currentTabs = tabsRef.current;
+    const tabToClose = currentTabs.find((t) => t.id === id);
+    if (!tabToClose) return;
+    if (tabToClose.isPinned) return; // Pinned tabs cannot be closed without unpinning
+    if (currentTabs.length <= 1) return;
+    if (tabToClose.isDirty) {
       setClosingTab(tabToClose);
       return;
     }
     executeCloseTab(id);
-  };
+  }, [executeCloseTab]);
+
+  const handleTogglePinTab = useCallback((id: string) => {
+    setTabs((prev) => {
+      const target = prev.find((t) => t.id === id);
+      if (!target) return prev;
+      const isNowPinned = !target.isPinned;
+      const updated = prev.map((t) => (t.id === id ? { ...t, isPinned: isNowPinned } : t));
+      setNotification({
+        type: 'info',
+        text: isNowPinned ? `📌 Pestaña fijada: ${target.title}` : `Pestaña desfijada: ${target.title}`,
+      });
+      return [...updated.filter((t) => t.isPinned), ...updated.filter((t) => !t.isPinned)];
+    });
+  }, []);
+
+  const handleCloseOthers = useCallback((id: string) => {
+    const currentTabs = tabsRef.current;
+    const unpinnedOthers = currentTabs.filter((t) => t.id !== id && !t.isPinned);
+    if (unpinnedOthers.length === 0) return;
+
+    const dirtyOther = unpinnedOthers.find((t) => t.isDirty);
+    if (dirtyOther) {
+      setClosingTab(dirtyOther);
+      return;
+    }
+
+    setTabs((prev) => prev.filter((t) => t.id === id || t.isPinned));
+    setActiveTabId(id);
+    setNotification({
+      type: 'info',
+      text: 'Otras pestañas cerradas',
+    });
+  }, []);
+
+  const handleCloseAll = useCallback(() => {
+    const currentTabs = tabsRef.current;
+    const unpinned = currentTabs.filter((t) => !t.isPinned);
+    const dirtyTab = unpinned.find((t) => t.isDirty);
+    if (dirtyTab) {
+      setClosingTab(dirtyTab);
+      return;
+    }
+
+    const pinned = currentTabs.filter((t) => t.isPinned);
+    if (pinned.length > 0) {
+      setTabs(pinned);
+      setActiveTabId(pinned[0].id);
+    } else {
+      const freshId = `tab-${Date.now()}`;
+      const freshTab: TabItem = {
+        id: freshId,
+        title: 'scratch-1.md',
+        path: null,
+        content: '# scratch-1\n\nEscribe tus notas aquí...\n',
+        isDirty: false,
+      };
+      setTabs([freshTab]);
+      setActiveTabId(freshId);
+    }
+    setNotification({
+      type: 'info',
+      text: 'Pestañas cerradas',
+    });
+  }, []);
+
+  const handleTogglePreview = useCallback(() => {
+    setEditorViewMode((prev) => {
+      const next = prev === 'rich-text' ? 'source' : 'rich-text';
+      setNotification({
+        type: 'info',
+        text: next === 'source' ? '📝 Modo Código Fuente Markdown' : '👁️ Modo Vista Previa Enriquecida',
+      });
+      return next;
+    });
+  }, []);
+
+  const handleCopyId = useCallback((tab: TabItem) => {
+    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(tab.id).catch(() => {});
+    }
+    setNotification({
+      type: 'success',
+      text: `✓ ID copiado: ${tab.id}`,
+    });
+  }, []);
+
+  const handleCopyPath = useCallback((tab: TabItem) => {
+    let pathToCopy = tab.path;
+    if (!pathToCopy) {
+      const baseDir = notesDir || '';
+      const sep = baseDir.includes('\\') ? '\\' : '/';
+      pathToCopy = baseDir ? `${baseDir}${sep}${tab.title}` : tab.title;
+    }
+    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(pathToCopy).catch(() => {});
+    }
+    setNotification({
+      type: 'success',
+      text: `✓ Ruta copiada: ${pathToCopy}`,
+    });
+  }, [notesDir]);
+
+  const handleCopyRelativePath = useCallback((tab: TabItem) => {
+    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(tab.title).catch(() => {});
+    }
+    setNotification({
+      type: 'success',
+      text: `✓ Ruta relativa copiada: ${tab.title}`,
+    });
+  }, []);
+
+  const handleRevealInExplorer = useCallback(async (tab: TabItem) => {
+    if (window.electronAPI?.revealInExplorer) {
+      const res = await window.electronAPI.revealInExplorer(tab.path || undefined);
+      if (res.success) {
+        setNotification({
+          type: 'success',
+          text: '✓ Abriendo en el Explorador de archivos',
+        });
+      } else {
+        setNotification({
+          type: 'info',
+          text: `Explorador: ${res.error || 'Abierto'}`,
+        });
+      }
+    } else {
+      setNotification({
+        type: 'info',
+        text: `Explorador (navegador): ${tab.path || tab.title}`,
+      });
+    }
+  }, []);
+
+  // Global keyboard shortcuts (Ctrl+Shift+D to toggle dark mode, Ctrl+W, Ctrl+Alt+W)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        handleToggleDarkMode();
+      } else if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        handleCloseAll();
+      } else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        if (activeTabIdRef.current) {
+          handleCloseTab(activeTabIdRef.current);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [handleToggleDarkMode, handleCloseAll, handleCloseTab]);
 
   const handleRenameTab = async (id: string, newTitle: string) => {
     const tab = tabs.find((t) => t.id === id);
@@ -385,6 +535,14 @@ export const App: React.FC = () => {
         onCloseTab={handleCloseTab}
         onNewTab={handleNewTab}
         onRenameTab={handleRenameTab}
+        onTogglePinTab={handleTogglePinTab}
+        onCloseOthers={handleCloseOthers}
+        onCloseAll={handleCloseAll}
+        onTogglePreview={handleTogglePreview}
+        onCopyPath={handleCopyPath}
+        onCopyRelativePath={handleCopyRelativePath}
+        onCopyId={handleCopyId}
+        onRevealInExplorer={handleRevealInExplorer}
       />
 
       {/* 3. Main Editor (@mdxeditor/editor with Boldkit Neubrutalism) */}
@@ -396,6 +554,7 @@ export const App: React.FC = () => {
             onChange={handleContentChange}
             onSave={handleSaveActiveTab}
             isDarkMode={isDarkMode}
+            viewMode={editorViewMode}
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-xs font-bold text-neutral-500">

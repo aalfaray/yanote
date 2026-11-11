@@ -143,6 +143,21 @@ function renameFile(oldPath, newPath) {
   }
 }
 
+function resolveNotePath(notesDir, filename) {
+  if (!notesDir || typeof notesDir !== 'string') return null;
+  if (!filename || typeof filename !== 'string') return path.resolve(notesDir);
+  const safeName = path.basename(filename);
+  return path.resolve(notesDir, safeName);
+}
+
+function getRelativeNotePath(notesDir, fullPath) {
+  if (!notesDir || !fullPath || typeof notesDir !== 'string' || typeof fullPath !== 'string') {
+    return typeof fullPath === 'string' ? path.basename(fullPath) : '';
+  }
+  const rel = path.relative(notesDir, fullPath);
+  return rel && !rel.startsWith('..') ? rel : path.basename(fullPath);
+}
+
 module.exports = {
   ensureNotesDir,
   listNotes,
@@ -150,5 +165,7 @@ module.exports = {
   writeFile,
   deleteFile,
   renameFile,
+  resolveNotePath,
+  getRelativeNotePath,
   WELCOME_CONTENT,
 };
