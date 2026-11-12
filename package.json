@@ -2,7 +2,7 @@
   "name": "yanote",
   "private": true,
   "version": "1.0.0",
-  "description": "Neubrutalist Markdown Editor with Multi-Tabs",
+  "description": "yanote: editor de notas Markdown flotante con pestañas, terminal y chat con Claude Code",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -14,28 +14,21 @@
     "start": "electron .",
     "lint": "oxlint",
     "preview": "vite preview",
-    "package:portable": "npm run build && electron-builder --win portable",
-    "package:dir": "npm run build && electron-builder --dir"
+    "package:portable": "npm run build && electron-builder --win portable --publish never",
+    "package:dir": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder --win nsis portable --publish never",
+    "release": "npm run build && electron-builder --win nsis portable --publish always"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.322",
+    "@lydell/node-pty": "^1.2.0-beta.18",
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
-    "@lydell/node-pty": "^1.2.0-beta.18",
     "@mdxeditor/editor": "^4.5.0",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/xterm": "^6.0.0",
-    "clsx": "^2.1.1",
-    "codemirror": "^6.0.2",
-    "lucide-react": "^1.16.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.5.4"
-  },
-  "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
@@ -44,12 +37,22 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "clsx": "^2.1.1",
+    "codemirror": "^6.0.2",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron": "^41.2.0",
     "electron-builder": "^26.7.1",
     "jsdom": "^31.0.0",
+    "lucide-react": "^1.16.0",
     "oxlint": "^1.90.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.5.4",
     "tailwindcss": "^4.3.5",
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
@@ -65,18 +68,46 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "build/icon.png"
+      "build/icon.png",
+      "!node_modules/@anthropic-ai/claude-agent-sdk-*/**"
     ],
     "asarUnpack": [
       "node_modules/@lydell/**",
-      "node_modules/@anthropic-ai/claude-agent-sdk*/**"
+      "node_modules/@anthropic-ai/claude-agent-sdk/**"
     ],
     "win": {
-      "target": "portable",
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "build/icon.png"
     },
     "portable": {
       "artifactName": "yanote-Portable-${version}.exe"
-    }
+    },
+    "nsis": {
+      "artifactName": "yanote-Setup-${version}.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "yanote",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "aalfaray",
+        "repo": "yanote",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "author": "aalfaray",
+  "homepage": "https://aalfaray.github.io/yanote/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aalfaray/yanote.git"
   }
 }

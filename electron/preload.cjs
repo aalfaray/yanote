@@ -46,6 +46,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('term:event', listener);
   },
 
+  // App version & updates
+  getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+  getUpdateMode: () => ipcRenderer.invoke('update:getMode'),
+  checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  acceptUpdate: () => ipcRenderer.invoke('update:accept'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdateEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('update:event', listener);
+    return () => ipcRenderer.removeListener('update:event', listener);
+  },
+
   // Claude chat sessions (Agent SDK)
   claudeStart: (options) => ipcRenderer.invoke('claude:start', options),
   claudeSend: (id, payload) => ipcRenderer.invoke('claude:send', id, payload),

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, Shield, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Folder, Shield, Save, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import type { AppConfig } from '../types/electron';
@@ -23,6 +23,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [version, setVersion] = useState('');
+  const [updateMode, setUpdateMode] = useState<'auto' | 'portable' | 'disabled' | ''>('');
+  const [checking, setChecking] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    window.electronAPI?.getAppVersion?.().then(setVersion).catch(() => {});
+    window.electronAPI?.getUpdateMode?.().then(setUpdateMode).catch(() => {});
+  }, [isOpen]);
+
+  const handleCheckUpdates = async () => {
+    setChecking(true);
+    try {
+      // The answer shows up as the update dialog or a toast (UpdateNotice)
+      await window.electronAPI?.checkForUpdates?.();
+    } finally {
+      setChecking(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen && window.electronAPI) {
@@ -145,6 +164,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </span>
           </label>
         </div>
+
+        {/* Section: Version & updates */}
+        {version && (
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded shadow-[2px_2px_0px_#000]">
+            <div className="flex flex-col">
+              <span className="font-black uppercase text-black dark:text-zinc-200">yanote v{version}</span>
+              <span className="text-[10px] text-neutral-500 dark:text-zinc-400 font-medium">
+                {updateMode === 'portable'
+                  ? 'Versión portable: te avisa de nuevas versiones para descargarlas.'
+                  : updateMode === 'disabled'
+                  ? 'Modo desarrollo: actualizaciones desactivadas.'
+                  : 'Se actualiza automáticamente (te pregunta antes).'}
+              </span>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleCheckUpdates}
+              disabled={checking}
+              className="dark:bg-zinc-700 dark:text-zinc-200 dark:border-zinc-500"
+            >
+              <RefreshCw size={12} strokeWidth={2.5} className={checking ? 'animate-spin' : ''} />
+              {checking ? 'Buscando…' : 'Buscar actualizaciones'}
+            </Button>
+          </div>
+        )}
 
         {/* Save Button */}
         <Button

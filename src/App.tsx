@@ -4,6 +4,7 @@ import { TabBar } from './components/TabBar';
 import { Editor } from './components/Editor';
 import { TerminalView } from './components/TerminalView';
 import { ClaudeChatView } from './components/ClaudeChatView';
+import { UpdateNotice } from './components/UpdateNotice';
 import { SettingsModal } from './components/SettingsModal';
 import { RecentFilesDrawer } from './components/RecentFilesDrawer';
 import { addRecentFile, removeRecentFile } from './lib/recentFiles';
@@ -774,6 +775,9 @@ export const App: React.FC = () => {
           }
         }}
       />
+
+      {/* New version available -> ask, download, restart */}
+      <UpdateNotice unsavedCount={tabs.filter((t) => t.isDirty).length} />
 
       {/* Confirmation before quitting the whole app from the titlebar close button */}
       <ConfirmModal

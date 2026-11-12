@@ -90,6 +90,8 @@ function createClaudeChatService({
   platform = process.platform,
   readPath,
   findExecutable = findClaudeExecutable,
+  /** Packaged builds don't ship the SDK's bundled CLI, so a missing `claude` is an error */
+  requireInstalledCli = false,
 } = {}) {
   const sessions = new Map();
   let nextRequest = 1;
@@ -113,6 +115,14 @@ function createClaudeChatService({
       // The renderer is the UI, not a terminal: keep the CLI from thinking it runs nested in Claude Code
       delete childEnv.CLAUDECODE;
       const executable = findExecutable(childEnv, platform);
+      if (!executable && requireInstalledCli) {
+        sessions.delete(id);
+        return {
+          success: false,
+          error:
+            'No encontré Claude Code. Instálalo desde https://claude.com/claude-code, abre una terminal, ejecuta "claude" una vez para iniciar sesión y vuelve a abrir el chat.',
+        };
+      }
       const mode = PERMISSION_MODES.has(permissionMode) ? permissionMode : 'default';
 
       const canUseTool = (toolName, input, { signal, suggestions, blockedPath, decisionReason, title, toolUseID } = {}) =>

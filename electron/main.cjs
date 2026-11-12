@@ -8,10 +8,13 @@ const { createSpeechService } = require('./services/speechService.cjs');
 const { createTerminalService } = require('./services/terminalService.cjs');
 const { savePastedImage } = require('./services/clipboardImageService.cjs');
 const { createClaudeChatService } = require('./services/claudeChatService.cjs');
+const { createUpdateService } = require('./services/updateService.cjs');
 
 const speechService = createSpeechService();
 const terminalService = createTerminalService();
-const claudeChatService = createClaudeChatService();
+// The installer doesn't ship the SDK's own Claude Code binary (331 MB): the user's `claude` is required
+const claudeChatService = createClaudeChatService({ requireInstalledCli: app.isPackaged });
+let updateService = null;
 
 let mainWindow = null;
 let isAlwaysOnTop = false;
@@ -68,6 +71,8 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
+  mainWindow.webContents.once('did-finish-load', () => setupUpdates());
+
   mainWindow.on('closed', () => {
     speechService.stop();
     terminalService.killAll();
@@ -75,6 +80,39 @@ function createWindow() {
     mainWindow = null;
   });
 }
+
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let updateTimer = null;
+
+function sendUpdateEvent(evt) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update:event', evt);
+}
+
+/** Checks GitHub releases shortly after start and every 6 hours. */
+function setupUpdates() {
+  if (updateService) return;
+  const mode = !app.isPackaged ? 'disabled' : process.env.PORTABLE_EXECUTABLE_DIR ? 'portable' : 'auto';
+  let autoUpdater = null;
+  if (mode === 'auto') {
+    try {
+      ({ autoUpdater } = require('electron-updater'));
+    } catch (err) {
+      console.error('electron-updater no disponible:', err.message);
+    }
+  }
+  updateService = createUpdateService({
+    mode: mode === 'auto' && !autoUpdater ? 'portable' : mode,
+    autoUpdater,
+    currentVersion: app.getVersion(),
+    openExternal: (url) => shell.openExternal(url),
+    emit: sendUpdateEvent,
+  });
+  if (updateService.mode === 'disabled') return;
+  setTimeout(() => updateService.check(), 8000);
+  updateTimer = setInterval(() => updateService.check(), UPDATE_CHECK_INTERVAL_MS);
+}
+
+app.on('before-quit', () => clearInterval(updateTimer));
 
 app.whenReady().then(async () => {
   fileService.ensureNotesDir(appConfig.notesPath);
@@ -297,3 +335,10 @@ ipcMain.handle('claude:setPermissionMode', (_, id, mode) => claudeChatService.se
 ipcMain.handle('claude:setModel', (_, id, model) => claudeChatService.setModel(id, model));
 ipcMain.handle('claude:setEffort', (_, id, level) => claudeChatService.setEffort(id, level));
 ipcMain.handle('claude:stop', (_, id) => claudeChatService.stop(id));
+
+// IPC - App version & updates
+ipcMain.handle('app:getVersion', () => app.getVersion());
+ipcMain.handle('update:getMode', () => (updateService ? updateService.mode : app.isPackaged ? 'auto' : 'disabled'));
+ipcMain.handle('update:check', () => (updateService ? updateService.check({ manual: true }) : { success: false }));
+ipcMain.handle('update:accept', () => (updateService ? updateService.accept() : { success: false }));
+ipcMain.handle('update:install', () => (updateService ? updateService.install() : false));

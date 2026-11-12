@@ -4,6 +4,16 @@ Un editor de notas Markdown de escritorio **portable**, con **superposición (Al
 
 ---
 
+## ⬇️ Descargar
+
+**[Página de yanote](https://aalfaray.github.io/yanote/)** · **[Última versión (.exe)](https://github.com/aalfaray/yanote/releases/latest)**
+
+- **Instalador** (`yanote-Setup-x.y.z.exe`): recomendado. Se actualiza solo: cuando hay una versión nueva, la app te pregunta y, si aceptas, la descarga, la instala y se reinicia.
+- **Portable** (`yanote-Portable-x.y.z.exe`): sin instalar. Te avisa de las versiones nuevas y abre la página de descarga.
+
+> Windows puede mostrar "Windows protegió su PC" porque la app no está firmada digitalmente: pulsa *Más información → Ejecutar de todas formas*.
+> El chat con Claude necesita [Claude Code](https://claude.com/claude-code) instalado y con la sesión iniciada (`claude` en una terminal).
+
 ## ✨ Características Principales
 
 1. **Estilo Neubrutalista (Boldkit Style)**
@@ -83,15 +93,27 @@ npm test
 
 ---
 
-## 📦 Compilación y Generación Portable
+## 📦 Compilación y publicación
 
-### Compilar TypeScript y Vite:
+### Compilar instalador + portable en local
 ```bash
-npm run build
+npm run dist
+```
+Genera en `dist-electron/` el instalador `yanote-Setup-x.y.z.exe`, el portable `yanote-Portable-x.y.z.exe` y `latest.yml` (lo que lee el actualizador).
+
+### Publicar una versión nueva (actualización automática)
+La publicación la hace GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)) al subir una etiqueta `v*`:
+
+```bash
+npm version 1.1.0 --no-git-tag-version          # sube la versión en package.json
+git commit -am "chore: release v1.1.0"
+git tag -a v1.1.0 -m "Novedades de la versión:
+- Lo que cambió
+- Otra mejora"                                   # este texto aparece en el aviso de actualización
+git push origin main --follow-tags
 ```
 
-### Generar ejecutable portable de Windows (`.exe`):
-```bash
-npm run package:portable
-```
-El archivo ejecutable se generará en la carpeta `dist-electron/yanote-Portable-1.0.0.exe`. Puede copiarse a una memoria USB o a cualquier computadora y funcionar de manera autónoma.
+El workflow comprueba que la etiqueta coincide con `package.json`, ejecuta los tests, compila y crea la release con los `.exe`. Las copias instaladas lo detectan al iniciar (y cada 6 horas) y preguntan al usuario si quiere actualizar.
+
+### Landing page
+La web está en [site/](site/) y se publica en GitHub Pages con [.github/workflows/pages.yml](.github/workflows/pages.yml) cada vez que cambia. Los botones de descarga apuntan siempre al `.exe` de la última release.

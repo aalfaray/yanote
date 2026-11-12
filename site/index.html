@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>yanote — Notas Markdown flotantes con Claude</title>
+  <meta name="description" content="yanote es un editor de notas Markdown para Windows que flota sobre tus ventanas, con pestañas, terminal integrada y chat con Claude Code. Gratis y de código abierto." />
+  <meta property="og:title" content="yanote — Notas Markdown flotantes con Claude" />
+  <meta property="og:description" content="Editor Markdown flotante para Windows con pestañas, terminal y chat con Claude Code." />
+  <meta property="og:image" content="img/editor-light.png" />
+  <meta name="theme-color" content="#FFE500" />
+  <link rel="icon" type="image/png" href="img/icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #FAF8F5;
+      --card: #FFFFFF;
+      --ink: #111111;
+      --muted: #555049;
+      --line: #000000;
+      --yellow: #FFE500;
+      --green: #78E08F;
+      --red: #FF6B6B;
+      --blue: #A3D8F4;
+      --violet: #C9A7F5;
+      --claude: #D97757;
+      --shadow: 4px 4px 0 #000;
+      --radius: 8px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #121212;
+        --card: #1C1C20;
+        --ink: #F4F4F5;
+        --muted: #A1A1AA;
+        --line: #000000;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #121212;
+      --card: #1C1C20;
+      --ink: #F4F4F5;
+      --muted: #A1A1AA;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    img { max-width: 100%; display: block; }
+    a { color: inherit; }
+    code, .mono { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; }
+
+    .wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      min-height: 52px; padding: 12px 20px;
+      border: 3px solid var(--line); border-radius: var(--radius);
+      background: var(--yellow); color: #000;
+      font-weight: 900; font-size: 17px; text-decoration: none;
+      box-shadow: var(--shadow);
+      transition: transform .08s ease, box-shadow .08s ease;
+      cursor: pointer;
+    }
+    .btn:hover { transform: translate(-1px, -1px); box-shadow: 6px 6px 0 #000; }
+    .btn:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 #000; }
+    .btn.secondary { background: var(--card); color: var(--ink); font-size: 15px; min-height: 46px; }
+    .btn small { display: block; font-weight: 600; font-size: 12px; opacity: .75; }
+    .btn .label { text-align: left; line-height: 1.15; }
+    .btn svg { flex-shrink: 0; }
+
+    /* ---------- Header ---------- */
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--bg);
+      border-bottom: 3px solid var(--line);
+    }
+    header .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 12px; }
+    .logo {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 12px; background: var(--yellow); color: #000;
+      border: 3px solid #000; border-radius: var(--radius); box-shadow: 3px 3px 0 #000;
+      font-weight: 900; letter-spacing: .06em; text-decoration: none; font-size: 18px;
+    }
+    nav { display: flex; align-items: center; gap: 6px; }
+    nav a.link { display: none; font-weight: 800; text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+    nav a.link:hover { background: var(--yellow); color: #000; }
+    .icon-btn {
+      width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center;
+      border: 3px solid #000; border-radius: var(--radius); background: var(--card); color: var(--ink);
+      box-shadow: 3px 3px 0 #000; cursor: pointer; text-decoration: none;
+    }
+    .icon-btn:hover { background: var(--yellow); color: #000; }
+
+    /* ---------- Hero ---------- */
+    .hero { padding: 40px 0 56px; border-bottom: 3px solid var(--line); overflow: hidden; }
+    .hero .wrap { display: grid; gap: 40px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 4px 10px; border: 2px solid #000; border-radius: 999px;
+      background: var(--green); color: #000; font-weight: 800; font-size: 13px;
+    }
+    h1 {
+      font-size: clamp(38px, 10vw, 76px); line-height: .98; font-weight: 900;
+      letter-spacing: -0.02em; margin: 18px 0 16px;
+    }
+    h1 mark { background: var(--yellow); color: #000; padding: 0 .12em; border: 3px solid #000; box-shadow: 4px 4px 0 #000; display: inline-block; transform: rotate(-1.5deg); }
+    .lead { font-size: 18px; color: var(--muted); max-width: 560px; margin: 0 0 28px; }
+    .cta { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+    .meta { font-size: 13px; color: var(--muted); font-weight: 600; margin-top: 14px; }
+
+    .shots { position: relative; min-height: 360px; }
+    .frame {
+      border: 3px solid #000; border-radius: 10px; overflow: hidden;
+      box-shadow: 8px 8px 0 #000; background: var(--card);
+    }
+    .shots .a { width: 78%; transform: rotate(-2deg); }
+    .shots .b { width: 62%; position: absolute; right: 0; top: 34%; transform: rotate(3deg); }
+
+    /* ---------- Sections ---------- */
+    section { padding: 64px 0; border-bottom: 3px solid var(--line); }
+    h2 { font-size: clamp(30px, 6vw, 48px); line-height: 1.05; font-weight: 900; margin: 0 0 12px; letter-spacing: -0.01em; }
+    .kicker { font-weight: 900; text-transform: uppercase; letter-spacing: .12em; font-size: 13px; color: var(--claude); margin: 0 0 8px; }
+    .sub { color: var(--muted); font-size: 17px; max-width: 640px; margin: 0 0 32px; }
+
+    .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+    .card {
+      background: var(--card); border: 3px solid #000; border-radius: var(--radius);
+      box-shadow: var(--shadow); padding: 20px;
+    }
+    .card h3 { margin: 12px 0 6px; font-size: 19px; font-weight: 900; }
+    .card p { margin: 0; color: var(--muted); font-size: 15px; }
+    .chip {
+      width: 46px; height: 46px; display: inline-flex; align-items: center; justify-content: center;
+      border: 3px solid #000; border-radius: 8px; color: #000; box-shadow: 2px 2px 0 #000;
+    }
+
+    .split { display: grid; gap: 32px; align-items: center; }
+    .checks { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 12px; }
+    .checks li { display: flex; gap: 10px; align-items: flex-start; font-weight: 600; }
+    .checks li::before {
+      content: "✓"; flex-shrink: 0; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center;
+      background: var(--green); color: #000; border: 2px solid #000; border-radius: 5px; font-weight: 900; font-size: 14px;
+    }
+    .note {
+      border: 3px dashed var(--muted); border-radius: var(--radius); padding: 14px 16px; font-size: 14px; color: var(--muted);
+    }
+    .note code { color: var(--ink); }
+
+    .steps { counter-reset: s; display: grid; gap: 16px; padding: 0; margin: 0; list-style: none; }
+    .steps li { counter-increment: s; position: relative; padding-left: 58px; min-height: 44px; }
+    .steps li::before {
+      content: counter(s); position: absolute; left: 0; top: 0;
+      width: 42px; height: 42px; display: flex; align-items: center; justify-content: center;
+      background: var(--yellow); color: #000; border: 3px solid #000; border-radius: 8px; box-shadow: 2px 2px 0 #000; font-weight: 900;
+    }
+    .steps b { display: block; font-size: 17px; }
+    .steps span { color: var(--muted); font-size: 15px; }
+
+    .download-box { text-align: center; }
+    .download-box .cta { max-width: 420px; margin: 0 auto; }
+
+    footer { padding: 32px 0 40px; font-size: 14px; color: var(--muted); }
+    footer .wrap { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; }
+    footer a { font-weight: 800; }
+
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+    /* ---------- Larger screens ---------- */
+    @media (min-width: 560px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+      .cta { flex-direction: row; flex-wrap: wrap; align-items: center; }
+    }
+    @media (min-width: 760px) {
+      nav a.link { display: inline-block; }
+      .hero { padding: 64px 0 80px; }
+    }
+    @media (min-width: 960px) {
+      .hero .wrap { grid-template-columns: 1.05fr 1fr; align-items: center; }
+      .shots { min-height: 520px; }
+      .grid { grid-template-columns: repeat(4, 1fr); }
+      .split { grid-template-columns: 1fr 1fr; gap: 56px; }
+      .split.reverse > :first-child { order: 2; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .btn, .btn:hover, .btn:active { transition: none; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a class="logo" href="#top" aria-label="yanote, inicio">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="#FF8A00" stroke="#000" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        YANOTE
+      </a>
+      <nav aria-label="Principal">
+        <a class="link" href="#funciones">Funciones</a>
+        <a class="link" href="#claude">Claude</a>
+        <a class="link" href="#descargar">Descargar</a>
+        <button class="icon-btn" id="theme" type="button" aria-label="Cambiar tema claro/oscuro" title="Tema">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+        </button>
+        <a class="icon-btn" href="https://github.com/aalfaray/yanote" aria-label="Código en GitHub" title="GitHub">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.36-3.87-1.36-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.19-3.08-.12-.3-.52-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.23 2.74.11 3.04.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <div class="hero">
+      <div class="wrap">
+        <div>
+          <span class="badge"><span aria-hidden="true">●</span> Gratis · Código abierto · Windows</span>
+          <h1>Tus notas, <mark>siempre encima</mark></h1>
+          <p class="lead">
+            yanote es un bloc de notas Markdown que flota sobre tus ventanas. Abre notas, terminales y
+            <b>chats con Claude Code</b> en pestañas, sin salir de lo que estás haciendo.
+          </p>
+          <div class="cta">
+            <a class="btn" data-asset="setup" href="https://github.com/aalfaray/yanote/releases/latest">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
+              <span class="label">Descargar para Windows<small data-version>Instalador .exe · se actualiza solo</small></span>
+            </a>
+            <a class="btn secondary" data-asset="portable" href="https://github.com/aalfaray/yanote/releases/latest">Versión portable</a>
+          </div>
+          <p class="meta" data-meta>Windows 10 / 11 · 64 bits</p>
+        </div>
+
+        <div class="shots" aria-hidden="true">
+          <div class="frame a"><img src="img/editor-light.png" width="520" height="680" alt="" /></div>
+          <div class="frame b"><img src="img/chat-dark.png" width="520" height="680" alt="" loading="lazy" /></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <section id="funciones">
+      <div class="wrap">
+        <p class="kicker">Funciones</p>
+        <h2>Pequeño por fuera. Completo por dentro.</h2>
+        <p class="sub">Diseñado como una ventana compacta que puedes dejar fijada en una esquina mientras trabajas.</p>
+
+        <div class="grid">
+          <article class="card">
+            <span class="chip" style="background:var(--yellow)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 10.76V6h6v4.76l2 3.24H7z"/></svg></span>
+            <h3>Siempre encima</h3>
+            <p>Fija la ventana sobre las demás y ajusta su transparencia para leer lo que hay detrás.</p>
+          </article>
+          <article class="card">
+            <span class="chip" style="background:var(--blue)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h7V4H3zM3 7v13h18V7zM10 4h4v3"/></svg></span>
+            <h3>Pestañas para todo</h3>
+            <p>Notas Markdown, PowerShell, CMD y chats con Claude, todo en pestañas que puedes fijar y renombrar.</p>
+          </article>
+          <article class="card">
+            <span class="chip" style="background:var(--green)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"/></svg></span>
+            <h3>Editor visual o Markdown</h3>
+            <p>Títulos, tablas, listas de tareas y código con formato visual, o cambia al texto Markdown puro.</p>
+          </article>
+          <article class="card">
+            <span class="chip" style="background:var(--violet)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></svg></span>
+            <h3>Lectura en voz alta</h3>
+            <p>Escucha tu nota, una selección o la última respuesta de Claude mientras haces otra cosa.</p>
+          </article>
+          <article class="card">
+            <span class="chip" style="background:var(--card);color:var(--ink)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 17 6-5-6-5M12 19h8"/></svg></span>
+            <h3>Terminal integrada</h3>
+            <p>Abre PowerShell o CMD en la carpeta de la nota activa. Pega imágenes con Ctrl+V.</p>
+          </article>
+          <article class="card">
+            <span class="chip" style="background:#FFD1C2"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg></span>
+            <h3>Chat con Claude</h3>
+            <p>Claude Code como un chat de verdad, con permisos, tareas y diffs visibles.</p>
+          </article>
+          <article class="card">
+            <span class="chip" style="background:#27272A;color:#FFE500"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg></span>
+            <h3>Modo oscuro</h3>
+            <p>Un tema nocturno pensado para trabajar de noche sin perder el contraste.</p>
+          </article>
+          <article class="card">
+            <span class="chip" style="background:var(--yellow)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg></span>
+            <h3>Se actualiza solo</h3>
+            <p>Cuando sale una versión nueva te avisa; aceptas y se instala en segundos.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Claude -->
+    <section id="claude">
+      <div class="wrap split">
+        <div>
+          <p class="kicker">Claude Code, sin terminal</p>
+          <h2>Conversa con Claude como en un chat normal.</h2>
+          <p class="sub">Elige <b>Chat con Claude</b> en el menú de nueva pestaña y trabaja con Claude Code sobre la carpeta de tus notas.</p>
+          <ul class="checks">
+            <li>Respuestas en tiempo real con tablas, listas y código</li>
+            <li>Apruebas cada edición o comando con un clic: Permitir, Permitir siempre o Rechazar</li>
+            <li>Responde las preguntas de Claude y aprueba sus planes desde tarjetas</li>
+            <li>Cambia de modelo y de nivel de esfuerzo (se recuerda por modelo)</li>
+            <li>Comandos con <code>/</code>, imágenes pegadas y modo planificación</li>
+          </ul>
+          <p class="note">
+            Necesitas <a href="https://claude.com/claude-code">Claude Code</a> instalado y con la sesión iniciada:
+            ejecuta <code>claude</code> una vez en una terminal. yanote usa tu propia cuenta.
+          </p>
+        </div>
+        <div class="frame" style="max-width:460px;margin:0 auto;transform:rotate(1.5deg)">
+          <img src="img/chat-permission-dark.png" width="520" height="680" alt="Chat con Claude en yanote: una solicitud de permiso para crear Resumen.md y una pregunta de Claude con opciones" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section id="descargar">
+      <div class="wrap split reverse">
+        <div class="download-box">
+          <h2>Descárgalo gratis</h2>
+          <p class="sub" style="margin:0 auto 24px">El instalador es la opción recomendada: se actualiza automáticamente.</p>
+          <div class="cta" style="flex-direction:column">
+            <a class="btn" data-asset="setup" href="https://github.com/aalfaray/yanote/releases/latest">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16"/></svg>
+              <span class="label">Instalador para Windows<small data-version>.exe · recomendado</small></span>
+            </a>
+            <a class="btn secondary" data-asset="portable" href="https://github.com/aalfaray/yanote/releases/latest">
+              <span class="label">Versión portable<small>Sin instalar · ideal para USB · actualización manual</small></span>
+            </a>
+          </div>
+          <p class="meta"><a href="https://github.com/aalfaray/yanote/releases">Todas las versiones y notas de cambios</a></p>
+        </div>
+        <div>
+          <p class="kicker">Instalación</p>
+          <ol class="steps">
+            <li><b>Descarga el instalador</b><span>Un único archivo <code>yanote-Setup.exe</code>.</span></li>
+            <li><b>Ábrelo</b><span>Si Windows muestra “Windows protegió su PC”, pulsa <em>Más información</em> → <em>Ejecutar de todas formas</em>. Aparece porque la app aún no está firmada digitalmente.</span></li>
+            <li><b>Elige la carpeta y listo</b><span>Se crea un acceso directo en el escritorio y en el menú Inicio.</span></li>
+            <li><b>Olvídate de actualizar</b><span>Cuando haya una versión nueva, yanote te preguntará si quieres instalarla.</span></li>
+          </ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <span>yanote · hecho con Electron y React</span>
+      <a href="https://github.com/aalfaray/yanote">Código fuente en GitHub →</a>
+    </div>
+  </footer>
+
+  <script>
+    // Theme toggle (remembered per browser; falls back to the OS preference)
+    (function () {
+      var root = document.documentElement;
+      try {
+        var saved = localStorage.getItem('yanote-theme');
+        if (saved) root.setAttribute('data-theme', saved);
+      } catch (e) {}
+      document.getElementById('theme').addEventListener('click', function () {
+        var dark = root.getAttribute('data-theme')
+          ? root.getAttribute('data-theme') === 'dark'
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var next = dark ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        try { localStorage.setItem('yanote-theme', next); } catch (e) {}
+      });
+    })();
+
+    // Point the download buttons at the .exe files of the latest GitHub release
+    (function () {
+      var fallback = 'https://github.com/aalfaray/yanote/releases/latest';
+      fetch('https://api.github.com/repos/aalfaray/yanote/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (rel) {
+          var assets = rel.assets || [];
+          var find = function (re) { return assets.filter(function (a) { return re.test(a.name); })[0]; };
+          var files = { setup: find(/Setup.*\.exe$/i), portable: find(/Portable.*\.exe$/i) };
+          var version = String(rel.tag_name || '').replace(/^v/i, '');
+          document.querySelectorAll('[data-asset]').forEach(function (a) {
+            var f = files[a.getAttribute('data-asset')];
+            a.href = f ? f.browser_download_url : fallback;
+          });
+          if (files.setup && version) {
+            var mb = Math.round(files.setup.size / 1048576);
+            document.querySelectorAll('[data-version]').forEach(function (el) {
+              el.textContent = 'v' + version + ' · ' + mb + ' MB · se actualiza solo';
+            });
+          }
+          if (rel.published_at) {
+            var d = new Date(rel.published_at).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
+            var meta = document.querySelector('[data-meta]');
+            if (meta) meta.textContent = 'Windows 10 / 11 · 64 bits · Última versión: ' + d;
+          }
+        })
+        .catch(function () { /* offline or no release yet: buttons keep linking to the releases page */ });
+    })();
+  </script>
+</body>
+</html>

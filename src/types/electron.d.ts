@@ -144,6 +144,17 @@ export interface ElectronAPI {
   termResize?: (id: string, cols: number, rows: number) => void;
   termKill?: (id: string) => Promise<boolean>;
   onTermEvent?: (callback: (event: TermEvent) => void) => () => void;
+  // App version & updates
+  getAppVersion?: () => Promise<string>;
+  getUpdateMode?: () => Promise<UpdateMode>;
+  /** Manual check; the result arrives as update events */
+  checkForUpdates?: () => Promise<{ success: boolean; mode?: UpdateMode; error?: string }>;
+  /** Installed: start the download. Portable: open the download page. */
+  acceptUpdate?: () => Promise<{ success: boolean; opened?: boolean; error?: string }>;
+  /** Restart into the downloaded version */
+  installUpdate?: () => Promise<boolean>;
+  onUpdateEvent?: (callback: (event: UpdateEvent) => void) => () => void;
+
   // Claude chat sessions (Agent SDK)
   claudeStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: ClaudePermissionMode; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string }>;
   claudeSend?: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => ClaudeResult;
@@ -158,6 +169,15 @@ export interface ElectronAPI {
   /** Saves the clipboard image as a temp PNG and returns its path; null when there is no image */
   saveClipboardImage?: () => Promise<string | null>;
 }
+
+export type UpdateMode = 'auto' | 'portable' | 'disabled';
+
+export type UpdateEvent =
+  | { type: 'available'; mode: UpdateMode; version: string; currentVersion: string; notes: string; url: string }
+  | { type: 'none'; currentVersion: string }
+  | { type: 'progress'; percent: number; transferred?: number; total?: number }
+  | { type: 'downloaded'; version: string }
+  | { type: 'error'; error: string };
 
 export interface TtsSpeakRequest {
   id: number;
