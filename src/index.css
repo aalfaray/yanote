@@ -24,6 +24,15 @@ body {
   overflow: hidden;
 }
 
+/* Chat transcript: allow selecting and copying replies (body disables selection app-wide) */
+.claude-chat-scroll {
+  user-select: text;
+  cursor: auto;
+}
+.claude-chat-scroll button {
+  user-select: none;
+}
+
 /* Neubrutalist utility classes (Boldkit style) */
 .shadow-brutal-sm {
   box-shadow: 2px 2px 0px #000000;

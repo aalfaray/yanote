@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -72,6 +72,30 @@ function createWindow() {
   }
 
   mainWindow.webContents.once('did-finish-load', () => setupUpdates());
+
+  // Electron has no default right-click menu: offer copy/paste on selections and editable fields
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const hasSelection = Boolean(params.selectionText && params.selectionText.trim());
+    if (!hasSelection && !params.isEditable) return;
+    const flags = params.editFlags || {};
+    const template = params.isEditable
+      ? [
+          { label: 'Deshacer', role: 'undo', enabled: flags.canUndo },
+          { label: 'Rehacer', role: 'redo', enabled: flags.canRedo },
+          { type: 'separator' },
+          { label: 'Cortar', role: 'cut', enabled: flags.canCut },
+          { label: 'Copiar', role: 'copy', enabled: flags.canCopy },
+          { label: 'Pegar', role: 'paste', enabled: flags.canPaste },
+          { type: 'separator' },
+          { label: 'Seleccionar todo', role: 'selectAll' },
+        ]
+      : [
+          { label: 'Copiar', role: 'copy' },
+          { type: 'separator' },
+          { label: 'Seleccionar todo', role: 'selectAll' },
+        ];
+    Menu.buildFromTemplate(template).popup({ window: mainWindow });
+  });
 
   mainWindow.on('closed', () => {
     speechService.stop();
