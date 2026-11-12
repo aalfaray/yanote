@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Pencil,
+  FileDown,
   Pin,
   PinOff,
   X,
@@ -25,6 +26,8 @@ export interface TabContextMenuProps {
   onCopyPath: (tab: TabItem) => void;
   onCopyRelativePath: (tab: TabItem) => void;
   onRevealInExplorer: (tab: TabItem) => void;
+  /** Only offered for note tabs */
+  onExportPdf?: (tab: TabItem) => void;
 }
 
 export const TabContextMenu: React.FC<TabContextMenuProps> = ({
@@ -44,6 +47,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
   onCopyPath,
   onCopyRelativePath,
   onRevealInExplorer,
+  onExportPdf,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -78,7 +82,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
 
   // Viewport collision clamping so menu never overflows the window
   const menuWidth = 260;
-  const menuHeight = 350;
+  const menuHeight = 380;
   const clampedX = typeof window !== 'undefined'
     ? Math.max(8, Math.min(x, window.innerWidth - menuWidth - 8))
     : x;
@@ -205,6 +209,19 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
       >
         <span>Abrir vista previa de Markdown</span>
       </button>
+
+      {/* Exportar a PDF (solo notas) */}
+      {onExportPdf && tab.kind !== 'terminal' && tab.kind !== 'claude' && (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => handleAction(() => onExportPdf(tab))}
+          className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+        >
+          <FileDown size={13} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
+          <span>Exportar a PDF</span>
+        </button>
+      )}
 
       <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
 

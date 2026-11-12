@@ -9,6 +9,7 @@ import {
   matchCommands,
   activeModelInfo,
   effortLevelsFor,
+  modelLabel,
   type ChatState,
   type ChatAction,
 } from '../../src/lib/claudeChat';
@@ -124,6 +125,40 @@ describe('Frontend: Claude model / effort helpers', () => {
     expect(effortLevelsFor(models[2])).toEqual([]);
     expect(effortLevelsFor({ ...models[0], supportsEffort: false })).toEqual([]);
     expect(effortLevelsFor(undefined)).toEqual([]);
+  });
+
+  it('formats model ids as readable names', () => {
+    expect(modelLabel('claude-opus-5-5')).toBe('Opus 5.5');
+    expect(modelLabel('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
+    expect(modelLabel('claude-sonnet-5-5[1m]')).toBe('Sonnet 5.5 1M');
+    expect(modelLabel('opus')).toBe('opus');
+    expect(modelLabel(undefined)).toBe('');
+  });
+
+  it('rebuilds a resumed transcript from stored session messages', () => {
+    const history = [
+      { type: 'user', parent_tool_use_id: null, message: { role: 'user', content: 'lista los archivos' } },
+      { type: 'assistant', parent_tool_use_id: null, message: { id: 'a1', content: [{ type: 'text', text: 'Voy.' }, { type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'ls' } }] } },
+      { type: 'user', parent_tool_use_id: null, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'a.md' }] } },
+      { type: 'user', parent_tool_use_id: null, message: { role: 'user', content: '<command-name>/clear</command-name>' } },
+      { type: 'assistant', parent_tool_use_id: null, message: { id: 'a2', content: [{ type: 'text', text: 'Hay un archivo.' }] } },
+    ];
+    const s = run([{ type: 'history', messages: history }]);
+    expect(s.items.map((i) => i.kind)).toEqual(['user', 'text', 'tool', 'text']);
+    expect(s.items[0]).toMatchObject({ text: 'lista los archivos' });
+    expect(s.items[2]).toMatchObject({ result: { text: 'a.md' } });
+    expect(s.running).toBe(false);
+    // A late history never duplicates a chat that already has content
+    expect(run([{ type: 'history', messages: history }], s).items).toHaveLength(4);
+  });
+
+  it('stores the model and effort Claude resolved from its settings', () => {
+    const s = run([ev({ type: 'applied_settings', model: 'claude-opus-5-5', effort: 'medium' })]);
+    expect(s.appliedModel).toBe('claude-opus-5-5');
+    expect(s.appliedEffort).toBe('medium');
+    const cleared = run([ev({ type: 'applied_settings', model: null, effort: null })], s);
+    expect(cleared.appliedModel).toBe('claude-opus-5-5');
+    expect(cleared.appliedEffort).toBeNull();
   });
 });
 

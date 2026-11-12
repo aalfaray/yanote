@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   listNotes: () => ipcRenderer.invoke('fs:listNotes'),
   readFile: (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
   writeFile: (filePath, content) => ipcRenderer.invoke('fs:writeFile', filePath, content),
+  exportPdf: (options) => ipcRenderer.invoke('export:pdf', options),
+  saveTextAs: (options) => ipcRenderer.invoke('export:saveText', options),
+  openPath: (filePath) => ipcRenderer.invoke('shell:openPath', filePath),
   deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
   renameFile: (oldPath, newPath) => ipcRenderer.invoke('fs:renameFile', oldPath, newPath),
   getAppConfig: () => ipcRenderer.invoke('fs:getAppConfig'),
@@ -67,9 +70,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   claudeSetModel: (id, model) => ipcRenderer.invoke('claude:setModel', id, model),
   claudeSetEffort: (id, level) => ipcRenderer.invoke('claude:setEffort', id, level),
   claudeStop: (id) => ipcRenderer.invoke('claude:stop', id),
+  claudeHistory: (sessionId) => ipcRenderer.invoke('claude:history', sessionId),
   onClaudeEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('claude:event', listener);
     return () => ipcRenderer.removeListener('claude:event', listener);
+  },
+
+  // Antigravity CLI (Gemini) chat over ACP
+  agyStart: (options) => ipcRenderer.invoke('agy:start', options),
+  agySend: (id, payload) => ipcRenderer.invoke('agy:send', id, payload),
+  agyRespondPermission: (id, requestId, decision) => ipcRenderer.invoke('agy:respondPermission', id, requestId, decision),
+  agyInterrupt: (id) => ipcRenderer.invoke('agy:interrupt', id),
+  agySetPermissionMode: (id, mode) => ipcRenderer.invoke('agy:setPermissionMode', id, mode),
+  agySetModel: (id, model) => ipcRenderer.invoke('agy:setModel', id, model),
+  agySetEffort: (id, level) => ipcRenderer.invoke('agy:setEffort', id, level),
+  agyStop: (id) => ipcRenderer.invoke('agy:stop', id),
+  onAgyEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('agy:event', listener);
+    return () => ipcRenderer.removeListener('agy:event', listener);
   },
 });

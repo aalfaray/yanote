@@ -8,12 +8,15 @@ const { createSpeechService } = require('./services/speechService.cjs');
 const { createTerminalService } = require('./services/terminalService.cjs');
 const { savePastedImage } = require('./services/clipboardImageService.cjs');
 const { createClaudeChatService } = require('./services/claudeChatService.cjs');
+const { createAntigravityChatService } = require('./services/antigravityChatService.cjs');
 const { createUpdateService } = require('./services/updateService.cjs');
+const { createExportService } = require('./services/exportService.cjs');
 
 const speechService = createSpeechService();
 const terminalService = createTerminalService();
 // The installer doesn't ship the SDK's own Claude Code binary (331 MB): the user's `claude` is required
 const claudeChatService = createClaudeChatService({ requireInstalledCli: app.isPackaged });
+const agyChatService = createAntigravityChatService();
 let updateService = null;
 
 let mainWindow = null;
@@ -101,6 +104,7 @@ function createWindow() {
     speechService.stop();
     terminalService.killAll();
     claudeChatService.stopAll();
+    agyChatService.stopAll();
     mainWindow = null;
   });
 }
@@ -359,6 +363,31 @@ ipcMain.handle('claude:setPermissionMode', (_, id, mode) => claudeChatService.se
 ipcMain.handle('claude:setModel', (_, id, model) => claudeChatService.setModel(id, model));
 ipcMain.handle('claude:setEffort', (_, id, level) => claudeChatService.setEffort(id, level));
 ipcMain.handle('claude:stop', (_, id) => claudeChatService.stop(id));
+const exportService = createExportService({
+  dialog,
+  BrowserWindow,
+  getParentWindow: () => mainWindow,
+  getDefaultDir: () => appConfig.notesPath,
+});
+ipcMain.handle('export:pdf', (_, options) => exportService.exportPdf(options));
+ipcMain.handle('export:saveText', (_, options) => exportService.saveText(options));
+ipcMain.handle('shell:openPath', (_, filePath) => (typeof filePath === 'string' && filePath ? shell.openPath(filePath) : ''));
+ipcMain.handle('claude:history', (_, sessionId) => claudeChatService.history(sessionId));
+
+// Antigravity CLI (Gemini) chats: same renderer contract as Claude, driven over ACP
+ipcMain.handle('agy:start', (event, options) => {
+  const sender = event.sender;
+  return agyChatService.start({ ...options, fallbackCwd: appConfig.notesPath }, (chatEvent) => {
+    if (!sender.isDestroyed()) sender.send('agy:event', chatEvent);
+  });
+});
+ipcMain.handle('agy:send', (_, id, payload) => agyChatService.sendMessage(id, payload));
+ipcMain.handle('agy:respondPermission', (_, id, requestId, decision) => agyChatService.respondPermission(id, requestId, decision));
+ipcMain.handle('agy:interrupt', (_, id) => agyChatService.interrupt(id));
+ipcMain.handle('agy:setPermissionMode', (_, id, mode) => agyChatService.setPermissionMode(id, mode));
+ipcMain.handle('agy:setModel', (_, id, model) => agyChatService.setModel(id, model));
+ipcMain.handle('agy:setEffort', (_, id, level) => agyChatService.setEffort(id, level));
+ipcMain.handle('agy:stop', (_, id) => agyChatService.stop(id));
 
 // IPC - App version & updates
 ipcMain.handle('app:getVersion', () => app.getVersion());

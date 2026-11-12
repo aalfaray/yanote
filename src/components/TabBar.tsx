@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, FileText, Check, ChevronLeft, ChevronRight, ChevronDown, Pin, SquareTerminal, Terminal, FolderOpen, Sparkles } from 'lucide-react';
-import type { TabItem, TerminalShell } from '../types/electron';
+import { Plus, X, FileText, Check, ChevronLeft, ChevronRight, ChevronDown, Pin, SquareTerminal, Terminal, FolderOpen, Sparkles, Orbit } from 'lucide-react';
+import type { ChatProvider, TabItem, TerminalShell } from '../types/electron';
 import { TabContextMenu } from './ui/TabContextMenu';
 
 interface TabBarProps {
@@ -10,8 +10,8 @@ interface TabBarProps {
   onCloseTab: (id: string) => void;
   onNewTab: () => void;
   onNewTerminal?: (shell: TerminalShell) => void;
-  /** Opens a chat with Claude Code (structured session instead of the TUI) */
-  onNewClaude?: () => void;
+  /** Opens a chat with Claude Code, or Antigravity CLI (Gemini), as a structured session instead of the TUI */
+  onNewClaude?: (provider?: ChatProvider) => void;
   /** Browse the disk and open an existing .md file */
   onOpenFile?: () => void;
   onRenameTab: (id: string, newTitle: string) => void;
@@ -23,6 +23,8 @@ interface TabBarProps {
   onCopyRelativePath?: (tab: TabItem) => void;
   onCopyId?: (tab: TabItem) => void;
   onRevealInExplorer?: (tab: TabItem) => void;
+  /** Export a note tab to PDF */
+  onExportPdf?: (tab: TabItem) => void;
 }
 
 export const TabBar: React.FC<TabBarProps> = ({
@@ -43,6 +45,7 @@ export const TabBar: React.FC<TabBarProps> = ({
   onCopyRelativePath,
   onCopyId,
   onRevealInExplorer,
+  onExportPdf,
 }) => {
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -249,6 +252,8 @@ export const TabBar: React.FC<TabBarProps> = ({
                     className="text-[#FFB800] dark:text-[#FFE500]"
                   />
                 </span>
+              ) : tab.kind === 'claude' && tab.provider === 'antigravity' ? (
+                <Orbit size={12} strokeWidth={2.5} className="shrink-0 text-[#4285F4]" />
               ) : tab.kind === 'claude' ? (
                 <Sparkles size={12} strokeWidth={2.5} className="shrink-0 text-[#D97757]" />
               ) : tab.kind === 'terminal' ? (
@@ -368,7 +373,16 @@ export const TabBar: React.FC<TabBarProps> = ({
                 ? [{ key: 'open', label: 'Abrir archivo…', hint: 'Ctrl+O', icon: <FolderOpen size={14} strokeWidth={2.5} />, action: () => onOpenFile() }]
                 : []),
               ...(onNewClaude
-                ? [{ key: 'claude', label: 'Chat con Claude', hint: 'AI', icon: <Sparkles size={14} strokeWidth={2.5} className="text-[#D97757]" />, action: () => onNewClaude() }]
+                ? [
+                    { key: 'claude', label: 'Chat con Claude', hint: 'AI', icon: <Sparkles size={14} strokeWidth={2.5} className="text-[#D97757]" />, action: () => onNewClaude('claude') },
+                    {
+                      key: 'antigravity',
+                      label: 'Chat con Antigravity',
+                      hint: 'Gemini',
+                      icon: <Orbit size={14} strokeWidth={2.5} className="text-[#4285F4]" />,
+                      action: () => onNewClaude('antigravity'),
+                    },
+                  ]
                 : []),
               { key: 'ps', label: 'PowerShell', hint: 'PS', icon: <Terminal size={14} strokeWidth={2.5} />, action: () => onNewTerminal?.('powershell') },
               { key: 'cmd', label: 'Terminal (CMD)', hint: 'cmd', icon: <SquareTerminal size={14} strokeWidth={2.5} />, action: () => onNewTerminal?.('cmd') },
@@ -410,6 +424,7 @@ export const TabBar: React.FC<TabBarProps> = ({
         onCopyPath={(targetTab) => handleCopyPath(targetTab)}
         onCopyRelativePath={(targetTab) => handleCopyRelativePath(targetTab)}
         onRevealInExplorer={(targetTab) => onRevealInExplorer?.(targetTab)}
+        onExportPdf={onExportPdf}
       />
     </div>
   );

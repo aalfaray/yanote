@@ -17,6 +17,14 @@ export interface AppConfig {
   recentFiles?: RecentFile[];
 }
 
+export interface ExportResult {
+  success: boolean;
+  path?: string;
+  /** The user closed the "Save as" dialog */
+  canceled?: boolean;
+  error?: string;
+}
+
 export interface RecentFile {
   path: string;
   name: string;
@@ -39,6 +47,10 @@ export interface TabItem {
   cwd?: string;
   /** Command typed into a new terminal right after it starts (e.g. Claude sign-in) */
   initialCommand?: string;
+  /** Claude Code session of a chat tab, resumed when the app reopens */
+  sessionId?: string;
+  /** Agent behind a chat tab (kind === 'claude'); Claude when absent */
+  provider?: ChatProvider;
 }
 
 export type TabKind = 'markdown' | 'terminal' | 'claude';
@@ -56,6 +68,16 @@ export interface ClaudeSlashCommand {
   description: string;
   argumentHint?: string;
 }
+
+/** A permission mode the agent offers (Antigravity reports its own list) */
+export interface ChatModeInfo {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+/** Which agent a chat tab talks to */
+export type ChatProvider = 'claude' | 'antigravity';
 
 export type ClaudeEffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
@@ -84,7 +106,10 @@ export type ClaudeEvent =
   | { id: string; type: 'message'; message: Record<string, unknown> }
   | ({ id: string; type: 'permission' } & ClaudePermissionRequest)
   | { id: string; type: 'permission_cancelled'; requestId: string }
-  | { id: string; type: 'capabilities'; commands: ClaudeSlashCommand[]; models: ClaudeModelInfo[] }
+  | { id: string; type: 'capabilities'; commands: ClaudeSlashCommand[]; models: ClaudeModelInfo[]; modes?: ChatModeInfo[] }
+  /** A user message replayed while a resumed session loads (Antigravity) */
+  | { id: string; type: 'user_message'; text: string }
+  | { id: string; type: 'applied_settings'; model: string | null; effort: ClaudeEffortLevel | null }
   | { id: string; type: 'stderr'; data: string }
   | { id: string; type: 'error'; error: string }
   | { id: string; type: 'exit' };
@@ -128,6 +153,12 @@ export interface ElectronAPI {
   listNotes: () => Promise<{ success: boolean; notes: NoteFile[]; error?: string }>;
   readFile: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
   writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+  /** Renders a full HTML document to a PDF chosen through "Save as" */
+  exportPdf?: (options: { html: string; defaultName: string; defaultDir?: string }) => Promise<ExportResult>;
+  /** Saves text through "Save as" (Markdown unless ext says otherwise) */
+  saveTextAs?: (options: { content: string; defaultName: string; ext?: string; filterName?: string; defaultDir?: string }) => Promise<ExportResult>;
+  /** Opens a file with the system's default app */
+  openPath?: (filePath: string) => Promise<string>;
   deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
   getAppConfig: () => Promise<AppConfig>;
@@ -167,7 +198,20 @@ export interface ElectronAPI {
   /** null returns to the model's default effort */
   claudeSetEffort?: (id: string, level: ClaudeEffortLevel | null) => ClaudeResult;
   claudeStop?: (id: string) => Promise<boolean>;
+  /** Messages of a past Claude Code session (user/assistant, chronological) */
+  claudeHistory?: (sessionId: string) => Promise<{ success: boolean; messages?: Record<string, unknown>[]; error?: string }>;
   onClaudeEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
+
+  // Antigravity CLI (Gemini) chat over ACP — same events as Claude
+  agyStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: string; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
+  agySend?: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => ClaudeResult;
+  agyRespondPermission?: (id: string, requestId: string, decision: ClaudePermissionDecision) => Promise<boolean>;
+  agyInterrupt?: (id: string) => ClaudeResult;
+  agySetPermissionMode?: (id: string, mode: string) => ClaudeResult;
+  agySetModel?: (id: string, model: string | null) => ClaudeResult;
+  agySetEffort?: (id: string, level: ClaudeEffortLevel | null) => ClaudeResult;
+  agyStop?: (id: string) => Promise<boolean>;
+  onAgyEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
   /** Saves the clipboard image as a temp PNG and returns its path; null when there is no image */
   saveClipboardImage?: () => Promise<string | null>;
 }

@@ -117,12 +117,13 @@ function createClaudeChatService({
     if (!id) return { success: false, error: 'Falta el identificador del chat' };
     if (sessions.has(id)) return { success: true, reused: true };
 
-    const session = { inbox: createInbox(), query: null, pending: new Map(), closed: false };
+    const session = { inbox: createInbox(), query: null, pending: new Map(), closed: false, send: null };
     sessions.set(id, session);
     const isCurrent = () => sessions.get(id) === session;
     const send = (payload) => {
       if (isCurrent()) emit({ id, ...payload });
     };
+    session.send = send;
 
     try {
       const sdk = await loadSdk();
@@ -211,6 +212,8 @@ function createClaudeChatService({
           models: models.status === 'fulfilled' ? toPlain(models.value) : [],
         });
       });
+      // The model + effort the user's settings resolve to, so the UI shows them before the first turn
+      void reportApplied(session);
 
       return { success: true, executable: executable || 'sdk-bundled', source };
     } catch (err) {
@@ -249,11 +252,28 @@ function createClaudeChatService({
     return true;
   }
 
-  async function control(id, fn) {
+  /** Emits the model + effort Claude will actually use (settings, env, caps and downgrades applied). */
+  async function reportApplied(session) {
+    try {
+      const settings = await session.query?.getSettings?.();
+      const applied = settings && settings.applied;
+      if (!applied) return;
+      session.send?.({
+        type: 'applied_settings',
+        model: typeof applied.model === 'string' ? applied.model : null,
+        effort: EFFORT_LEVELS.has(applied.effort) ? applied.effort : null,
+      });
+    } catch {
+      // older CLIs without get_settings: the selectors just show their placeholders
+    }
+  }
+
+  async function control(id, fn, { refreshApplied = false } = {}) {
     const session = sessions.get(id);
     if (!session || !session.query) return { success: false, error: 'La sesión de Claude no está activa' };
     try {
       await fn(session.query);
+      if (refreshApplied) void reportApplied(session);
       return { success: true };
     } catch (err) {
       return { success: false, error: err && err.message ? err.message : String(err) };
@@ -263,12 +283,12 @@ function createClaudeChatService({
   const interrupt = (id) => control(id, (q) => q.interrupt());
   const setPermissionMode = (id, mode) =>
     PERMISSION_MODES.has(mode) ? control(id, (q) => q.setPermissionMode(mode)) : Promise.resolve({ success: false, error: 'Modo inválido' });
-  const setModel = (id, model) => control(id, (q) => q.setModel(model || undefined));
+  const setModel = (id, model) => control(id, (q) => q.setModel(model || undefined), { refreshApplied: true });
   /** null/'' returns to the model's default effort */
   const setEffort = (id, level) =>
     level && !EFFORT_LEVELS.has(level)
       ? Promise.resolve({ success: false, error: 'Nivel de esfuerzo inválido' })
-      : control(id, (q) => q.applyFlagSettings({ effortLevel: level || null }));
+      : control(id, (q) => q.applyFlagSettings({ effortLevel: level || null }), { refreshApplied: true });
 
   function stop(id) {
     const session = sessions.get(id);
@@ -285,6 +305,18 @@ function createClaudeChatService({
     return true;
   }
 
+  /** Transcript of a past session (from Claude Code's own JSONL), to show it again after a restart. */
+  async function history(sessionId) {
+    if (!sessionId || typeof sessionId !== 'string') return { success: false, error: 'Falta la sesión' };
+    try {
+      const sdk = await loadSdk();
+      const messages = await sdk.getSessionMessages(sessionId);
+      return { success: true, messages: toPlain(messages || []) };
+    } catch (err) {
+      return { success: false, error: err && err.message ? err.message : String(err) };
+    }
+  }
+
   function stopAll() {
     for (const id of [...sessions.keys()]) stop(id);
   }
@@ -297,6 +329,7 @@ function createClaudeChatService({
     setPermissionMode,
     setModel,
     setEffort,
+    history,
     stop,
     stopAll,
     has: (id) => sessions.has(id),

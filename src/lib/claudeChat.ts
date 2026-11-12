@@ -1,4 +1,4 @@
-import type { ClaudeEvent, ClaudePermissionRequest, ClaudeSlashCommand, ClaudeModelInfo, ClaudeEffortLevel } from '../types/electron';
+import type { ClaudeEvent, ClaudePermissionRequest, ClaudeSlashCommand, ClaudeModelInfo, ClaudeEffortLevel, ChatModeInfo } from '../types/electron';
 
 /**
  * Turns the Agent SDK's message stream into a chat transcript.
@@ -42,6 +42,12 @@ export interface ChatState {
   status?: string | null;
   commands: ClaudeSlashCommand[];
   models: ClaudeModelInfo[];
+  /** Permission modes the agent offers (Antigravity); Claude uses the built-in list */
+  modes?: ChatModeInfo[];
+  /** Model id Claude will use for the next turn (from its resolved settings) */
+  appliedModel?: string;
+  /** Effort Claude will use for the next turn; null = the model sends no effort */
+  appliedEffort?: ClaudeEffortLevel | null;
   totalCostUsd: number;
   /** Context tokens of the last API call (input + cache) */
   contextTokens: number;
@@ -334,12 +340,54 @@ export type ChatAction =
   | { type: 'notice'; text: string; tone: 'info' | 'error' }
   | { type: 'local_permission_mode'; mode: string }
   | { type: 'auth_retry' }
+  | { type: 'history'; messages: Json[] }
   | { type: 'reset' };
+
+/** The user's own words in a stored user message (not tool results or CLI-injected tags). */
+function userPrompt(msg: Json): { text: string; imageCount: number } | null {
+  const m = isObj(msg.message) ? msg.message : {};
+  const content = m.content;
+  let text = '';
+  let imageCount = 0;
+  if (typeof content === 'string') text = content;
+  else if (Array.isArray(content)) {
+    for (const block of content) {
+      if (!isObj(block)) continue;
+      if (block.type === 'tool_result') return null;
+      if (block.type === 'text') text += (text ? '\n' : '') + str(block.text);
+      if (block.type === 'image') imageCount++;
+    }
+  }
+  text = text.trim();
+  // Slash-command echoes, reminders and other CLI plumbing are wrapped in tags
+  if (/^<[a-z-]+>/i.test(text)) return null;
+  return text || imageCount ? { text, imageCount } : null;
+}
+
+/** Rebuilds the transcript of a resumed session from its stored messages. */
+function onHistory(state: ChatState, messages: Json[]): ChatState {
+  let next = state;
+  for (const msg of messages) {
+    if (!isObj(msg)) continue;
+    if (msg.type === 'user' && !msg.parent_tool_use_id) {
+      const prompt = userPrompt(msg);
+      if (prompt) {
+        next = push(next, { kind: 'user', id: localId('user'), text: prompt.text, imageCount: prompt.imageCount });
+        continue;
+      }
+    }
+    if (msg.type === 'user' || msg.type === 'assistant') next = onMessage(next, msg);
+  }
+  return { ...next, running: false, stream: {}, currentMsg: undefined };
+}
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'reset':
       return initialChatState();
+    case 'history':
+      // Only into an empty chat, so a late answer never duplicates what is already shown
+      return state.items.length === 0 && action.messages.length ? onHistory(state, action.messages) : state;
     case 'send':
       return {
         ...push(state, { kind: 'user', id: localId('user'), text: action.text, imageCount: action.imageCount }),
@@ -370,7 +418,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             ...state,
             commands: ev.commands.length ? ev.commands : state.commands,
             models: ev.models.length ? ev.models : state.models,
+            modes: ev.modes?.length ? ev.modes : state.modes,
           };
+        case 'user_message':
+          return ev.text.trim() ? push(state, { kind: 'user', id: localId('user'), text: ev.text, imageCount: 0 }) : state;
+        case 'applied_settings':
+          return { ...state, appliedModel: ev.model ?? state.appliedModel, appliedEffort: ev.effort };
         case 'error':
           return { ...push(state, { kind: 'notice', id: localId('error'), text: ev.error, tone: 'error' }), running: false, ended: true };
         case 'exit':
@@ -472,8 +525,91 @@ export function activeModelInfo(models: ClaudeModelInfo[], selected: string, rep
   return models.find((m) => m.value === 'default');
 }
 
+/** 'claude-opus-5-5' -> 'Opus 5.5', 'claude-haiku-4-5-20251001' -> 'Haiku 4.5'; other ids pass through. */
+export function modelLabel(id: string | undefined): string {
+  if (!id) return '';
+  const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(\[1m\])?$/i.exec(id);
+  if (!m) return id;
+  const family = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+  return `${family} ${m[2]}${m[3] ? `.${m[3]}` : ''}${m[4] ? ' 1M' : ''}`;
+}
+
 /** Effort levels the model accepts ([] when it has no effort control). */
 export function effortLevelsFor(model: ClaudeModelInfo | undefined): ClaudeEffortLevel[] {
   if (!model || model.supportsEffort === false) return [];
   return model.supportedEffortLevels ?? [];
+}
+
+/** Most telling argument of a tool call, for a one-line summary ('Bash: ls', 'Edit: src/a.ts'). */
+function exportToolSummary(input: Record<string, unknown>): string {
+  for (const key of ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description', 'prompt']) {
+    const v = input[key];
+    if (typeof v === 'string' && v.trim()) return v.trim().split('\n')[0].slice(0, 200);
+  }
+  return '';
+}
+
+/** A Markdown fence that cannot be closed early by backticks inside the text. */
+function fenced(text: string, lang = ''): string {
+  const longest = Math.max(2, ...(text.match(/`+/g) ?? []).map((m) => m.length));
+  const fence = '`'.repeat(longest + 1);
+  return `${fence}${lang}\n${text}\n${fence}`;
+}
+
+export interface ChatExportOptions {
+  /** Include tool calls (summarised) and their output */
+  includeTools?: boolean;
+  /** Max characters kept from each tool's output */
+  maxToolOutput?: number;
+  model?: string;
+  cwd?: string;
+  date?: Date;
+  /** Who answered ('Claude', 'Antigravity') */
+  assistantName?: string;
+  /** Tool the chat ran on, for the note to the next AI */
+  source?: string;
+}
+
+/**
+ * The conversation as portable Markdown, to save or paste into another AI session as context.
+ * Keeps the user's messages and Claude's answers; tool calls are summarised; thinking, notices
+ * and permission prompts are left out.
+ */
+export function chatToMarkdown(items: ChatItem[], opts: ChatExportOptions = {}): string {
+  const { includeTools = true, maxToolOutput = 1500, model, cwd, date = new Date(), assistantName = 'Claude', source = 'Claude Code' } = opts;
+  const lines: string[] = [`# Conversación con ${assistantName}`, ''];
+  const meta = [
+    `Exportada: ${date.toLocaleString('es')}`,
+    model ? `Modelo: ${model}` : '',
+    cwd ? `Carpeta de trabajo: \`${cwd}\`` : '',
+  ].filter(Boolean);
+  lines.push(...meta.map((m) => `- ${m}`), '');
+  lines.push(
+    `> Historial exportado desde yanote (${source}). Úsalo como contexto de la conversación anterior para continuar el trabajo.`,
+    ''
+  );
+
+  let last: 'user' | 'assistant' | null = null;
+  for (const item of topLevelItems(items)) {
+    if (item.kind === 'user') {
+      const images = item.imageCount ? `\n\n_(${item.imageCount} ${item.imageCount === 1 ? 'imagen adjunta' : 'imágenes adjuntas'})_` : '';
+      lines.push('---', '', '## 🧑 Usuario', '', item.text + images, '');
+      last = 'user';
+    } else if (item.kind === 'text' && item.text.trim()) {
+      if (last !== 'assistant') lines.push(`## 🤖 ${assistantName}`, '');
+      lines.push(item.text.trim(), '');
+      last = 'assistant';
+    } else if (item.kind === 'tool' && includeTools) {
+      if (last !== 'assistant') lines.push(`## 🤖 ${assistantName}`, '');
+      const summary = exportToolSummary(item.input);
+      lines.push(`**🔧 ${item.name}**${summary ? `: \`${summary.replace(/`/g, "'")}\`` : ''}`, '');
+      if (item.result?.text.trim()) {
+        const out = item.result.text.trim();
+        const cut = out.length > maxToolOutput ? `${out.slice(0, maxToolOutput)}\n… (${out.length - maxToolOutput} caracteres omitidos)` : out;
+        lines.push(`<details><summary>${item.result.isError ? 'Error' : 'Resultado'}</summary>`, '', fenced(cut), '', '</details>', '');
+      }
+      last = 'assistant';
+    }
+  }
+  return `${lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;
 }

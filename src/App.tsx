@@ -9,9 +9,10 @@ import { SettingsModal } from './components/SettingsModal';
 import { RecentFilesDrawer } from './components/RecentFilesDrawer';
 import { addRecentFile, removeRecentFile } from './lib/recentFiles';
 import { ConfirmModal } from './components/ui/ConfirmModal';
-import type { TabItem, TerminalShell, RecentFile } from './types/electron';
-import { Save, Check, AlertCircle } from 'lucide-react';
+import type { TabItem, TerminalShell, RecentFile, ChatProvider } from './types/electron';
+import { Save, Check, AlertCircle, FileDown } from 'lucide-react';
 import { parentDir } from './lib/paths';
+import { serializeTabs, restoreTabs } from './lib/session';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
@@ -105,6 +106,18 @@ export const App: React.FC = () => {
             document.documentElement.classList.remove('dark');
           }
 
+          // Reopen what was open last time (notes, terminals, Claude chats)
+          const restored = await restoreTabs(config.openTabs, config.activeTabId, (p) => window.electronAPI.readFile(p));
+          if (restored) {
+            // Never wipe tabs the user already opened or edited while this was loading
+            const cur = tabsRef.current;
+            if (!(cur.length > 1 || (cur.length === 1 && cur[0].isDirty))) {
+              setTabs(restored.tabs);
+              setActiveTabId(restored.activeTabId);
+            }
+            return;
+          }
+
           const res = await window.electronAPI.listNotes();
           if (res.success && res.notes.length > 0) {
             const firstNote = res.notes[0];
@@ -130,10 +143,32 @@ export const App: React.FC = () => {
           }
         } catch (err) {
           console.error('Init error:', err);
+        } finally {
+          // From here on the open tabs are the session to remember
+          setSessionReady(true);
         }
       }
     };
     initApp();
+  }, []);
+
+  // Remember the open tabs (debounced) so the next launch reopens them
+  const [sessionReady, setSessionReady] = useState(false);
+  const saveSession = useCallback(() => {
+    if (!window.electronAPI) return Promise.resolve();
+    return window.electronAPI
+      .saveAppConfig({ openTabs: serializeTabs(tabsRef.current), activeTabId: activeTabIdRef.current })
+      .then(() => undefined)
+      .catch((err) => console.error('Error saving session:', err));
+  }, []);
+  useEffect(() => {
+    if (!sessionReady) return;
+    const timer = setTimeout(() => void saveSession(), 400);
+    return () => clearTimeout(timer);
+  }, [tabs, activeTabId, sessionReady, saveSession]);
+
+  const handleClaudeSessionId = useCallback((tabId: string, sessionId: string) => {
+    setTabs((prev) => prev.map((t) => (t.id === tabId && t.sessionId !== sessionId ? { ...t, sessionId } : t)));
   }, []);
 
   // Dark Mode Toggle
@@ -227,16 +262,17 @@ export const App: React.FC = () => {
     setActiveTabId(newId);
   };
 
-  const handleNewClaude = () => {
-    const newId = `claude-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const handleNewClaude = (provider: ChatProvider = 'claude') => {
+    const newId = `${provider === 'antigravity' ? 'agy' : 'claude'}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     // Same folder rule as terminals: where the active note lives, else the notes folder
     const current = tabs.find((t) => t.id === activeTabId);
     const cwd = current?.kind === 'terminal' || current?.kind === 'claude' ? current.cwd : parentDir(current?.path ?? null) ?? undefined;
     setTabs((prev) => {
-      const count = prev.filter((t) => t.kind === 'claude').length + 1;
+      const baseName = provider === 'antigravity' ? 'Antigravity' : 'Claude';
+      const count = prev.filter((t) => t.kind === 'claude' && (t.provider ?? 'claude') === provider).length + 1;
       return [
         ...prev,
-        { id: newId, title: count > 1 ? `Claude ${count}` : 'Claude', path: null, content: '', isDirty: false, kind: 'claude', cwd },
+        { id: newId, title: count > 1 ? `${baseName} ${count}` : baseName, path: null, content: '', isDirty: false, kind: 'claude', provider, cwd },
       ];
     });
     setActiveTabId(newId);
@@ -509,6 +545,29 @@ export const App: React.FC = () => {
     }
   };
 
+  // Export a note to PDF (rendered Markdown, A4), then open it so the user sees the result
+  const handleExportPdf = useCallback(async (tab: TabItem) => {
+    if (tab.kind === 'terminal' || tab.kind === 'claude') return;
+    if (!window.electronAPI?.exportPdf) {
+      setNotification({ type: 'info', text: 'Exportar a PDF solo está disponible en la app de escritorio' });
+      return;
+    }
+    try {
+      const { markdownToPrintHtml } = await import('./lib/exportPdf');
+      const folder = parentDir(tab.path) ?? undefined;
+      const html = markdownToPrintHtml(tab.content, tab.title.replace(/\.(md|markdown|mdx)$/i, ''), folder);
+      const res = await window.electronAPI.exportPdf({ html, defaultName: tab.title, defaultDir: folder });
+      if (res.success && res.path) {
+        setNotification({ type: 'success', text: `✓ PDF exportado: ${res.path.split(/[\\/]/).pop()}` });
+        void window.electronAPI.openPath?.(res.path);
+      } else if (!res.canceled) {
+        setNotification({ type: 'error', text: `No se pudo exportar: ${res.error}` });
+      }
+    } catch (err: any) {
+      setNotification({ type: 'error', text: `No se pudo exportar: ${err?.message ?? err}` });
+    }
+  }, []);
+
   // Opens a file in a tab, or focuses the tab if that file is already open
   const openFileInTab = (filePath: string, name: string, content: string) => {
     const existing = tabs.find((t) => t.path === filePath);
@@ -634,6 +693,7 @@ export const App: React.FC = () => {
         onCopyRelativePath={handleCopyRelativePath}
         onCopyId={handleCopyId}
         onRevealInExplorer={handleRevealInExplorer}
+        onExportPdf={(tab) => void handleExportPdf(tab)}
       />
 
       {/* 3. Main Editor (@mdxeditor/editor with Boldkit Neubrutalism) */}
@@ -657,7 +717,16 @@ export const App: React.FC = () => {
         {tabs
           .filter((t) => t.kind === 'claude')
           .map((t) => (
-            <ClaudeChatView key={t.id} tabId={t.id} cwd={t.cwd} isActive={t.id === activeTab?.id} onLogin={handleClaudeLogin} />
+            <ClaudeChatView
+              key={t.id}
+              tabId={t.id}
+              cwd={t.cwd}
+              isActive={t.id === activeTab?.id}
+              provider={t.provider ?? 'claude'}
+              resumeSessionId={t.sessionId}
+              onSessionId={(sessionId) => handleClaudeSessionId(t.id, sessionId)}
+              onLogin={handleClaudeLogin}
+            />
           ))}
 
         {isTerminalActive ? null : activeTab ? (
@@ -727,6 +796,16 @@ export const App: React.FC = () => {
             <span className="whitespace-nowrap">
               Guardar<span className="hidden min-[480px]:inline"> (Ctrl+S)</span>
             </span>
+          </button>
+
+          {/* Export the note to PDF */}
+          <button
+            onClick={() => activeTab && void handleExportPdf(activeTab)}
+            className="h-5 flex items-center gap-1 px-1.5 leading-none bg-white dark:bg-[#27272A] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer font-black whitespace-nowrap shrink-0"
+            title="Exportar la nota a PDF"
+          >
+            <FileDown size={10} strokeWidth={2.8} className="shrink-0" />
+            <span className="whitespace-nowrap">PDF</span>
           </button>
           </>
           )}
@@ -799,14 +878,16 @@ export const App: React.FC = () => {
           const warnings = [
             unsaved > 0 ? `${unsaved} ${unsaved === 1 ? 'nota tiene' : 'notas tienen'} cambios sin guardar que se perderán.` : '',
             terminals > 0 ? `${terminals} ${terminals === 1 ? 'terminal abierta se cerrará' : 'terminales abiertas se cerrarán'}.` : '',
-            chats > 0 ? `${chats} ${chats === 1 ? 'chat con Claude se cerrará' : 'chats con Claude se cerrarán'}.` : '',
+            chats > 0 ? `${chats} ${chats === 1 ? 'chat con IA se cerrará' : 'chats con IA se cerrarán'}.` : '',
           ].filter(Boolean);
           return warnings.length > 0 ? warnings.join(' ') : 'Todas tus notas están guardadas.';
         })()}
         confirmText="Sí, cerrar"
         cancelText="Cancelar"
-        onConfirm={() => {
+        onConfirm={async () => {
           setIsQuitConfirmOpen(false);
+          // Write the latest tabs right away: the debounced save may not have run yet
+          await saveSession();
           window.electronAPI?.close();
         }}
         onCancel={() => setIsQuitConfirmOpen(false)}

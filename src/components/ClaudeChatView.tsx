@@ -17,8 +17,11 @@ import {
   CircleAlert,
   ListTodo,
   Sparkles,
+  ClipboardCopy,
+  Download,
 } from 'lucide-react';
-import type { ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionMode, ClaudePermissionRequest } from '../types/electron';
+import type { ChatProvider, ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionRequest } from '../types/electron';
+import { getChatBackend, PROVIDER_LABELS } from '../lib/chatBackends';
 import {
   chatReducer,
   initialChatState,
@@ -28,9 +31,11 @@ import {
   toolSummary,
   matchCommands,
   formatTokens,
+  chatToMarkdown,
   activeModelInfo,
   effortLevelsFor,
   EFFORT_LABELS,
+  modelLabel,
   type ChatItem,
 } from '../lib/claudeChat';
 import { markdownToSegments } from '../lib/speechText';
@@ -46,9 +51,11 @@ interface ClaudeChatViewProps {
   resumeSessionId?: string;
   /** Opens Claude Code's own sign-in (`claude auth login`) with the executable this chat runs */
   onLogin?: (executable?: string) => void;
+  /** Agent behind this chat: Claude Code (default) or Antigravity CLI (Gemini) */
+  provider?: ChatProvider;
 }
 
-const MODES: { value: ClaudePermissionMode; label: string; hint: string }[] = [
+const MODES: { value: string; label: string; hint: string }[] = [
   { value: 'default', label: 'Preguntar', hint: 'Pide permiso antes de editar o ejecutar' },
   { value: 'acceptEdits', label: 'Aceptar ediciones', hint: 'Edita archivos sin preguntar; pide permiso para comandos' },
   { value: 'plan', label: 'Planificar', hint: 'Solo lee y propone un plan, sin cambiar nada' },
@@ -315,7 +322,8 @@ const QuestionPrompt: React.FC<{ request: ClaudePermissionRequest; onAnswer: (an
 const PermissionCard: React.FC<{
   item: Extract<ChatItem, { kind: 'permission' }>;
   onDecide: (requestId: string, decision: { behavior: 'allow' | 'deny'; always?: boolean; updatedInput?: Record<string, unknown>; message?: string }) => void;
-}> = ({ item, onDecide }) => {
+  agentName?: string;
+}> = ({ item, onDecide, agentName = 'Claude' }) => {
   const { request, status } = item;
   const isQuestion = request.toolName === 'AskUserQuestion';
   const isPlan = request.toolName === 'ExitPlanMode';
@@ -339,7 +347,7 @@ const PermissionCard: React.FC<{
     <div className={`${card} p-2.5 bg-[#FFFBDA] dark:bg-[#26240F] border-[#000] space-y-2`} role="alertdialog" aria-label="Permiso solicitado">
       <div className="flex items-center gap-1.5 text-[12px] font-black">
         <ShieldCheck size={14} strokeWidth={2.5} />
-        {isQuestion ? 'Claude te pregunta' : isPlan ? 'Claude propone este plan' : request.title || `Claude quiere usar ${request.toolName}`}
+        {isQuestion ? `${agentName} te pregunta` : isPlan ? `${agentName} propone este plan` : request.title || `${agentName} quiere usar ${request.toolName}`}
       </div>
       {request.decisionReason && !isQuestion && <div className="text-[11px] opacity-70">{request.decisionReason}</div>}
 
@@ -439,11 +447,11 @@ function readImage(file: File): Promise<ClaudeImageInput & { url: string }> {
   });
 }
 
-export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isActive, onSessionId, resumeSessionId, onLogin }) => {
+export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isActive, onSessionId, resumeSessionId, onLogin, provider = 'claude' }) => {
   const [state, dispatch] = useReducer(chatReducer, undefined, initialChatState);
   const [draft, setDraft] = useState('');
   const [images, setImages] = useState<(ClaudeImageInput & { url: string })[]>([]);
-  const [mode, setMode] = useState<ClaudePermissionMode>('default');
+  const [mode, setMode] = useState<string>('default');
   const [cmdIndex, setCmdIndex] = useState(0);
   const [starting, setStarting] = useState(true);
   const [restartKey, setRestartKey] = useState(0);
@@ -457,33 +465,47 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const executableRef = useRef<string | undefined>(undefined);
   const speech = useSpeech();
   const api = window.electronAPI;
+  const backend = useMemo(() => getChatBackend(api, provider), [api, provider]);
+  const agentName = PROVIDER_LABELS[provider];
+  // Claude's modes are built in; Antigravity reports its own
+  const modes = provider === 'claude' || !state.modes?.length ? MODES : state.modes.map((m) => ({ value: m.id, label: m.name, hint: m.description || m.name }));
 
-  // Start (or resume) the Claude Code process for this tab
+  // Start (or resume) the agent process for this tab
   useEffect(() => {
-    if (!api?.claudeStart) {
-      dispatch({ type: 'notice', text: 'El chat con Claude solo está disponible en la app de escritorio (Electron).', tone: 'error' });
+    if (!backend) {
+      dispatch({
+        type: 'notice',
+        text: api ? `Esta versión de yanote no incluye el chat con ${agentName}.` : `El chat con ${agentName} solo está disponible en la app de escritorio (Electron).`,
+        tone: 'error',
+      });
       setStarting(false);
       return;
     }
-    const off = api.onClaudeEvent?.((evt) => {
+    const off = backend.onEvent((evt) => {
       if (evt.id === tabId) dispatch({ type: 'event', event: evt });
     });
     let cancelled = false;
     setStarting(true);
-    api
-      .claudeStart({ id: tabId, cwd, permissionMode: mode, resume: sessionIdRef.current })
+    // Reopened after an app restart: show the conversation that is being resumed
+    if (restartKey === 0 && sessionIdRef.current && backend.history) {
+      void backend.history(sessionIdRef.current).then((res) => {
+        if (!cancelled && res.success && res.messages?.length) dispatch({ type: 'history', messages: res.messages });
+      });
+    }
+    backend
+      .start({ id: tabId, cwd, permissionMode: mode, resume: sessionIdRef.current })
       .then((res) => {
         if (cancelled) return;
         setStarting(false);
         executableRef.current = res.executable;
         if (!res.success) {
-          dispatch({ type: 'notice', text: `No se pudo iniciar Claude: ${res.error}`, tone: 'error' });
+          dispatch({ type: 'notice', text: `No se pudo iniciar ${agentName}: ${res.error}`, tone: 'error' });
         }
       });
     return () => {
       cancelled = true;
       off?.();
-      api.claudeStop?.(tabId);
+      backend.stop(tabId);
     };
     // One process per tab (and per manual restart); mode changes go through setPermissionMode
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -498,8 +520,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
 
   // Mirror the mode the CLI reports (e.g. after a plan is approved it leaves "plan")
   useEffect(() => {
-    if (state.permissionMode && MODES.some((m) => m.value === state.permissionMode)) setMode(state.permissionMode as ClaudePermissionMode);
-  }, [state.permissionMode]);
+    if (state.permissionMode && (provider !== 'claude' || MODES.some((m) => m.value === state.permissionMode))) setMode(state.permissionMode);
+  }, [state.permissionMode, provider]);
 
   // Keep following the conversation unless the user scrolled up
   useLayoutEffect(() => {
@@ -526,32 +548,32 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
 
   const send = useCallback(async () => {
     const text = draft.trim();
-    if ((!text && images.length === 0) || !api?.claudeSend || state.ended) return;
+    if ((!text && images.length === 0) || !backend || state.ended) return;
     const payload = { text, images: images.map(({ data, mediaType }) => ({ data, mediaType })) };
     dispatch({ type: 'send', text, imageCount: images.length });
     setDraft('');
     setImages([]);
     stickRef.current = true;
-    const res = await api.claudeSend(tabId, payload);
+    const res = await backend.send(tabId, payload);
     if (!res.success) dispatch({ type: 'notice', text: res.error || 'No se pudo enviar el mensaje', tone: 'error' });
-  }, [draft, images, api, tabId, state.ended]);
+  }, [draft, images, backend, tabId, state.ended]);
 
   const interrupt = useCallback(() => {
-    api?.claudeInterrupt?.(tabId);
-  }, [api, tabId]);
+    backend?.interrupt(tabId);
+  }, [backend, tabId]);
 
   const decide = useCallback(
     (requestId: string, decision: { behavior: 'allow' | 'deny'; always?: boolean; updatedInput?: Record<string, unknown>; message?: string }) => {
       dispatch({ type: 'permission_resolved', requestId, allowed: decision.behavior === 'allow' });
-      api?.claudeRespondPermission?.(tabId, requestId, decision);
+      backend?.respondPermission(tabId, requestId, decision);
     },
-    [api, tabId]
+    [backend, tabId]
   );
 
-  const changeMode = async (next: ClaudePermissionMode) => {
+  const changeMode = async (next: string) => {
     setMode(next);
     dispatch({ type: 'local_permission_mode', mode: next });
-    const res = await api?.claudeSetPermissionMode?.(tabId, next);
+    const res = await backend?.setPermissionMode(tabId, next);
     if (res && !res.success) dispatch({ type: 'notice', text: `No se pudo cambiar el modo: ${res.error}`, tone: 'error' });
   };
 
@@ -565,10 +587,10 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const applyEffort = useCallback(
     async (key: string, level: ClaudeEffortLevel | '') => {
       appliedEffortRef.current = `${key}:${level}`;
-      const res = await api?.claudeSetEffort?.(tabId, level || null);
+      const res = await backend?.setEffort(tabId, level || null);
       if (res && !res.success) dispatch({ type: 'notice', text: `No se pudo cambiar el esfuerzo: ${res.error}`, tone: 'error' });
     },
-    [api, tabId]
+    [backend, tabId]
   );
 
   // Once Claude reports its model, apply the effort the user picked for it in earlier chats
@@ -585,7 +607,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
 
   const changeModel = async (model: string) => {
     setSelectedModel(model);
-    const res = await api?.claudeSetModel?.(tabId, model || null);
+    const res = await backend?.setModel(tabId, model || null);
     if (res && !res.success) {
       dispatch({ type: 'notice', text: `No se pudo cambiar el modelo: ${res.error}`, tone: 'error' });
       return;
@@ -648,6 +670,33 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const lastTextId = [...visible].reverse().find((i) => i.kind === 'text')?.id;
   const streamingSomething = state.items.some((i) => (i.kind === 'text' || i.kind === 'thinking') && i.streaming);
   const cwdName = (state.cwd || cwd || '').split(/[\\/]/).filter(Boolean).pop();
+  // What Claude will really use next turn (its resolved settings), falling back to what it last reported
+  const shownModelId = state.appliedModel || state.model;
+  // Claude ids read better formatted; other agents (Antigravity) report their own display names
+  const shownModel = shownModelId?.startsWith('claude-')
+    ? modelLabel(shownModelId)
+    : state.models.find((m) => m.value === shownModelId)?.displayName || modelLabel(shownModelId);
+  const shownEffort = state.appliedEffort ? EFFORT_LABELS[state.appliedEffort] : '';
+
+  // Export the conversation as Markdown, to keep it or paste it into another AI session
+  const hasConversation = state.items.some((i) => i.kind === 'user' || i.kind === 'text');
+  const exportMarkdown = () =>
+    chatToMarkdown(state.items, { model: shownModel || undefined, cwd: state.cwd || cwd, assistantName: agentName, source: backend?.source });
+  const copyConversation = async () => {
+    try {
+      await navigator.clipboard.writeText(exportMarkdown());
+      dispatch({ type: 'notice', text: 'Conversación copiada como Markdown: pégala en cualquier otra IA.', tone: 'info' });
+    } catch (err) {
+      dispatch({ type: 'notice', text: `No se pudo copiar: ${err instanceof Error ? err.message : String(err)}`, tone: 'error' });
+    }
+  };
+  const saveConversation = async () => {
+    if (!api?.saveTextAs) return;
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '-');
+    const res = await api.saveTextAs({ content: exportMarkdown(), defaultName: `chat-${provider} ${stamp}`, defaultDir: state.cwd || cwd });
+    if (res.success) dispatch({ type: 'notice', text: `Conversación guardada en ${res.path}`, tone: 'info' });
+    else if (!res.canceled) dispatch({ type: 'notice', text: `No se pudo guardar: ${res.error}`, tone: 'error' });
+  };
 
   return (
     <div
@@ -659,9 +708,18 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
       <div className="h-8 shrink-0 flex items-center gap-1.5 px-2 border-b-2 border-black dark:border-zinc-700 text-[10.5px] font-black overflow-hidden whitespace-nowrap">
         <Sparkles size={13} strokeWidth={2.5} className="shrink-0 text-[#D97757]" />
         <span className="truncate min-w-0" title={state.cwd || cwd}>
-          {cwdName || 'Claude'}
+          {cwdName || agentName}
         </span>
-        {state.model && <span className="hidden min-[420px]:inline opacity-60 truncate">· {state.model}</span>}
+        {shownModel && (
+          <span
+            className="hidden min-[360px]:inline opacity-60 truncate"
+            title={`Modelo: ${state.appliedModel || state.model}${shownEffort ? ` · esfuerzo ${shownEffort.toLowerCase()}` : ''}`}
+            data-testid="claude-model-effort"
+          >
+            · {shownModel}
+            {shownEffort && ` · ${shownEffort}`}
+          </span>
+        )}
         <span className="flex-1" />
         {state.contextTokens > 0 && (
           <span className="hidden min-[480px]:inline opacity-60" title="Tokens de contexto de la última llamada">
@@ -669,12 +727,36 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
           </span>
         )}
         {state.totalCostUsd > 0 && <span className="opacity-60">${state.totalCostUsd.toFixed(state.totalCostUsd < 1 ? 3 : 2)}</span>}
+        {hasConversation && (
+          <>
+            <button
+              type="button"
+              onClick={() => void copyConversation()}
+              className={`${btn} h-6 w-6 bg-white dark:bg-[#27272A]`}
+              title="Copiar la conversación como Markdown (para pegarla en otra IA)"
+              aria-label="Copiar conversación"
+            >
+              <ClipboardCopy size={11} strokeWidth={2.5} />
+            </button>
+            {api?.saveTextAs && (
+              <button
+                type="button"
+                onClick={() => void saveConversation()}
+                className={`${btn} h-6 w-6 bg-white dark:bg-[#27272A]`}
+                title="Guardar la conversación como archivo .md"
+                aria-label="Guardar conversación"
+              >
+                <Download size={11} strokeWidth={2.5} />
+              </button>
+            )}
+          </>
+        )}
         {state.ended && (
           <button
             type="button"
             onClick={() => setRestartKey((k) => k + 1)}
             className={`${btn} h-6 px-1.5 bg-[#FFE500] text-black`}
-            title="Reanudar la sesión de Claude"
+            title={`Reanudar la sesión de ${agentName}`}
           >
             <RotateCcw size={11} strokeWidth={3} /> Reanudar
           </button>
@@ -694,7 +776,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
           {visible.length === 0 && (
             <div className="pt-10 text-center space-y-2">
               <Sparkles size={28} strokeWidth={2} className="mx-auto text-[#D97757]" />
-              <div className="text-sm font-black">{starting ? 'Iniciando Claude Code…' : '¿En qué te ayudo?'}</div>
+              <div className="text-sm font-black">{starting ? `Iniciando ${backend?.source ?? agentName}…` : '¿En qué te ayudo?'}</div>
               <div className="text-[11px] opacity-60">
                 Trabaja en <span className="font-mono">{state.cwd || cwd || 'la carpeta de notas'}</span>. Escribe <span className="font-mono">/</span> para ver comandos.
               </div>
@@ -745,7 +827,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
               case 'tool':
                 return <ToolCard key={item.id} item={item} all={state.items} running={state.running} />;
               case 'permission':
-                return <PermissionCard key={item.id} item={item} onDecide={decide} />;
+                return <PermissionCard key={item.id} item={item} onDecide={decide} agentName={agentName} />;
               case 'result':
                 return (
                   <div
@@ -884,9 +966,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                   void addFiles(files);
                 }
               }}
-              placeholder={state.ended ? 'Sesión terminada — pulsa Reanudar' : state.running ? 'Escribe para encolar otro mensaje…' : 'Pregúntale a Claude… ( / comandos )'}
+              placeholder={state.ended ? 'Sesión terminada — pulsa Reanudar' : state.running ? 'Escribe para encolar otro mensaje…' : `Pregúntale a ${agentName}… ( / comandos )`}
               disabled={state.ended}
-              aria-label="Mensaje para Claude"
+              aria-label={`Mensaje para ${agentName}`}
               className="w-full resize-none bg-transparent outline-none text-[13px] leading-snug px-1 py-0.5 placeholder:text-black/40 dark:placeholder:text-zinc-500"
             />
             <div className="flex items-end gap-1 mt-1">
@@ -894,20 +976,20 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
               <div className="flex flex-1 min-w-0 flex-wrap items-center gap-1">
               <select
                 value={mode}
-                onChange={(e) => void changeMode(e.target.value as ClaudePermissionMode)}
-                title={MODES.find((m) => m.value === mode)?.hint}
+                onChange={(e) => void changeMode(e.target.value)}
+                title={modes.find((m) => m.value === mode)?.hint}
                 aria-label="Modo de permisos"
                 className={`h-6 max-w-[9.5rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none ${
                   mode === 'bypassPermissions'
                     ? 'bg-[#FF6B6B] text-white'
                     : mode === 'plan'
                     ? 'bg-[#A3D8F4] text-black'
-                    : mode === 'acceptEdits' || mode === 'auto'
+                    : mode === 'acceptEdits' || mode === 'accept-edits' || mode === 'auto'
                     ? 'bg-[#78E08F] text-black'
                     : 'bg-white dark:bg-[#27272A]'
                 }`}
               >
-                {MODES.map((m) => (
+                {modes.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
                   </option>
@@ -921,7 +1003,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                   title={modelInfo?.description || 'Modelo'}
                   className="h-6 max-w-[9.5rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none bg-white dark:bg-[#27272A]"
                 >
-                  <option value="">{selectedModel ? 'Predeterminado' : 'Modelo'}</option>
+                  <option value="">{selectedModel ? 'Predeterminado' : shownModel || 'Modelo'}</option>
                   {state.models.map((m) => (
                     <option key={m.value} value={m.value}>
                       {m.displayName}
@@ -939,7 +1021,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                     effort === 'max' || effort === 'xhigh' ? 'bg-[#C9A7F5] text-black' : 'bg-white dark:bg-[#27272A]'
                   }`}
                 >
-                  <option value="">Esfuerzo</option>
+                  <option value="">{!effort && shownEffort ? shownEffort : 'Predeterminado'}</option>
                   {effortLevels.map((l) => (
                     <option key={l} value={l}>
                       {EFFORT_LABELS[l]}
