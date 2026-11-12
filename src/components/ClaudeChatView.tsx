@@ -688,7 +688,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
           const el = e.currentTarget;
           stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
         }}
-        className="flex-1 min-h-0 overflow-y-auto px-2.5 min-[640px]:px-4 py-3"
+        className="claude-chat-scroll flex-1 min-h-0 overflow-y-auto px-2.5 min-[640px]:px-4 py-3"
       >
         <div className="max-w-3xl mx-auto space-y-2.5">
           {visible.length === 0 && (
