@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-const { createClaudeChatService, findClaudeExecutable, buildUserContent } = require('../../electron/services/claudeChatService.cjs');
+const { createClaudeChatService, findClaudeExecutable, findBundledExecutable, buildUserContent } = require('../../electron/services/claudeChatService.cjs');
 
 /** Fake Agent SDK: echoes each user turn as an assistant reply + result, and exposes canUseTool. */
 function fakeSdk() {
@@ -50,6 +50,27 @@ describe('Backend: ClaudeChatService (Agent SDK sessions)', () => {
     expect(findClaudeExecutable({ Path: 'C:\\a' }, 'win32', exists)).toBeUndefined();
   });
 
+  it('finds the Claude Code binary bundled with the SDK, preferring app.asar.unpacked', () => {
+    const pkg = 'C:/App/resources/app.asar/node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/package.json';
+    const resolve = () => pkg;
+    const unpacked = 'C:/App/resources/app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/claude.exe'.replace(/\//g, '\\');
+    expect(findBundledExecutable('win32', 'x64', (p: string) => p === unpacked, resolve)).toBe(unpacked);
+    expect(findBundledExecutable('win32', 'x64', () => false, resolve)).toBeUndefined();
+    expect(findBundledExecutable('win32', 'x64', () => true, () => { throw new Error('not installed'); })).toBeUndefined();
+  });
+
+  it('uses the user install first, then the bundled binary, else fails when required', async () => {
+    const { sdk, calls } = fakeSdk();
+    const base = { loadSdk: async () => sdk, env: {}, platform: 'win32', readPath: () => '' };
+    const bundled = createClaudeChatService({ ...base, findExecutable: () => undefined, findBundled: () => 'C:\\b\\claude.exe', requireInstalledCli: true });
+    expect(await bundled.start({ id: 'a' }, () => {})).toEqual({ success: true, executable: 'C:\\b\\claude.exe', source: 'bundled' });
+    expect(calls[0].pathToClaudeCodeExecutable).toBe('C:\\b\\claude.exe');
+
+    const none = createClaudeChatService({ ...base, findExecutable: () => undefined, findBundled: () => undefined, requireInstalledCli: true });
+    expect((await none.start({ id: 'b' }, () => {})).success).toBe(false);
+    expect(none.has('b')).toBe(false);
+  });
+
   it('builds plain text or image+text content', () => {
     expect(buildUserContent('hola')).toBe('hola');
     expect(buildUserContent('mira', [{ data: 'AAA', mediaType: 'image/png' }])).toEqual([
@@ -61,7 +82,7 @@ describe('Backend: ClaudeChatService (Agent SDK sessions)', () => {
   it('starts a streaming session with Claude Code options and forwards messages', async () => {
     const { service, events, emit, calls } = setup();
     const res = await service.start({ id: 'c1', cwd: 'C:\\no-existe', permissionMode: 'plan' }, emit);
-    expect(res).toEqual({ success: true, executable: 'C:\\bin\\claude.exe' });
+    expect(res).toEqual({ success: true, executable: 'C:\\bin\\claude.exe', source: 'user' });
 
     const opts = calls[0];
     expect(opts.includePartialMessages).toBe(true);

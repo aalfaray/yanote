@@ -70,4 +70,15 @@ describe('Backend: TerminalService (PowerShell / CMD)', () => {
     expect(failing.create({ id: 'x' }, () => {})).toEqual({ success: false, error: 'boom' });
     expect(failing.create({}, () => {}).success).toBe(false);
   });
+
+  it('types an initial command into the new terminal (Claude sign-in button)', () => {
+    const proc = fakePty();
+    const service = createTerminalService({ ptyModule: { spawn: () => proc }, platform: 'win32', env: {} });
+    service.create({ id: 'login', shell: 'powershell', initialCommand: "& 'C:\\b\\claude.exe' auth login\n" }, () => {});
+    expect(proc.write).toHaveBeenCalledWith("& 'C:\\b\\claude.exe' auth login\r");
+
+    const plain = fakePty();
+    createTerminalService({ ptyModule: { spawn: () => plain }, platform: 'win32', env: {} }).create({ id: 'x', shell: 'cmd' }, () => {});
+    expect(plain.write).not.toHaveBeenCalled();
+  });
 });

@@ -30,6 +30,8 @@ interface TerminalViewProps {
   isActive: boolean;
   isDarkMode: boolean;
   cwd?: string;
+  /** Typed into the shell once it starts */
+  initialCommand?: string;
 }
 
 const DARK_THEME = {
@@ -57,7 +59,7 @@ const LIGHT_THEME = {
  * One xterm.js instance bound to one pseudo-terminal in the main process.
  * Kept mounted while the tab exists (hidden when inactive) so the buffer survives tab switches.
  */
-export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActive, isDarkMode, cwd }) => {
+export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActive, isDarkMode, cwd, initialCommand }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -141,7 +143,7 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     const inputSub = term.onData((data) => api.termWrite?.(tabId, data));
     const resizeSub = term.onResize(({ cols, rows }) => api.termResize?.(tabId, cols, rows));
 
-    api.termCreate({ id: tabId, shell, cols: term.cols, rows: term.rows, cwd }).then((res) => {
+    api.termCreate({ id: tabId, shell, cols: term.cols, rows: term.rows, cwd, initialCommand }).then((res) => {
       if (!res.success) {
         term.writeln(`\x1b[31mNo se pudo iniciar la terminal: ${res.error}\x1b[0m`);
       }

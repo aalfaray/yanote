@@ -49,6 +49,8 @@ export interface ChatState {
   stream: Record<string, Record<number, string>>;
   /** Id of the top-level message currently streaming */
   currentMsg?: string;
+  /** Claude Code answered "Not logged in": the user has to sign in (Anthropic's own flow) */
+  authRequired: boolean;
 }
 
 export const initialChatState = (): ChatState => ({
@@ -60,6 +62,7 @@ export const initialChatState = (): ChatState => ({
   totalCostUsd: 0,
   contextTokens: 0,
   stream: {},
+  authRequired: false,
 });
 
 type Json = Record<string, unknown>;
@@ -211,8 +214,13 @@ function onAssistant(state: ChatState, msg: Json): ChatState {
   }
 
   const err = msg.error;
-  if (err && !parent) {
-    next = push(next, { kind: 'notice', id: localId('err'), text: `Error de la API: ${typeof err === 'string' ? err : JSON.stringify(err)}`, tone: 'error' });
+  if (!parent) {
+    if (err === 'authentication_failed') return { ...next, authRequired: true };
+    if (err) {
+      next = push(next, { kind: 'notice', id: localId('err'), text: `Error de la API: ${typeof err === 'string' ? err : JSON.stringify(err)}`, tone: 'error' });
+    } else if (next.authRequired && content.length > 0) {
+      next = { ...next, authRequired: false };
+    }
   }
   return next;
 }
@@ -325,6 +333,7 @@ export type ChatAction =
   | { type: 'permission_resolved'; requestId: string; allowed: boolean }
   | { type: 'notice'; text: string; tone: 'info' | 'error' }
   | { type: 'local_permission_mode'; mode: string }
+  | { type: 'auth_retry' }
   | { type: 'reset' };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -341,6 +350,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return push(state, { kind: 'notice', id: localId('notice'), text: action.text, tone: action.tone });
     case 'local_permission_mode':
       return { ...state, permissionMode: action.mode };
+    case 'auth_retry':
+      return { ...state, authRequired: false, running: false, ended: false };
     case 'permission_resolved':
       return updateItem(state, action.requestId, (i) => (i.kind === 'permission' ? { ...i, status: action.allowed ? 'allowed' : 'denied' } : i));
     case 'event': {

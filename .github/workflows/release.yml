@@ -40,16 +40,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # The annotated tag message becomes the release notes shown in the app's update dialog
+      # The annotated tag message becomes the release notes shown in the app's update dialog.
+      # Read through the API: actions/checkout turns annotated tags into lightweight ones.
       - name: Release notes from the tag message
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
-          NOTES="$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME" | sed '/-----BEGIN PGP SIGNATURE-----/,$d')"
-          if [ -n "$(echo "$NOTES" | tr -d '[:space:]')" ]; then
-            gh release edit "$GITHUB_REF_NAME" --title "yanote $GITHUB_REF_NAME" --notes "$NOTES"
+          REF=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")
+          TYPE=$(echo "$REF" | jq -r .object.type)
+          if [ "$TYPE" = "tag" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/git/tags/$(echo "$REF" | jq -r .object.sha)" --jq .message | sed '/-----BEGIN PGP SIGNATURE-----/,$d' > notes.md
           else
-            gh release edit "$GITHUB_REF_NAME" --title "yanote $GITHUB_REF_NAME"
+            : > notes.md
+          fi
+          if [ -s notes.md ]; then
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "yanote $GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "yanote $GITHUB_REF_NAME"
           fi

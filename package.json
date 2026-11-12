@@ -68,12 +68,12 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "build/icon.png",
-      "!node_modules/@anthropic-ai/claude-agent-sdk-*/**"
+      "build/icon.png"
     ],
     "asarUnpack": [
       "node_modules/@lydell/**",
-      "node_modules/@anthropic-ai/claude-agent-sdk/**"
+      "node_modules/@anthropic-ai/claude-agent-sdk/**",
+      "node_modules/@anthropic-ai/claude-agent-sdk-win32-x64/**"
     ],
     "win": {
       "target": [

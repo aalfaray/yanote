@@ -203,7 +203,7 @@ export const App: React.FC = () => {
     setFocusTabId(newId);
   };
 
-  const handleNewTerminal = (shell: TerminalShell) => {
+  const handleNewTerminal = (shell: TerminalShell, options: { title?: string; initialCommand?: string } = {}) => {
     const newId = `term-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     // Open where the user is: the folder of the active note, else (main process) the notes folder
     const current = tabs.find((t) => t.id === activeTabId);
@@ -213,13 +213,14 @@ export const App: React.FC = () => {
       const count = prev.filter((t) => t.kind === 'terminal' && t.shell === shell).length + 1;
       const newTab: TabItem = {
         id: newId,
-        title: count > 1 ? `${baseName} ${count}` : baseName,
+        title: options.title || (count > 1 ? `${baseName} ${count}` : baseName),
         path: null,
         content: '',
         isDirty: false,
         kind: 'terminal',
         shell,
         cwd,
+        initialCommand: options.initialCommand,
       };
       return [...prev, newTab];
     });
@@ -239,6 +240,12 @@ export const App: React.FC = () => {
       ];
     });
     setActiveTabId(newId);
+  };
+
+  /** Sign-in runs Claude Code's own `auth login` in a terminal tab: yanote never sees the credentials */
+  const handleClaudeLogin = (executable?: string) => {
+    const exe = executable && executable !== 'sdk-bundled' ? `& '${executable.replace(/'/g, "''")}'` : 'claude';
+    handleNewTerminal('powershell', { title: 'Iniciar sesión en Claude', initialCommand: `${exe} auth login` });
   };
 
   const handleSelectTab = (id: string) => {
@@ -640,6 +647,7 @@ export const App: React.FC = () => {
               tabId={t.id}
               shell={t.shell || 'powershell'}
               cwd={t.cwd}
+              initialCommand={t.initialCommand}
               isActive={t.id === activeTab?.id}
               isDarkMode={isDarkMode}
             />
@@ -649,7 +657,7 @@ export const App: React.FC = () => {
         {tabs
           .filter((t) => t.kind === 'claude')
           .map((t) => (
-            <ClaudeChatView key={t.id} tabId={t.id} cwd={t.cwd} isActive={t.id === activeTab?.id} />
+            <ClaudeChatView key={t.id} tabId={t.id} cwd={t.cwd} isActive={t.id === activeTab?.id} onLogin={handleClaudeLogin} />
           ))}
 
         {isTerminalActive ? null : activeTab ? (

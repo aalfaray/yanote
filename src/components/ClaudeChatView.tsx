@@ -44,6 +44,8 @@ interface ClaudeChatViewProps {
   /** Called once Claude reports its session id (used to resume after a restart) */
   onSessionId?: (sessionId: string) => void;
   resumeSessionId?: string;
+  /** Opens Claude Code's own sign-in (`claude auth login`) with the executable this chat runs */
+  onLogin?: (executable?: string) => void;
 }
 
 const MODES: { value: ClaudePermissionMode; label: string; hint: string }[] = [
@@ -437,7 +439,7 @@ function readImage(file: File): Promise<ClaudeImageInput & { url: string }> {
   });
 }
 
-export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isActive, onSessionId, resumeSessionId }) => {
+export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isActive, onSessionId, resumeSessionId, onLogin }) => {
   const [state, dispatch] = useReducer(chatReducer, undefined, initialChatState);
   const [draft, setDraft] = useState('');
   const [images, setImages] = useState<(ClaudeImageInput & { url: string })[]>([]);
@@ -452,6 +454,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stickRef = useRef(true);
   const sessionIdRef = useRef<string | undefined>(resumeSessionId);
+  const executableRef = useRef<string | undefined>(undefined);
   const speech = useSpeech();
   const api = window.electronAPI;
 
@@ -472,10 +475,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
       .then((res) => {
         if (cancelled) return;
         setStarting(false);
+        executableRef.current = res.executable;
         if (!res.success) {
           dispatch({ type: 'notice', text: `No se pudo iniciar Claude: ${res.error}`, tone: 'error' });
-        } else if (res.executable === 'sdk-bundled') {
-          dispatch({ type: 'notice', text: 'No encontré "claude" en el PATH; usando el Claude Code incluido en la app.', tone: 'info' });
         }
       });
     return () => {
@@ -772,6 +774,35 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                 return null;
             }
           })}
+
+          {state.authRequired && (
+            <div className={`${card} p-3 space-y-2 bg-[#FFFBDA] dark:bg-[#26240F]`} role="alert">
+              <div className="flex items-center gap-1.5 text-[13px] font-black">
+                <ShieldCheck size={15} strokeWidth={2.5} /> Inicia sesión en Claude
+              </div>
+              <p className="text-[12px] opacity-80">
+                El chat usa Claude Code con tu propia cuenta: tu suscripción de Claude o una API key de Anthropic. Se abrirá una terminal con el
+                inicio de sesión oficial de Claude Code, que continúa en tu navegador. yanote no ve tus credenciales.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button type="button" onClick={() => onLogin?.(executableRef.current)} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
+                  Iniciar sesión
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // A session that never authenticated has nothing to resume: start a fresh one
+                    sessionIdRef.current = undefined;
+                    dispatch({ type: 'auth_retry' });
+                    setRestartKey((k) => k + 1);
+                  }}
+                  className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}
+                >
+                  <RotateCcw size={11} strokeWidth={3} /> Ya inicié sesión, reintentar
+                </button>
+              </div>
+            </div>
+          )}
 
           {state.running && !streamingSomething && (
             <div className="flex items-center gap-1.5 text-[11px] font-black opacity-60">

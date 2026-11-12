@@ -126,3 +126,24 @@ describe('Frontend: Claude model / effort helpers', () => {
     expect(effortLevelsFor(undefined)).toEqual([]);
   });
 });
+
+describe('Frontend: Claude sign-in detection', () => {
+  const notLoggedIn = msg({
+    type: 'assistant',
+    error: 'authentication_failed',
+    parent_tool_use_id: null,
+    message: { id: 'a1', content: [{ type: 'text', text: 'Not logged in · Please run /login' }] },
+  });
+
+  it('flags "Not logged in" so the chat can offer the official sign-in', () => {
+    const s = run([{ type: 'send', text: 'hola', imageCount: 0 }, notLoggedIn]);
+    expect(s.authRequired).toBe(true);
+    expect(s.items.some((i) => i.kind === 'notice')).toBe(false);
+  });
+
+  it('clears the flag on retry and after a normal reply', () => {
+    expect(run([notLoggedIn, { type: 'auth_retry' }]).authRequired).toBe(false);
+    const ok = msg({ type: 'assistant', parent_tool_use_id: null, message: { id: 'a2', content: [{ type: 'text', text: 'Hola' }] } });
+    expect(run([notLoggedIn, ok]).authRequired).toBe(false);
+  });
+});

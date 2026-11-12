@@ -78,7 +78,7 @@ function createTerminalService({ ptyModule, platform = process.platform, env = p
   const sessions = new Map();
   const getPty = () => ptyModule || require('@lydell/node-pty');
 
-  function create({ id, shell, cols = 80, rows = 24, cwd, fallbackCwd } = {}, emit) {
+  function create({ id, shell, cols = 80, rows = 24, cwd, fallbackCwd, initialCommand } = {}, emit) {
     if (!id) return { success: false, error: 'Falta el identificador de la terminal' };
     if (sessions.has(id)) return { success: true, reused: true };
     try {
@@ -101,6 +101,10 @@ function createTerminalService({ ptyModule, platform = process.platform, env = p
         sessions.delete(id);
         emit({ id, type: 'exit', exitCode });
       });
+      // e.g. `claude auth login` for the chat's sign-in button; typed as if the user ran it
+      if (typeof initialCommand === 'string' && initialCommand.trim()) {
+        proc.write(`${initialCommand.replace(/[\r\n]+/g, ' ').trim()}\r`);
+      }
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };

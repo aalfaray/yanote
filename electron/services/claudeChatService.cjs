@@ -26,6 +26,22 @@ function findClaudeExecutable(env, platform = process.platform, exists = fs.exis
   return undefined;
 }
 
+/**
+ * The Claude Code binary shipped with the Agent SDK (unmodified, as published by Anthropic).
+ * In a packaged app it lives in app.asar.unpacked, where it can actually be executed.
+ */
+function findBundledExecutable(platform = process.platform, arch = process.arch, exists = fs.existsSync, resolve = require.resolve) {
+  try {
+    const pkg = resolve(`@anthropic-ai/claude-agent-sdk-${platform}-${arch}/package.json`);
+    const exe = path.join(path.dirname(pkg), platform === 'win32' ? 'claude.exe' : 'claude');
+    const unpacked = exe.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+    for (const candidate of [unpacked, exe]) if (exists(candidate)) return candidate;
+  } catch {
+    // optional dependency not installed for this platform
+  }
+  return undefined;
+}
+
 /** Async iterable the SDK reads user turns from; stays open so one process serves the whole chat. */
 function createInbox() {
   const queue = [];
@@ -90,7 +106,8 @@ function createClaudeChatService({
   platform = process.platform,
   readPath,
   findExecutable = findClaudeExecutable,
-  /** Packaged builds don't ship the SDK's bundled CLI, so a missing `claude` is an error */
+  findBundled = findBundledExecutable,
+  /** No usable `claude` at all is an error (instead of letting the SDK guess a path) */
   requireInstalledCli = false,
 } = {}) {
   const sessions = new Map();
@@ -114,13 +131,15 @@ function createClaudeChatService({
       const childEnv = withFreshPath({ ...env }, platform, readPath);
       // The renderer is the UI, not a terminal: keep the CLI from thinking it runs nested in Claude Code
       delete childEnv.CLAUDECODE;
-      const executable = findExecutable(childEnv, platform);
+      // The user's own install wins (it keeps itself updated); the bundled copy is the fallback
+      const userExecutable = findExecutable(childEnv, platform);
+      const executable = userExecutable || findBundled(platform);
+      const source = userExecutable ? 'user' : executable ? 'bundled' : 'sdk';
       if (!executable && requireInstalledCli) {
         sessions.delete(id);
         return {
           success: false,
-          error:
-            'No encontré Claude Code. Instálalo desde https://claude.com/claude-code, abre una terminal, ejecuta "claude" una vez para iniciar sesión y vuelve a abrir el chat.',
+          error: 'No encontré Claude Code. Instálalo desde https://claude.com/claude-code y vuelve a abrir el chat.',
         };
       }
       const mode = PERMISSION_MODES.has(permissionMode) ? permissionMode : 'default';
@@ -193,7 +212,7 @@ function createClaudeChatService({
         });
       });
 
-      return { success: true, executable: executable || 'sdk-bundled' };
+      return { success: true, executable: executable || 'sdk-bundled', source };
     } catch (err) {
       if (isCurrent()) sessions.delete(id);
       return { success: false, error: err && err.message ? err.message : String(err) };
@@ -284,4 +303,4 @@ function createClaudeChatService({
   };
 }
 
-module.exports = { createClaudeChatService, findClaudeExecutable, buildUserContent, createInbox };
+module.exports = { createClaudeChatService, findClaudeExecutable, findBundledExecutable, buildUserContent, createInbox };

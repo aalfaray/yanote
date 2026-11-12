@@ -12,7 +12,7 @@ Un editor de notas Markdown de escritorio **portable**, con **superposición (Al
 - **Portable** (`yanote-Portable-x.y.z.exe`): sin instalar. Te avisa de las versiones nuevas y abre la página de descarga.
 
 > Windows puede mostrar "Windows protegió su PC" porque la app no está firmada digitalmente: pulsa *Más información → Ejecutar de todas formas*.
-> El chat con Claude necesita [Claude Code](https://claude.com/claude-code) instalado y con la sesión iniciada (`claude` en una terminal).
+> yanote incluye [Claude Code](https://claude.com/claude-code) (el binario oficial, sin modificar, que trae el Claude Agent SDK). Si ya tienes `claude` instalado, se usa el tuyo. La primera vez que uses el chat, pulsa **Iniciar sesión**: se abre `claude auth login`, el inicio de sesión oficial de Claude Code, con tu cuenta de Claude o tu API key. yanote no ve tus credenciales y el uso se factura a tu propia cuenta.
 
 ## ✨ Características Principales
 

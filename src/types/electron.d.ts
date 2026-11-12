@@ -37,6 +37,8 @@ export interface TabItem {
   shell?: TerminalShell;
   /** Starting folder of a terminal tab (folder of the note that was active when it was opened) */
   cwd?: string;
+  /** Command typed into a new terminal right after it starts (e.g. Claude sign-in) */
+  initialCommand?: string;
 }
 
 export type TabKind = 'markdown' | 'terminal' | 'claude';
@@ -139,7 +141,7 @@ export interface ElectronAPI {
   onTtsEvent?: (callback: (event: TtsEvent) => void) => () => void;
 
   // Integrated terminals
-  termCreate?: (options: { id: string; shell: TerminalShell; cols: number; rows: number; cwd?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string }>;
+  termCreate?: (options: { id: string; shell: TerminalShell; cols: number; rows: number; cwd?: string; initialCommand?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string }>;
   termWrite?: (id: string, data: string) => void;
   termResize?: (id: string, cols: number, rows: number) => void;
   termKill?: (id: string) => Promise<boolean>;
@@ -156,7 +158,7 @@ export interface ElectronAPI {
   onUpdateEvent?: (callback: (event: UpdateEvent) => void) => () => void;
 
   // Claude chat sessions (Agent SDK)
-  claudeStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: ClaudePermissionMode; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string }>;
+  claudeStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: ClaudePermissionMode; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
   claudeSend?: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => ClaudeResult;
   claudeRespondPermission?: (id: string, requestId: string, decision: ClaudePermissionDecision) => Promise<boolean>;
   claudeInterrupt?: (id: string) => ClaudeResult;
