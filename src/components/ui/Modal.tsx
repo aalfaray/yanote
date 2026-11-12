@@ -30,16 +30,16 @@ export const Modal: React.FC<ModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-100">
-      <div className="w-full max-w-lg bg-[#FAF8F5] dark:bg-[#18181B] border-3 border-black dark:border-zinc-700 rounded-lg shadow-[6px_6px_0px_#000] dark:shadow-[6px_6px_0px_#000] overflow-hidden flex flex-col max-h-[90vh] transition-colors">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 min-[480px]:p-3 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-100">
+      <div className="w-full max-w-lg bg-[#FAF8F5] dark:bg-[#18181B] border-3 border-black dark:border-zinc-700 rounded-lg shadow-[4px_4px_0px_#000] min-[480px]:shadow-[6px_6px_0px_#000] overflow-hidden flex flex-col max-h-[calc(100vh-16px)] min-[480px]:max-h-[90vh] transition-colors">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-3 py-2 bg-[#FFE500] border-b-2 border-black">
-          <div className="flex items-center gap-2">
-            <span className="font-black text-sm tracking-wide text-black uppercase">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-black text-xs min-[480px]:text-sm tracking-wide text-black uppercase">
               {title}
             </span>
             {badge && (
-              <span className="bg-black text-[#FFE500] text-[10px] font-black px-1.5 py-0.5 rounded">
+              <span className="bg-black text-[#FFE500] text-[10px] font-black px-1.5 py-0.5 rounded whitespace-nowrap shrink-0">
                 {badge}
               </span>
             )}
@@ -55,7 +55,7 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-4 overflow-y-auto flex-1 text-black dark:text-zinc-200">
+        <div className="p-3 min-[480px]:p-4 overflow-y-auto flex-1 text-black dark:text-zinc-200">
           {children}
         </div>
       </div>

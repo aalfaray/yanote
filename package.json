@@ -1,8 +1,8 @@
 {
-  "name": "boldnotes",
+  "name": "yanote",
   "private": true,
   "version": "1.0.0",
-  "description": "Neubrutalist Markdown Editor with Multi-Tabs and GitHub Git Sync",
+  "description": "Neubrutalist Markdown Editor with Multi-Tabs",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -18,12 +18,21 @@
     "package:dir": "npm run build && electron-builder --dir"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.322",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
+    "@lydell/node-pty": "^1.2.0-beta.18",
     "@mdxeditor/editor": "^4.5.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "clsx": "^2.1.1",
+    "codemirror": "^6.0.2",
     "lucide-react": "^1.16.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "simple-git": "^3.30.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.5.4"
   },
   "devDependencies": {
@@ -48,20 +57,26 @@
     "wait-on": "^9.0.4"
   },
   "build": {
-    "appId": "com.boldnotes.app",
-    "productName": "BoldNotes",
+    "appId": "com.yanote.app",
+    "productName": "yanote",
     "directories": {
       "output": "dist-electron"
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "build/icon.png"
+    ],
+    "asarUnpack": [
+      "node_modules/@lydell/**",
+      "node_modules/@anthropic-ai/claude-agent-sdk*/**"
     ],
     "win": {
-      "target": "portable"
+      "target": "portable",
+      "icon": "build/icon.png"
     },
     "portable": {
-      "artifactName": "BoldNotes-Portable-${version}.exe"
+      "artifactName": "yanote-Portable-${version}.exe"
     }
   }
 }

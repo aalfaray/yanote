@@ -52,34 +52,15 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       getAppConfig: vi.fn().mockResolvedValue({
         notesPath: '/notes',
         alwaysOnTop: false,
-        githubRepo: '',
-        githubBranch: 'main',
-        autoSyncOnSave: false,
       }),
       saveAppConfig: vi.fn().mockResolvedValue({}),
-      gitStatus: vi.fn().mockResolvedValue({
-        success: true,
-        currentBranch: 'main',
-        modified: [],
-        not_added: [],
-        staged: [],
-        hasChanges: false,
-      }),
-      gitCommit: vi.fn().mockResolvedValue({ success: true }),
-      gitPush: vi.fn().mockResolvedValue({ success: true }),
-      gitPull: vi.fn().mockResolvedValue({ success: true }),
-      gitSync: vi.fn().mockResolvedValue({ success: true, synced: true, message: 'Notas sincronizadas' }),
-      gitHistory: vi.fn().mockResolvedValue({ success: true, all: [] }),
-      gitFileAtCommit: vi.fn().mockResolvedValue({ success: true, content: '' }),
-      gitSetRemote: vi.fn().mockResolvedValue({ success: true }),
-      gitInit: vi.fn().mockResolvedValue({ success: true, isRepo: true }),
       selectFolder: vi.fn().mockResolvedValue('/notes'),
       revealInExplorer: vi.fn().mockResolvedValue({ success: true }),
     } as any;
   });
 
   // --- 20% HAPPY PATH E2E TESTS ---
-  it('[HAPPY E2E 1/4] Full Note Lifecycle: creates new tab (Orca style), writes content, saves with Ctrl+S, commits to Git', async () => {
+  it('[HAPPY E2E 1/4] Full Note Lifecycle: creates new tab (Orca style), writes content, saves with Ctrl+S', async () => {
     render(<App />);
 
     await waitFor(() => {
@@ -97,7 +78,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
 
     // 3. Edit markdown content in textarea
     const textarea = screen.getByTestId('mock-markdown-textarea');
-    fireEvent.change(textarea, { target: { value: '# Tareas Pendientes\n\n- [x] Implementar BoldNotes' } });
+    fireEvent.change(textarea, { target: { value: '# Tareas Pendientes\n\n- [x] Implementar yanote' } });
 
     // 4. Save using Ctrl+S
     fireEvent.keyDown(textarea, { key: 's', ctrlKey: true });
@@ -106,9 +87,9 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     await waitFor(() => {
       expect(window.electronAPI?.writeFile).toHaveBeenCalledWith(
         expect.stringContaining('scratch-1.md'),
-        '# Tareas Pendientes\n\n- [x] Implementar BoldNotes'
+        '# Tareas Pendientes\n\n- [x] Implementar yanote'
       );
-      expect(screen.getByText(/Guardado & Versionado/i)).toBeInTheDocument();
+      expect(screen.getByText(/✓ Guardado: scratch-1.md/i)).toBeInTheDocument();
     });
   });
 
@@ -225,7 +206,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     fireEvent.change(textarea, { target: { value: 'Important unsaved work' } });
 
     // Click bottom save button
-    const saveBtn = screen.getByText(/Guardar \(Ctrl\+S\)/i);
+    const saveBtn = screen.getByTitle(/Guardar nota \(Ctrl \+ S\)/i);
     fireEvent.click(saveBtn);
 
     await waitFor(() => {
@@ -294,39 +275,56 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     });
   });
 
-  it('[CHAOS E2E 5/8] NotesDrawer opens note; if already open, switches without duplication', async () => {
+  it('[CHAOS E2E 5/8] Recent files history opens a file; an already open one switches without duplication', async () => {
+    (window.electronAPI?.getAppConfig as any).mockResolvedValue({
+      notesPath: '/notes',
+      alwaysOnTop: false,
+      recentFiles: [
+        { path: '/proyectos/Plan.md', name: 'Plan.md', openedAt: Date.now() - 60_000 },
+        { path: '/notes/Bienvenido.md', name: 'Bienvenido.md', openedAt: Date.now() - 120_000 },
+      ],
+    });
     render(<App />);
-
-    // Open Notes Explorer drawer
-    fireEvent.click(screen.getByTitle('Explorador de Notas Markdown'));
-
     await waitFor(() => {
-      expect(screen.getByText('Explorador de Notas Markdown')).toBeInTheDocument();
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
     });
 
-    // Click on Bienvenido.md in drawer
-    const noteItems = screen.getAllByText('Bienvenido.md');
-    fireEvent.click(noteItems[noteItems.length - 1]);
+    fireEvent.click(screen.getByTitle('Archivos recientes'));
+    await waitFor(() => {
+      expect(screen.getByText('Plan.md')).toBeInTheDocument();
+    });
+    expect(screen.getByText('/proyectos')).toBeInTheDocument();
 
-    // Should still have only 1 Bienvenido.md tab in the tabbar
-    const tabsInDom = screen.getAllByText('Bienvenido.md');
-    expect(tabsInDom.length).toBeGreaterThanOrEqual(1);
+    // Opens a file from another folder in a new tab and moves it to the top of the history
+    fireEvent.click(screen.getByText('Plan.md'));
+    await waitFor(() => {
+      expect(window.electronAPI?.readFile).toHaveBeenCalledWith('/proyectos/Plan.md');
+      expect(screen.getAllByText('Plan.md').length).toBeGreaterThanOrEqual(1);
+    });
+    expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ recentFiles: expect.arrayContaining([expect.objectContaining({ path: '/proyectos/Plan.md' })]) })
+    );
+
+    // Bienvenido.md is already open: picking it again must not duplicate the tab
+    fireEvent.click(screen.getByTitle('Archivos recientes'));
+    const items = await screen.findAllByText('Bienvenido.md');
+    const before = screen.getAllByText('Bienvenido.md').length;
+    fireEvent.click(items[items.length - 1]);
+    await waitFor(() => {
+      expect(screen.getAllByText('Bienvenido.md').length).toBeLessThanOrEqual(before);
+    });
   });
 
-  it('[CHAOS E2E 6/8] 1-Click Git Sync failure displays error notification without crashing UI', async () => {
-    (window.electronAPI?.gitSync as any).mockResolvedValueOnce({
-      success: false,
-      error: 'Git conflict in remote main branch',
-    });
-
-    render(<App />);
-
-    // Click header cyan sync button
-    fireEvent.click(screen.getByTitle('Sincronizar con GitHub'));
+  it('[CHAOS E2E 6/8] App shows no Git / GitHub controls anywhere', async () => {
+    const { container } = render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText('Control de Versiones & GitHub')).toBeInTheDocument();
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
     });
+
+    expect(screen.queryByTitle(/git/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/github/i)).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Control de Versiones|Sincronizar/i);
   });
 
   it('[CHAOS E2E 7/8] Double-click rename persists file change on disk', async () => {

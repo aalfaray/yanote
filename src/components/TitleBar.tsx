@@ -1,6 +1,6 @@
 import React from 'react';
-import { Pin, Minus, Square, X, Settings, FolderOpen, RefreshCw, GitBranch, Moon, Sun } from 'lucide-react';
-import { Button } from './ui/Button';
+import { TransparencyControl } from './TransparencyControl';
+import { Pin, Minus, Square, X, Settings, History, Moon, Sun } from 'lucide-react';
 
 interface TitleBarProps {
   isAlwaysOnTop: boolean;
@@ -9,11 +9,24 @@ interface TitleBarProps {
   onToggleDarkMode?: () => void;
   onOpenSettings: () => void;
   onOpenFiles: () => void;
-  onOpenGit: () => void;
-  gitBranch?: string;
-  hasGitChanges?: boolean;
-  isSyncing?: boolean;
+  /** When provided, the close button asks the app first (confirmation modal) instead of closing directly */
+  onRequestClose?: () => void;
+  /** Window opacity 0.3–1; the transparency button is shown when onChangeOpacity is provided */
+  opacity?: number;
+  onChangeOpacity?: (opacity: number) => void;
 }
+
+// One shared look for every titlebar control: 28px tall, 2px border, hard shadow, same press effect
+const BASE =
+  'h-7 shrink-0 flex items-center justify-center gap-1 border-2 rounded text-[10px] font-black leading-none cursor-pointer transition-all shadow-[2px_2px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1px_1px_0px_#000]';
+const ICON = `${BASE} w-7`;
+// Square (28x28) while the label is hidden; widens when the label shows
+const LABELED = `${BASE} min-w-7 px-[5px]`;
+const NEUTRAL =
+  'bg-white text-black border-black hover:bg-[#FFE500] dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600 dark:hover:bg-[#FFE500] dark:hover:text-black dark:hover:border-black';
+const ACTIVE = 'bg-[#FFE500] text-black border-black hover:bg-[#FFD700]';
+const DANGER = 'bg-[#FF6B6B] text-white border-black hover:bg-[#FF5252]';
+const ICON_PROPS = { size: 14, strokeWidth: 2.5 } as const;
 
 export const TitleBar: React.FC<TitleBarProps> = ({
   isAlwaysOnTop,
@@ -22,10 +35,9 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onToggleDarkMode,
   onOpenSettings,
   onOpenFiles,
-  onOpenGit,
-  gitBranch = 'main',
-  hasGitChanges = false,
-  isSyncing = false,
+  onRequestClose,
+  opacity = 1,
+  onChangeOpacity,
 }) => {
   const handleMinimize = () => {
     window.electronAPI?.minimize();
@@ -36,126 +48,80 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   };
 
   const handleClose = () => {
+    if (onRequestClose) {
+      onRequestClose();
+      return;
+    }
     window.electronAPI?.close();
   };
 
   return (
-    <div className="titlebar-drag-region h-10 w-full bg-[#FAF8F5] dark:bg-[#18181B] border-b-2 border-black dark:border-zinc-700 flex items-center justify-between px-1.5 select-none z-40 transition-colors overflow-hidden">
+    <div className="titlebar-drag-region h-10 w-full bg-[#FAF8F5] dark:bg-[#18181B] border-b-2 border-black dark:border-zinc-700 flex items-center justify-between px-1 min-[420px]:px-1.5 select-none z-40 transition-colors overflow-hidden">
       {/* Left: App Title & Status */}
-      <div className="flex items-center gap-1.5 no-drag min-w-0 shrink">
-        <div className="flex items-center gap-1 font-black text-xs tracking-wider bg-black text-[#FFE500] dark:bg-[#FFE500] dark:text-black px-1.5 py-0.5 rounded shadow-[1.5px_1.5px_0px_#FFE500] dark:shadow-[1.5px_1.5px_0px_#000] shrink-0">
+      <div className="flex items-center gap-1 min-[420px]:gap-1.5 no-drag min-w-0 shrink">
+        <div className="h-7 flex items-center gap-1 font-black text-xs tracking-wider bg-black text-[#FFE500] dark:bg-[#FFE500] dark:text-black px-1.5 min-[480px]:px-2 border-2 border-black rounded shadow-[2px_2px_0px_#FFE500] dark:shadow-[2px_2px_0px_#000] shrink-0">
           <span>⚡</span>
-          <span className="hidden min-[480px]:inline"> BOLDNOTES</span>
+          <span className="hidden min-[480px]:inline"> YANOTE</span>
         </div>
 
         {/* Superposición (Always on Top) Toggle */}
-        <Button
-          variant={isAlwaysOnTop ? 'primary' : 'secondary'}
-          size="xs"
+        <button
           onClick={onToggleAlwaysOnTop}
           title={isAlwaysOnTop ? 'Superposición activa (Siempre encima)' : 'Activar superposición (Siempre encima)'}
-          className={`flex items-center gap-1 px-1.5 py-0.5 shrink-0 ${
-            isAlwaysOnTop ? 'bg-[#FFE500] text-black border-black font-black' : 'opacity-85 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600'
-          }`}
+          aria-pressed={isAlwaysOnTop}
+          className={`${LABELED} min-[540px]:px-2 ${isAlwaysOnTop ? ACTIVE : NEUTRAL}`}
         >
-          <Pin size={12} strokeWidth={2.8} className={isAlwaysOnTop ? 'fill-black rotate-45 text-black' : ''} />
-          <span className="text-[10px] hidden min-[540px]:inline">
-            {isAlwaysOnTop ? 'ENCIMA' : 'FLOTANTE'}
-          </span>
-        </Button>
-
-        {/* Git Quick Pill */}
-        <Button
-          variant="secondary"
-          size="xs"
-          onClick={onOpenGit}
-          title="Ver estado de Git y Sincronizar"
-          className="flex items-center gap-1 px-1.5 py-0.5 bg-white dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600 min-w-0 shrink"
-        >
-          <GitBranch size={12} strokeWidth={2.5} className="shrink-0" />
-          <span className="text-[10px] max-w-[45px] min-[480px]:max-w-[70px] truncate">{gitBranch}</span>
-          {hasGitChanges && (
-            <span className="w-2 h-2 rounded-full bg-[#FF6B6B] border border-black inline-block animate-pulse shrink-0" />
-          )}
-        </Button>
+          <Pin {...ICON_PROPS} className={isAlwaysOnTop ? 'fill-black rotate-45' : ''} />
+          <span className="hidden min-[540px]:inline">{isAlwaysOnTop ? 'ENCIMA' : 'FLOTANTE'}</span>
+        </button>
       </div>
 
       {/* Right: Actions & Window Controls */}
       <div className="flex items-center gap-1 no-drag shrink-0 ml-1">
         {/* Dark Mode Toggle */}
-        <Button
-          variant={isDarkMode ? 'primary' : 'secondary'}
-          size="xs"
+        <button
           onClick={onToggleDarkMode}
           title={isDarkMode ? 'Cambiar a modo claro (Ctrl+Shift+D)' : 'Cambiar a modo oscuro (Ctrl+Shift+D)'}
-          className={`flex items-center gap-1 px-1.5 py-0.5 shrink-0 ${
-            isDarkMode
-              ? 'bg-[#FFE500] text-black border-black font-black shadow-[1.5px_1.5px_0px_#000]'
-              : 'bg-white text-black border-black font-bold shadow-[1.5px_1.5px_0px_#000] hover:bg-[#FFE500]'
-          }`}
+          aria-pressed={isDarkMode}
+          className={`${LABELED} min-[560px]:px-2 ${isDarkMode ? ACTIVE : NEUTRAL}`}
         >
-          {isDarkMode ? <Sun size={12} strokeWidth={2.8} /> : <Moon size={12} strokeWidth={2.8} />}
-          <span className="text-[10px] font-black hidden min-[560px]:inline">
-            {isDarkMode ? 'CLARO' : 'OSCURO'}
-          </span>
-        </Button>
+          {isDarkMode ? <Sun {...ICON_PROPS} /> : <Moon {...ICON_PROPS} />}
+          <span className="hidden min-[560px]:inline">{isDarkMode ? 'CLARO' : 'OSCURO'}</span>
+        </button>
 
-        {/* Open Notes Explorer */}
-        <Button
-          variant="secondary"
-          size="xs"
-          onClick={onOpenFiles}
-          title="Explorador de Notas Markdown"
-          className="p-1 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600 shrink-0"
-        >
-          <FolderOpen size={13} strokeWidth={2.5} />
-        </Button>
+        {/* Window transparency */}
+        {onChangeOpacity && (
+          <TransparencyControl
+            opacity={opacity}
+            onChange={onChangeOpacity}
+            buttonClassName={ICON}
+            activeClassName={ACTIVE}
+            idleClassName={NEUTRAL}
+            iconProps={ICON_PROPS}
+          />
+        )}
 
-        {/* Sync Button */}
-        <Button
-          variant="cyan"
-          size="xs"
-          onClick={onOpenGit}
-          title="Sincronizar con GitHub"
-          className="p-1 shrink-0"
-        >
-          <RefreshCw size={13} strokeWidth={2.5} className={isSyncing ? 'animate-spin' : ''} />
-        </Button>
+        {/* History of opened files */}
+        <button onClick={onOpenFiles} title="Archivos recientes" className={`${ICON} ${NEUTRAL}`}>
+          <History {...ICON_PROPS} />
+        </button>
 
         {/* Settings Button */}
-        <Button
-          variant="secondary"
-          size="xs"
-          onClick={onOpenSettings}
-          title="Configuración y Repositorio GitHub"
-          className="p-1 dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600 shrink-0"
-        >
-          <Settings size={13} strokeWidth={2.5} />
-        </Button>
+        <button onClick={onOpenSettings} title="Configuración" className={`${ICON} ${NEUTRAL}`}>
+          <Settings {...ICON_PROPS} />
+        </button>
 
-        <div className="h-4 w-[1px] bg-black/40 dark:bg-zinc-600 mx-0.5 shrink-0" />
+        <div className="h-5 w-[2px] bg-black/40 dark:bg-zinc-600 shrink-0" />
 
         {/* Window controls - ALWAYS visible and never pushed off */}
-        <button
-          onClick={handleMinimize}
-          className="w-6 h-6 flex items-center justify-center border-1.5 border-black dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 dark:text-zinc-200 hover:bg-neutral-200 dark:hover:bg-zinc-700 shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer shrink-0"
-          title="Minimizar"
-        >
-          <Minus size={11} strokeWidth={3} />
+        <button onClick={handleMinimize} title="Minimizar" className={`${ICON} ${NEUTRAL}`}>
+          <Minus {...ICON_PROPS} />
         </button>
-        <button
-          onClick={handleMaximize}
-          className="w-6 h-6 flex items-center justify-center border-1.5 border-black dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 dark:text-zinc-200 hover:bg-neutral-200 dark:hover:bg-zinc-700 shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer shrink-0"
-          title="Maximizar / Restaurar"
-        >
-          <Square size={10} strokeWidth={2.8} />
+        <button onClick={handleMaximize} title="Maximizar / Restaurar" className={`${ICON} ${NEUTRAL}`}>
+          <Square size={12} strokeWidth={2.5} />
         </button>
-        <button
-          onClick={handleClose}
-          className="w-6 h-6 flex items-center justify-center border-1.5 border-black rounded bg-[#FF6B6B] text-white hover:bg-[#FF5252] shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer shrink-0"
-          title="Cerrar"
-        >
-          <X size={12} strokeWidth={3} />
+        <button onClick={handleClose} title="Cerrar" className={`${ICON} ${DANGER}`}>
+          <X {...ICON_PROPS} />
         </button>
       </div>
     </div>

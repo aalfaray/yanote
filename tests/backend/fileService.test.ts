@@ -9,7 +9,7 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
   let tempDir: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'boldnotes-test-files-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yanote-test-files-'));
   });
 
   afterEach(() => {
@@ -76,7 +76,7 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
   it('[CHAOS 2/12] reading a directory as a file returns error gracefully', () => {
     const res = fileService.readFile(tempDir);
     expect(res.success).toBe(false);
-    expect(res.error).toContain('directory');
+    expect(res.error).toContain('carpeta');
   });
 
   it('[CHAOS 3/12] writing with null and undefined content converts safely without crash', () => {
@@ -102,7 +102,7 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
     fs.mkdirSync(subDir);
     const res = fileService.deleteFile(subDir);
     expect(res.success).toBe(false);
-    expect(res.error).toContain('Cannot delete directory');
+    expect(res.error).toContain('No se puede eliminar una carpeta');
   });
 
   it('[CHAOS 6/12] renaming a non-existent source file returns error gracefully', () => {
@@ -110,7 +110,7 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
     const dest = path.join(tempDir, 'dest.md');
     const res = fileService.renameFile(src, dest);
     expect(res.success).toBe(false);
-    expect(res.error).toContain('does not exist');
+    expect(res.error).toContain('no existe');
   });
 
   it('[CHAOS 7/12] renaming to an already existing file name is prevented to avoid data loss', () => {
@@ -121,7 +121,7 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
 
     const res = fileService.renameFile(fileA, fileB);
     expect(res.success).toBe(false);
-    expect(res.error).toContain('already exists');
+    expect(res.error).toContain('Ya existe');
     // Ensure file B content is untouched
     expect(fileService.readFile(fileB).content).toBe('Content B');
   });
@@ -213,5 +213,12 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
     expect(fileService.getRelativeNotePath(null as any, null as any)).toBe('');
     expect(fileService.getRelativeNotePath(1234 as any, {} as any)).toBe('');
     expect(fileService.getRelativeNotePath('notes', 9999 as any)).toBe('');
+  });
+
+  it('[CHAOS i18n] translates common Node.js file system errors to Spanish', () => {
+    expect(fileService.describeFsError({ code: 'EACCES', message: 'EACCES: permission denied' })).toBe('Permiso denegado');
+    expect(fileService.describeFsError({ code: 'ENOSPC', message: 'no space' })).toBe('No queda espacio en el disco');
+    expect(fileService.describeFsError({ code: 'EWEIRD', message: 'raw message' })).toBe('raw message');
+    expect(fileService.describeFsError(null)).toBe('Error desconocido');
   });
 });

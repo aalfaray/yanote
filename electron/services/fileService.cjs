@@ -1,24 +1,47 @@
 const fs = require('fs');
 const path = require('path');
 
+// Spanish messages for the most common Node.js file system error codes
+const FS_ERROR_MESSAGES = {
+  ENOENT: 'El archivo o la carpeta no existe',
+  EACCES: 'Permiso denegado',
+  EPERM: 'Operación no permitida (permiso denegado)',
+  EEXIST: 'Ya existe un archivo con ese nombre',
+  EISDIR: 'La ruta indicada es una carpeta, no un archivo',
+  ENOTDIR: 'Parte de la ruta no es una carpeta',
+  ENOTEMPTY: 'La carpeta no está vacía',
+  ENOSPC: 'No queda espacio en el disco',
+  EBUSY: 'El archivo está en uso por otro programa',
+  EMFILE: 'Demasiados archivos abiertos',
+  EROFS: 'El disco es de solo lectura',
+  ENAMETOOLONG: 'El nombre o la ruta es demasiado largo',
+  EINVAL: 'Nombre de archivo o ruta no válido',
+};
+
+/** Translates a Node.js fs error into a Spanish message for the UI. */
+function describeFsError(err) {
+  if (err && FS_ERROR_MESSAGES[err.code]) return FS_ERROR_MESSAGES[err.code];
+  return (err && err.message) || 'Error desconocido';
+}
+
 const WELCOME_CONTENT = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
-Este es un editor **portable, flotante y sincronizado con GitHub** diseñado con la estética **Boldkit**.
+Este es un editor **portable y flotante** diseñado con la estética **Boldkit**.
 
 ### ✨ Características destacadas:
 - **Superposición (Always on Top):** Haz clic en el botón de pin 📌 en la barra superior para mantener la ventana siempre visible encima de otras aplicaciones.
 - **Pestañas tipo Orca:** Abre múltiples notas simultáneamente con el botón \`+\`. Cada pestaña es un archivo markdown independiente.
 - **Editor Rico con @mdxeditor/editor:** Formato enriquecido, tablas, bloques de código, listas, enlaces y alternancia rápida a código fuente Markdown.
-- **Control de Versiones & GitHub:** Tus notas se guardan localmente en un repositorio Git y se sincronizan con tu repositorio de GitHub con 1 solo clic.
+- **Lectura en voz alta:** Escucha la nota completa, la selección o el párrafo actual con el botón 🔊 de la barra de herramientas.
 - **Resolución Compacta y Redimensionable:** Diseñado inicialmente en tamaño pequeño/compacto tipo bloc de notas flotante, con libertad total para agrandarlo o maximizarlo.
 
 ---
-> *Tip: Presiona Ctrl + S para guardar tu nota o usa la barra de herramientas para sincronizar con Git.*
+> *Tip: Presiona Ctrl + S para guardar tu nota.*
 `;
 
 function ensureNotesDir(notesDir) {
   if (!notesDir || typeof notesDir !== 'string') {
-    throw new Error('Invalid notes directory path');
+    throw new Error('Ruta de la carpeta de notas no válida');
   }
 
   if (!fs.existsSync(notesDir)) {
@@ -39,7 +62,7 @@ function ensureNotesDir(notesDir) {
 function listNotes(notesDir) {
   try {
     if (!notesDir || !fs.existsSync(notesDir)) {
-      return { success: false, error: 'Directory does not exist', notes: [] };
+      return { success: false, error: 'La carpeta no existe', notes: [] };
     }
     const files = fs.readdirSync(notesDir);
     const notes = files
@@ -63,33 +86,33 @@ function listNotes(notesDir) {
 
     return { success: true, notes };
   } catch (err) {
-    return { success: false, error: err.message, notes: [] };
+    return { success: false, error: describeFsError(err), notes: [] };
   }
 }
 
 function readFile(filePath) {
   try {
     if (!filePath || typeof filePath !== 'string') {
-      return { success: false, error: 'Invalid file path' };
+      return { success: false, error: 'Ruta de archivo no válida' };
     }
     if (!fs.existsSync(filePath)) {
-      return { success: false, error: 'File does not exist' };
+      return { success: false, error: 'El archivo no existe' };
     }
     const stats = fs.statSync(filePath);
     if (stats.isDirectory()) {
-      return { success: false, error: 'Target path is a directory, not a file' };
+      return { success: false, error: 'La ruta indicada es una carpeta, no un archivo' };
     }
     const content = fs.readFileSync(filePath, 'utf8');
     return { success: true, content };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: false, error: describeFsError(err) };
   }
 }
 
 function writeFile(filePath, content) {
   try {
     if (!filePath || typeof filePath !== 'string') {
-      return { success: false, error: 'Invalid file path' };
+      return { success: false, error: 'Ruta de archivo no válida' };
     }
     // Prevent null or undefined content crashes
     const safeContent = content === undefined || content === null ? '' : String(content);
@@ -102,44 +125,44 @@ function writeFile(filePath, content) {
     fs.writeFileSync(filePath, safeContent, 'utf8');
     return { success: true };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: false, error: describeFsError(err) };
   }
 }
 
 function deleteFile(filePath) {
   try {
     if (!filePath || typeof filePath !== 'string') {
-      return { success: false, error: 'Invalid file path' };
+      return { success: false, error: 'Ruta de archivo no válida' };
     }
     if (fs.existsSync(filePath)) {
       const stats = fs.statSync(filePath);
       if (stats.isDirectory()) {
-        return { success: false, error: 'Cannot delete directory with deleteFile' };
+        return { success: false, error: 'No se puede eliminar una carpeta' };
       }
       fs.unlinkSync(filePath);
     }
     return { success: true };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: false, error: describeFsError(err) };
   }
 }
 
 function renameFile(oldPath, newPath) {
   try {
     if (!oldPath || !newPath || typeof oldPath !== 'string' || typeof newPath !== 'string') {
-      return { success: false, error: 'Invalid source or target path' };
+      return { success: false, error: 'Ruta de origen o destino no válida' };
     }
     if (!fs.existsSync(oldPath)) {
-      return { success: false, error: 'Source file does not exist' };
+      return { success: false, error: 'El archivo de origen no existe' };
     }
     // Check if newPath already exists and is different
     if (path.resolve(oldPath) !== path.resolve(newPath) && fs.existsSync(newPath)) {
-      return { success: false, error: 'Target file already exists' };
+      return { success: false, error: 'Ya existe un archivo con ese nombre' };
     }
     fs.renameSync(oldPath, newPath);
     return { success: true };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: false, error: describeFsError(err) };
   }
 }
 
@@ -159,6 +182,7 @@ function getRelativeNotePath(notesDir, fullPath) {
 }
 
 module.exports = {
+  describeFsError,
   ensureNotesDir,
   listNotes,
   readFile,

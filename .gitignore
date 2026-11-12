@@ -11,7 +11,7 @@ node_modules
 dist
 dist-ssr
 dist-electron
-.boldnotes-data
+.yanote-data
 *.local
 
 # Editor directories and files

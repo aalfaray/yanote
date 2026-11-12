@@ -8,11 +8,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
   setAlwaysOnTop: (alwaysOnTop) => ipcRenderer.invoke('window:setAlwaysOnTop', alwaysOnTop),
   getAlwaysOnTop: () => ipcRenderer.invoke('window:getAlwaysOnTop'),
+  setOpacity: (opacity) => ipcRenderer.invoke('window:setOpacity', opacity),
 
   // File system
   getNotesPath: () => ipcRenderer.invoke('fs:getNotesPath'),
   setNotesPath: (newPath) => ipcRenderer.invoke('fs:setNotesPath', newPath),
   selectFolder: () => ipcRenderer.invoke('fs:selectFolder'),
+  openMarkdownFile: () => ipcRenderer.invoke('fs:openMarkdownFile'),
   listNotes: () => ipcRenderer.invoke('fs:listNotes'),
   readFile: (filePath) => ipcRenderer.invoke('fs:readFile', filePath),
   writeFile: (filePath, content) => ipcRenderer.invoke('fs:writeFile', filePath, content),
@@ -22,14 +24,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveAppConfig: (config) => ipcRenderer.invoke('fs:saveAppConfig', config),
   revealInExplorer: (filePath) => ipcRenderer.invoke('app:revealInExplorer', filePath),
 
-  // Git & GitHub
-  gitStatus: () => ipcRenderer.invoke('git:status'),
-  gitCommit: (message) => ipcRenderer.invoke('git:commit', message),
-  gitPush: () => ipcRenderer.invoke('git:push'),
-  gitPull: () => ipcRenderer.invoke('git:pull'),
-  gitSync: (commitMessage) => ipcRenderer.invoke('git:sync', commitMessage),
-  gitHistory: (filePath) => ipcRenderer.invoke('git:history', filePath),
-  gitFileAtCommit: (filePath, commitHash) => ipcRenderer.invoke('git:fileAtCommit', filePath, commitHash),
-  gitSetRemote: (remoteUrl, branch) => ipcRenderer.invoke('git:setRemote', remoteUrl, branch),
-  gitInit: () => ipcRenderer.invoke('git:init'),
+
+  // Text to speech (native fallback)
+  ttsSpeak: (request) => ipcRenderer.invoke('tts:speak', request),
+  ttsStop: () => ipcRenderer.invoke('tts:stop'),
+  onTtsEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('tts:event', listener);
+    return () => ipcRenderer.removeListener('tts:event', listener);
+  },
+
+  // Integrated terminals
+  termCreate: (options) => ipcRenderer.invoke('term:create', options),
+  saveClipboardImage: () => ipcRenderer.invoke('clipboard:saveImage'),
+  termWrite: (id, data) => ipcRenderer.send('term:write', id, data),
+  termResize: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),
+  termKill: (id) => ipcRenderer.invoke('term:kill', id),
+  onTermEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('term:event', listener);
+    return () => ipcRenderer.removeListener('term:event', listener);
+  },
+
+  // Claude chat sessions (Agent SDK)
+  claudeStart: (options) => ipcRenderer.invoke('claude:start', options),
+  claudeSend: (id, payload) => ipcRenderer.invoke('claude:send', id, payload),
+  claudeRespondPermission: (id, requestId, decision) => ipcRenderer.invoke('claude:respondPermission', id, requestId, decision),
+  claudeInterrupt: (id) => ipcRenderer.invoke('claude:interrupt', id),
+  claudeSetPermissionMode: (id, mode) => ipcRenderer.invoke('claude:setPermissionMode', id, mode),
+  claudeSetModel: (id, model) => ipcRenderer.invoke('claude:setModel', id, model),
+  claudeSetEffort: (id, level) => ipcRenderer.invoke('claude:setEffort', id, level),
+  claudeStop: (id) => ipcRenderer.invoke('claude:stop', id),
+  onClaudeEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('claude:event', listener);
+    return () => ipcRenderer.removeListener('claude:event', listener);
+  },
 });

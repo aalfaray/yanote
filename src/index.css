@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "@mdxeditor/editor/style.css";
 
+/* Tailwind `dark:` follows the app theme toggle (.dark on <html>), not the OS preference */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --color-border: #000000;
   --bg-canvas: #faf8f5;
@@ -70,22 +73,60 @@ body {
 
 /* Custom Neubrutalist Scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
 }
 
 ::-webkit-scrollbar-track {
   background: #f1ede4;
-  border-left: 1.5px solid #000;
+  border-left: 2px solid #000;
+}
+
+::-webkit-scrollbar-track:horizontal {
+  border-left: none;
+  border-top: 2px solid #000;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #000;
-  border: 1px solid #000;
+  background: #ffe500;
+  border: 2px solid #000;
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #333;
+  background: #ffd000;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #000;
+}
+
+::-webkit-scrollbar-corner {
+  background: #f1ede4;
+}
+
+/* Dark mode scrollbars */
+.dark ::-webkit-scrollbar-track,
+.dark ::-webkit-scrollbar-corner {
+  background: #18181b;
+  border-color: #3f3f46;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-color: #000;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #ffe500;
+}
+
+.dark ::-webkit-scrollbar-thumb:active {
+  background: #ffd000;
 }
 
 /* Hide scrollbar for clean tab scrolling */
@@ -112,17 +153,28 @@ body {
 .mdxeditor-toolbar {
   background: #faf8f5 !important;
   border-bottom: 2px solid #000 !important;
-  padding: 3px 6px !important;
-  gap: 4px !important;
-  flex-wrap: nowrap !important;
-  overflow-x: auto !important;
+  /* Mobile first: tools wrap onto extra rows instead of hiding behind a scroll */
+  padding: 4px !important;
+  gap: 4px 3px !important;
+  flex-wrap: wrap !important;
+  overflow: visible !important;
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
-  height: 38px !important;
+  height: auto !important;
   min-height: 38px !important;
-  max-height: 38px !important;
+  max-height: none !important;
   display: flex !important;
   align-items: center !important;
+}
+
+/* Separators only make sense when the tools fit in one row */
+.toolbar-separator {
+  display: none;
+}
+
+/* MDXEditor adds 4px side margins to each tool group: drop them on small windows */
+.mdxeditor-toolbar [class*="_toolbarGroupOfGroups"] {
+  margin: 0 !important;
 }
 
 .mdxeditor-toolbar::-webkit-scrollbar {
@@ -132,7 +184,7 @@ body {
 .mdxeditor-toolbar button {
   height: 28px !important;
   min-width: 28px !important;
-  padding: 0 4px !important;
+  padding: 0 2px !important;
   border: 1.5px solid #000 !important;
   border-radius: 4px !important;
   background: #ffffff !important;
@@ -168,9 +220,9 @@ body {
 [class*="_toolbarNodeKindSelectTrigger"],
 button[role="combobox"] {
   height: 28px !important;
-  width: 135px !important;
-  min-width: 135px !important;
-  max-width: 135px !important;
+  width: 112px !important;
+  min-width: 112px !important;
+  max-width: 112px !important;
   border: 1.5px solid #000000 !important;
   border-radius: 4px !important;
   background: #ffffff !important;
@@ -332,7 +384,10 @@ div[data-radix-popover-content] {
   height: 28px !important;
   flex-shrink: 0 !important;
   flex-wrap: nowrap !important;
-  padding-left: 6px !important;
+  padding-left: 4px !important;
+  /* MDXEditor makes it sticky; with a wrapping toolbar it must flow like the rest */
+  position: static !important;
+  background: transparent !important;
 }
 
 [class*="_diffSourceToggle"] {
@@ -397,15 +452,31 @@ div[data-radix-popover-content] {
   transform: translate(1px, 1px) !important;
 }
 
-.mdxeditor-content {
-  padding: 16px 20px !important;
-  user-select: text !important;
-  cursor: text;
+/* Scroll area: everything below the toolbar fills the remaining height and scrolls.
+   The outer containers clip overflow, so without this the note can't be scrolled. */
+.mdxeditor {
+  min-height: 0 !important;
 }
 
-/* Rich text typography in light mode */
+.mdxeditor > .mdxeditor-diff-source-wrapper,
+.mdxeditor > .mdxeditor-root-contenteditable {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.mdxeditor-content {
+  padding: 12px 14px !important;
+  user-select: text !important;
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+
+/* Rich text typography (mobile-first sizes, scaled up from 640px) */
 .mdxeditor h1 {
-  font-size: 1.75rem !important;
+  font-size: 1.4rem !important;
+  line-height: 1.25 !important;
   font-weight: 800 !important;
   border-bottom: 2px solid #000000 !important;
   padding-bottom: 4px !important;
@@ -414,14 +485,15 @@ div[data-radix-popover-content] {
 }
 
 .mdxeditor h2 {
-  font-size: 1.4rem !important;
+  font-size: 1.2rem !important;
+  line-height: 1.3 !important;
   font-weight: 700 !important;
   margin-top: 0.8rem !important;
   margin-bottom: 0.4rem !important;
 }
 
 .mdxeditor h3 {
-  font-size: 1.15rem !important;
+  font-size: 1.05rem !important;
   font-weight: 700 !important;
   margin-top: 0.6rem !important;
   margin-bottom: 0.3rem !important;
@@ -446,6 +518,31 @@ div[data-radix-popover-content] {
   color: #c7254e !important;
 }
 
+/* Lazy code blocks / table cells: static until clicked (see LazyCodeBlock + vite-plugins) */
+.mdxeditor pre.mdxeditor-static-code {
+  cursor: text;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mdxeditor pre.mdxeditor-static-code code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  color: inherit !important;
+}
+
+.mdxeditor [data-static-cell] {
+  cursor: text;
+}
+
+.mdxeditor .mdxeditor-static-cell p {
+  margin: 0;
+}
+
 .mdxeditor pre {
   background: #1e1e1e !important;
   color: #f8f8f2 !important;
@@ -465,7 +562,7 @@ div[data-radix-popover-content] {
 
 .mdxeditor th, .mdxeditor td {
   border: 1.5px solid #000000 !important;
-  padding: 6px 10px !important;
+  padding: 4px 6px !important;
 }
 
 .mdxeditor th {
@@ -703,3 +800,309 @@ div[data-radix-popover-content] {
 .dark .tok-comment { color: #8B949E !important; font-style: italic !important; }
 .dark .tok-heading { color: #FFE500 !important; font-weight: bold !important; }
 .dark .tok-link { color: #70B8FF !important; text-decoration: underline !important; }
+
+/* Text to speech: paragraph being read aloud */
+.mdxeditor-content [data-tts-active] {
+  background: rgba(255, 229, 0, 0.35) !important;
+  box-shadow: -6px 0 0 #ffe500 !important;
+  border-radius: 2px;
+  transition: background 0.15s ease;
+}
+
+.dark .mdxeditor-content [data-tts-active] {
+  background: rgba(255, 229, 0, 0.18) !important;
+}
+
+/* ========================================================
+   PROGRESSIVE ENHANCEMENT FOR WIDER WINDOWS (mobile first)
+   ======================================================== */
+@media (min-width: 640px) {
+  .mdxeditor-toolbar {
+    padding: 3px 6px !important;
+    gap: 4px !important;
+  }
+
+  .mdxeditor-toolbar button {
+    padding: 0 4px !important;
+  }
+
+  .toolbar-separator {
+    display: block;
+  }
+
+  .mdxeditor-toolbar [class*="_toolbarGroupOfGroups"] {
+    margin: 0 4px !important;
+  }
+
+  [class*="_selectTrigger"],
+  [class*="_toolbarNodeKindSelectTrigger"],
+  button[role="combobox"] {
+    width: 135px !important;
+    min-width: 135px !important;
+    max-width: 135px !important;
+  }
+
+  [class*="_diffSourceToggleWrapper"] {
+    padding-left: 6px !important;
+  }
+
+  .mdxeditor-content {
+    padding: 16px 20px !important;
+  }
+
+  .mdxeditor h1 {
+    font-size: 1.75rem !important;
+  }
+
+  .mdxeditor h2 {
+    font-size: 1.4rem !important;
+  }
+
+  .mdxeditor h3 {
+    font-size: 1.15rem !important;
+  }
+
+  .mdxeditor th, .mdxeditor td {
+    padding: 6px 10px !important;
+  }
+}
+
+/* ========================================================
+   TOOLBAR RHYTHM: one spacing unit for every element
+   - 4px between every button / select (inside and across groups)
+   - separators add 4px on each side (8px total, symmetric)
+   - every icon button is exactly 28x28
+   Kept last so it wins over MDXEditor's own group/button margins.
+   ======================================================== */
+.mdxeditor-toolbar {
+  gap: 4px !important;
+}
+
+.mdxeditor-toolbar [class*="_toolbarGroupOfGroups"],
+.mdxeditor-toolbar [class*="_toolbarToggleSingleGroup"],
+.mdxeditor-toolbar [class*="_diffSourceToggle"] {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  margin: 0 !important;
+}
+
+.mdxeditor-toolbar [class*="_diffSourceToggleWrapper"] {
+  gap: 4px !important;
+  padding-left: 0 !important;
+}
+
+.mdxeditor-toolbar button {
+  margin: 0 !important;
+}
+
+.mdxeditor-toolbar button:not([role="combobox"]) {
+  width: 28px !important;
+  min-width: 28px !important;
+  padding: 0 !important;
+}
+
+.mdxeditor-toolbar .toolbar-separator {
+  margin: 0 4px !important;
+}
+
+/* ========================================================
+   TRANSPARENCY SLIDER (neubrutalist range input)
+   ======================================================== */
+.opacity-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 10px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.12), #000);
+  border: 2px solid #000;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+}
+
+.opacity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #ffe500;
+  border: 2px solid #000;
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 #000;
+  cursor: grab;
+}
+
+.opacity-slider:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  box-shadow: 1px 1px 0 #000;
+}
+
+.opacity-slider:focus-visible {
+  box-shadow: 0 0 0 2px #ffe500;
+}
+
+.dark .opacity-slider {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), #e4e4e7);
+  border-color: #52525b;
+}
+
+/* ========================================================
+   TOOLBAR ICON COLOR
+   MDXEditor paints every toolbar svg with --baseTextContrast (light grey in dark
+   mode), so icons vanished on the yellow hover/active background. Icons now follow
+   their button's text colour, which every state (normal/hover/on/dark) already sets.
+   ======================================================== */
+.mdxeditor-toolbar svg {
+  color: inherit !important;
+}
+
+/* ========================================================
+   CURSOR: every clickable control shows the hand pointer
+   (Tailwind v4 preflight resets buttons to cursor:default and
+   MDXEditor sets its own). Disabled controls show not-allowed.
+   ======================================================== */
+button,
+[role="button"],
+[role="menuitem"],
+[role="option"],
+[role="radio"],
+[role="tab"],
+[role="combobox"],
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"],
+select,
+summary {
+  cursor: pointer !important;
+}
+
+button:disabled,
+button[data-disabled],
+[aria-disabled="true"],
+input:disabled,
+select:disabled {
+  cursor: not-allowed !important;
+}
+
+/* ========================================================
+   Find in note (Ctrl+F) - CSS Custom Highlight API (FindBar)
+   ======================================================== */
+::highlight(bn-search) {
+  background-color: rgba(255, 229, 0, 0.45);
+  color: inherit;
+}
+
+::highlight(bn-search-current) {
+  background-color: #ff9f1a;
+  color: #000;
+}
+
+.dark ::highlight(bn-search) {
+  background-color: rgba(255, 229, 0, 0.3);
+}
+
+/* CodeMirror search panel (code mode, source mode, code blocks) in the app's style */
+.cm-panels {
+  background: #faf8f5 !important;
+  color: #000 !important;
+  border-color: #000 !important;
+}
+
+.cm-panels.cm-panels-bottom {
+  border-top: 2px solid #000 !important;
+}
+
+.cm-panel.cm-search {
+  padding: 6px 8px !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 700;
+}
+
+.cm-panel.cm-search input.cm-textfield {
+  border: 1.5px solid #000 !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  background: #fff !important;
+  color: #000 !important;
+  font-size: 12px !important;
+}
+
+.cm-panel.cm-search button.cm-button {
+  background-image: none !important;
+  background: #fff !important;
+  color: #000 !important;
+  border: 1.5px solid #000 !important;
+  border-radius: 4px !important;
+  box-shadow: 1.5px 1.5px 0 #000;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cm-panel.cm-search button.cm-button:hover {
+  background: #ffe500 !important;
+}
+
+.cm-searchMatch {
+  background-color: rgba(255, 229, 0, 0.45) !important;
+  outline: none !important;
+}
+
+.cm-searchMatch.cm-searchMatch-selected {
+  background-color: #ff9f1a !important;
+}
+
+.dark .cm-panels {
+  background: #18181b !important;
+  color: #e4e4e7 !important;
+  border-color: #3f3f46 !important;
+}
+
+.dark .cm-panel.cm-search input.cm-textfield {
+  background: #121212 !important;
+  color: #e4e4e7 !important;
+  border-color: #3f3f46 !important;
+}
+
+.dark .cm-panel.cm-search button.cm-button {
+  background: #27272a !important;
+  color: #e4e4e7 !important;
+  border-color: #3f3f46 !important;
+  box-shadow: 1.5px 1.5px 0 #000;
+}
+
+.dark .cm-panel.cm-search button.cm-button:hover {
+  background: #ffe500 !important;
+  color: #000 !important;
+}
+
+/* Claude chat: Markdown in assistant replies */
+.claude-md > :first-child { margin-top: 0; }
+.claude-md > :last-child { margin-bottom: 0; }
+.claude-md p { margin: 0.4em 0; }
+.claude-md h1, .claude-md h2, .claude-md h3, .claude-md h4 { font-weight: 900; line-height: 1.25; margin: 0.9em 0 0.35em; }
+.claude-md h1 { font-size: 1.25em; }
+.claude-md h2 { font-size: 1.15em; }
+.claude-md h3 { font-size: 1.05em; }
+.claude-md ul, .claude-md ol { margin: 0.4em 0; padding-left: 1.4em; }
+.claude-md ul { list-style: disc; }
+.claude-md ol { list-style: decimal; }
+.claude-md li { margin: 0.15em 0; }
+.claude-md li > input[type='checkbox'] { margin-right: 0.35em; }
+.claude-md strong { font-weight: 900; }
+.claude-md blockquote { border-left: 3px solid #FFB800; padding-left: 0.7em; margin: 0.5em 0; opacity: 0.85; }
+.claude-md hr { border: 0; border-top: 2px solid currentColor; opacity: 0.2; margin: 0.8em 0; }
+.claude-md :not(pre) > code {
+  font-size: 0.9em;
+  padding: 0.05em 0.3em;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  background: #F4F1EA;
+  word-break: break-word;
+}
+.dark .claude-md :not(pre) > code { background: #0D0D0F; border-color: #3F3F46; }
+.claude-md pre code { font-size: inherit; }
+.claude-md table { display: block; overflow-x: auto; border-collapse: collapse; margin: 0.5em 0; font-size: 0.92em; }
+.claude-md th, .claude-md td { border: 2px solid #000; padding: 0.25em 0.5em; text-align: left; }
+.claude-md th { background: #FFE500; color: #000; font-weight: 900; }
+.dark .claude-md th, .dark .claude-md td { border-color: #52525B; }

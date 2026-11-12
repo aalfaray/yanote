@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, FileText, Check, ChevronLeft, ChevronRight, Pin } from 'lucide-react';
-import type { TabItem } from '../types/electron';
+import { Plus, X, FileText, Check, ChevronLeft, ChevronRight, ChevronDown, Pin, SquareTerminal, Terminal, FolderOpen, Sparkles } from 'lucide-react';
+import type { TabItem, TerminalShell } from '../types/electron';
 import { TabContextMenu } from './ui/TabContextMenu';
 
 interface TabBarProps {
@@ -9,6 +9,11 @@ interface TabBarProps {
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
   onNewTab: () => void;
+  onNewTerminal?: (shell: TerminalShell) => void;
+  /** Opens a chat with Claude Code (structured session instead of the TUI) */
+  onNewClaude?: () => void;
+  /** Browse the disk and open an existing .md file */
+  onOpenFile?: () => void;
   onRenameTab: (id: string, newTitle: string) => void;
   onTogglePinTab?: (id: string) => void;
   onCloseOthers?: (id: string) => void;
@@ -26,6 +31,9 @@ export const TabBar: React.FC<TabBarProps> = ({
   onSelectTab,
   onCloseTab,
   onNewTab,
+  onNewTerminal,
+  onNewClaude,
+  onOpenFile,
   onRenameTab,
   onTogglePinTab,
   onCloseOthers,
@@ -42,6 +50,28 @@ export const TabBar: React.FC<TabBarProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [isNewMenuOpen, setIsNewMenuOpen] = useState(false);
+  const [newMenuPos, setNewMenuPos] = useState({ top: 0, right: 0 });
+  const newMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close the "new" menu on outside click or Escape
+  useEffect(() => {
+    if (!isNewMenuOpen) return;
+    const handlePointer = (e: MouseEvent) => {
+      if (newMenuRef.current && !newMenuRef.current.contains(e.target as Node)) {
+        setIsNewMenuOpen(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsNewMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointer);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handlePointer);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [isNewMenuOpen]);
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{
@@ -129,7 +159,9 @@ export const TabBar: React.FC<TabBarProps> = ({
   const handleFinishRename = (id: string) => {
     if (editTitle.trim()) {
       let finalName = editTitle.trim();
-      if (!finalName.endsWith('.md')) {
+      const kind = tabs.find((t) => t.id === id)?.kind;
+      const isTerminal = kind === 'terminal' || kind === 'claude';
+      if (!isTerminal && !finalName.endsWith('.md')) {
         finalName += '.md';
       }
       onRenameTab(id, finalName);
@@ -217,6 +249,10 @@ export const TabBar: React.FC<TabBarProps> = ({
                     className="text-[#FFB800] dark:text-[#FFE500]"
                   />
                 </span>
+              ) : tab.kind === 'claude' ? (
+                <Sparkles size={12} strokeWidth={2.5} className="shrink-0 text-[#D97757]" />
+              ) : tab.kind === 'terminal' ? (
+                <SquareTerminal size={12} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400" />
               ) : (
                 <FileText size={12} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400" />
               )}
@@ -292,15 +328,68 @@ export const TabBar: React.FC<TabBarProps> = ({
         </button>
       )}
 
-      {/* New Tab Button (Sticky on right) */}
-      <button
-        onClick={onNewTab}
-        title="Nueva nota Markdown (Orca style)"
-        className="h-7 px-2 flex items-center gap-1 bg-[#FFE500] hover:bg-[#FFD700] border-2 border-black rounded shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] text-xs font-black shrink-0 cursor-pointer transition-all ml-1 z-10"
-      >
-        <Plus size={14} strokeWidth={3} />
-        <span className="hidden sm:inline">NUEVA</span>
-      </button>
+      {/* New Tab split button: main part = Markdown, caret = choose type */}
+      <div ref={newMenuRef} className="relative flex items-stretch h-7 ml-1 shrink-0 z-10">
+        <button
+          onClick={onNewTab}
+          title="Nueva nota Markdown (estilo Orca)"
+          className="px-2 flex items-center gap-1 bg-[#FFE500] hover:bg-[#FFD700] border-2 border-black rounded-l shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] text-xs font-black cursor-pointer transition-all"
+        >
+          <Plus size={14} strokeWidth={3} />
+          <span className="hidden sm:inline">NUEVA</span>
+        </button>
+        <button
+          onClick={() => {
+            const rect = newMenuRef.current?.getBoundingClientRect();
+            if (rect) {
+              setNewMenuPos({ top: rect.bottom + 6, right: Math.max(4, window.innerWidth - rect.right) });
+            }
+            setIsNewMenuOpen((v) => !v);
+          }}
+          title="Elegir tipo de pestaña nueva"
+          aria-haspopup="menu"
+          aria-expanded={isNewMenuOpen}
+          className={`px-0.5 flex items-center border-2 border-l-0 border-black rounded-r shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer transition-all ${
+            isNewMenuOpen ? 'bg-[#FFD700]' : 'bg-[#FFE500] hover:bg-[#FFD700]'
+          }`}
+        >
+          <ChevronDown size={13} strokeWidth={3} />
+        </button>
+
+        {isNewMenuOpen && (
+          <div
+            role="menu"
+            style={{ top: newMenuPos.top, right: newMenuPos.right }}
+            className="fixed w-52 bg-white dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[3px_3px_0px_#000] py-1 z-50"
+          >
+            {[
+              { key: 'md', label: 'Nota Markdown', hint: '.md', icon: <FileText size={14} strokeWidth={2.5} />, action: () => onNewTab() },
+              ...(onOpenFile
+                ? [{ key: 'open', label: 'Abrir archivo…', hint: 'Ctrl+O', icon: <FolderOpen size={14} strokeWidth={2.5} />, action: () => onOpenFile() }]
+                : []),
+              ...(onNewClaude
+                ? [{ key: 'claude', label: 'Chat con Claude', hint: 'AI', icon: <Sparkles size={14} strokeWidth={2.5} className="text-[#D97757]" />, action: () => onNewClaude() }]
+                : []),
+              { key: 'ps', label: 'PowerShell', hint: 'PS', icon: <Terminal size={14} strokeWidth={2.5} />, action: () => onNewTerminal?.('powershell') },
+              { key: 'cmd', label: 'Terminal (CMD)', hint: 'cmd', icon: <SquareTerminal size={14} strokeWidth={2.5} />, action: () => onNewTerminal?.('cmd') },
+            ].map((item) => (
+              <button
+                key={item.key}
+                role="menuitem"
+                onClick={() => {
+                  setIsNewMenuOpen(false);
+                  item.action();
+                }}
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-bold text-left hover:bg-[#FFE500] hover:text-black cursor-pointer"
+              >
+                {item.icon}
+                <span className="flex-1">{item.label}</span>
+                <span className="text-[10px] font-black opacity-50">{item.hint}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Tab Context Menu */}
       <TabContextMenu

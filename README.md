@@ -1,6 +1,6 @@
-# ⚡ BoldNotes - Editor Markdown Neubrutalista Portable
+# ⚡ yanote - Editor Markdown Neubrutalista Portable
 
-Un editor de notas Markdown de escritorio **portable**, con **superposición (Always on Top)**, pestañas múltiples (estilo **Orca**), editor enriquecido con **@mdxeditor/editor**, diseño **Neubrutalista (Boldkit)** y control de versiones con sincronización a **GitHub**.
+Un editor de notas Markdown de escritorio **portable**, con **superposición (Always on Top)**, pestañas múltiples (estilo **Orca**), editor enriquecido con **@mdxeditor/editor**, diseño **Neubrutalista (Boldkit)**, lectura en voz alta y terminal integrada.
 
 ---
 
@@ -27,7 +27,7 @@ Un editor de notas Markdown de escritorio **portable**, con **superposición (Al
    - Doble clic en cualquier pestaña para renombrar la nota (agrega `.md` automáticamente).
    - Indicador de cambios sin guardar (círculo rojo de dirty state).
    - Cierre de pestañas con alerta protectora ante cambios sin guardar.
-   - Explorador de notas integrado para abrir notas existentes del repositorio.
+   - Explorador de notas integrado para abrir notas existentes de la carpeta de notas.
 
 5. **Editor Enriquecido con `@mdxeditor/editor`**
    - Encabezados (H1 - H6), negrita, cursiva, subrayado, código en línea.
@@ -35,12 +35,10 @@ Un editor de notas Markdown de escritorio **portable**, con **superposición (Al
    - Tablas interactivas y bloques de código con syntax highlighting (JS, TS, HTML, CSS, Python, Bash, SQL, etc.).
    - Alternancia instantánea entre modo visual enriquecido (WYSIWYG) y modo código fuente Markdown (Source mode) con el botón de alternancia.
 
-6. **Control de Versiones & GitHub**
-   - Inicializa automáticamente un repositorio Git local en la carpeta de notas.
-   - **Guardado y confirmación automática (Ctrl + S):** Guarda el archivo en disco y crea un commit en Git (`Update <filename> - <timestamp>`).
-   - **Sincronización con 1 solo clic:** Botón rápido de sincronización en la barra superior y barra de estado (Commit + Pull + Push).
-   - **Panel de control Git:** Visualiza rama actual, archivos modificados, estado de sincronización y visor de las últimas 20 revisiones/commits.
-   - **Configuración de GitHub:** Configuración de URL remota (`https://github.com/usuario/repo.git`), rama principal (`main`) y Token de Acceso Personal (PAT) para push directo sin requerir SSH global.
+6. **Lectura en Voz Alta**
+   - Botón 🔊 en la barra de herramientas: leer todo, la selección, el párrafo actual o desde el cursor hasta el final.
+   - Barra de reproducción con pausa, párrafo anterior/siguiente, velocidad y resaltado del párrafo que se lee.
+   - Usa las voces del sistema (preferencia por español) con respaldo nativo de Windows (System.Speech).
 
 7. **Portabilidad Total**
    - La aplicación detecta carpetas portables (`portable-data` o carpeta ejecutable) para almacenar todas las notas y configuración localmente.
@@ -53,7 +51,6 @@ Un editor de notas Markdown de escritorio **portable**, con **superposición (Al
 
 ### Requisitos
 - Node.js >= 18
-- Git instalado en el sistema
 
 ### Instalación de dependencias
 ```bash
@@ -71,13 +68,13 @@ npm run dev:electron
 
 ## 🧪 Suite de Pruebas (20% Happy Path / 80% Pruebas Destructivas y Caos)
 
-El proyecto cuenta con **92 pruebas automatizadas** que cubren **Backend**, **Frontend** y **E2E**:
+El proyecto cuenta con pruebas automatizadas que cubren **Backend**, **Frontend** y **E2E**:
 
 | Capa | Archivos de Prueba | Pruebas | Cobertura |
 |---|---|---|---|
-| **Backend** | `tests/backend/configService.test.ts`<br>`tests/backend/fileService.test.ts`<br>`tests/backend/gitService.test.ts` | 41 | Configuración portable, lectura/escritura atómica, borrado, renombrado, prevención de corrupción JSON, timeouts de red Git, credenciales seguras, fallos forzados de I/O. |
-| **Frontend** | `tests/frontend/TabBar.test.tsx`<br>`tests/frontend/TitleBar.test.tsx`<br>`tests/frontend/UIComponents.test.tsx`<br>`tests/frontend/Modals.test.tsx` | 41 | Pestañas estilo Orca, renombrado con enter/escape, spam de clics, superposición siempre visible, controles de ventana, componentes Neubrutalistas, modales y alertas de error. |
-| **E2E** | `tests/e2e/workflow.test.tsx` | 10 | Ciclo completo de creación de pestañas, edición markdown, guardado con `Ctrl+S`, confirmación en Git, creación rápida de 20 notas simultáneas (stress test), y recuperación ante fallos de disco. |
+| **Backend** | `tests/backend/configService.test.ts`<br>`tests/backend/fileService.test.ts`<br>`tests/backend/speechService.test.ts`<br>`tests/backend/terminalService.test.ts` | — | Configuración portable, lectura/escritura atómica, borrado, renombrado, prevención de corrupción JSON, voz nativa, terminales, fallos forzados de I/O. |
+| **Frontend** | `tests/frontend/TabBar.test.tsx`<br>`tests/frontend/TitleBar.test.tsx`<br>`tests/frontend/UIComponents.test.tsx`<br>`tests/frontend/Modals.test.tsx` | — | Pestañas estilo Orca, renombrado con enter/escape, spam de clics, superposición siempre visible, controles de ventana, componentes Neubrutalistas, modales y alertas de error. |
+| **E2E** | `tests/e2e/workflow.test.tsx` | — | Ciclo completo de creación de pestañas, edición markdown, guardado con `Ctrl+S`, creación rápida de 20 notas simultáneas (stress test), y recuperación ante fallos de disco. |
 
 ### Ejecutar todas las pruebas:
 ```bash
@@ -97,4 +94,4 @@ npm run build
 ```bash
 npm run package:portable
 ```
-El archivo ejecutable se generará en la carpeta `dist-electron/BoldNotes-Portable-1.0.0.exe`. Puede copiarse a una memoria USB o a cualquier computadora y funcionar de manera autónoma.
+El archivo ejecutable se generará en la carpeta `dist-electron/yanote-Portable-1.0.0.exe`. Puede copiarse a una memoria USB o a cualquier computadora y funcionar de manera autónoma.

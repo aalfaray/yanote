@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 
 // Import CommonJS service
-const { getBaseDataDir, loadConfig, saveConfig } = require('../../electron/services/configService.cjs');
+const { getBaseDataDir, loadConfig, saveConfig, migrateLegacyConfig } = require('../../electron/services/configService.cjs');
 
 describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
   let tempDir: string;
@@ -12,7 +12,7 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
   let notesPath: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'boldnotes-test-config-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yanote-test-config-'));
     configPath = path.join(tempDir, 'app-config.json');
     notesPath = path.join(tempDir, 'notes');
   });
@@ -29,27 +29,36 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     expect(config).toBeDefined();
     expect(config.notesPath).toBe(notesPath);
     expect(config.alwaysOnTop).toBe(false);
-    expect(config.githubBranch).toBe('main');
-    expect(config.autoSyncOnSave).toBe(false);
+    expect(config.darkMode).toBe(false);
+    expect(config).not.toHaveProperty('githubRepo');
+    expect(config).not.toHaveProperty('autoSyncOnSave');
   });
 
   it('[HAPPY 2/3] saves and loads valid config changes correctly', () => {
     const current = loadConfig(configPath, notesPath);
     const updated = saveConfig(configPath, current, {
       alwaysOnTop: true,
-      githubRepo: 'https://github.com/test/repo.git',
-      githubBranch: 'develop',
-      autoSyncOnSave: true,
+      notesPath: '/tmp/other-notes',
     });
 
     expect(updated.alwaysOnTop).toBe(true);
-    expect(updated.githubRepo).toBe('https://github.com/test/repo.git');
-    expect(updated.githubBranch).toBe('develop');
+    expect(updated.notesPath).toBe('/tmp/other-notes');
 
     // Reload from disk to verify persistence
     const reloaded = loadConfig(configPath, notesPath);
     expect(reloaded.alwaysOnTop).toBe(true);
-    expect(reloaded.githubRepo).toBe('https://github.com/test/repo.git');
+    expect(reloaded.notesPath).toBe('/tmp/other-notes');
+  });
+
+  it('persists the recent files history and drops malformed entries', () => {
+    const current = loadConfig(configPath, notesPath);
+    expect(current.recentFiles).toEqual([]);
+    saveConfig(configPath, current, {
+      recentFiles: [{ path: '/proyectos/Plan.md', name: 'Plan.md', openedAt: 5 }, { path: 42 }, null],
+    });
+    expect(loadConfig(configPath, notesPath).recentFiles).toEqual([
+      { path: '/proyectos/Plan.md', name: 'Plan.md', openedAt: 5 },
+    ]);
   });
 
   it('[HAPPY 3/3] saves and loads darkMode setting accurately across restarts', () => {
@@ -77,7 +86,7 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     fs.writeFileSync(configPath, '   \n  ', 'utf8');
     const config = loadConfig(configPath, notesPath);
     expect(config).toBeDefined();
-    expect(config.githubBranch).toBe('main');
+    expect(config.notesPath).toBe(notesPath);
   });
 
   it('[CHAOS 3/8] handles config file containing primitive value instead of object', () => {
@@ -155,19 +164,59 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     let cfg = loadConfig(configPath, notesPath);
     cfg = saveConfig(configPath, cfg, { darkMode: true });
     cfg = saveConfig(configPath, cfg, { alwaysOnTop: true });
-    cfg = saveConfig(configPath, cfg, { githubBranch: 'prod' });
+    cfg = saveConfig(configPath, cfg, { notesPath: '/tmp/prod' });
 
     expect(cfg.darkMode).toBe(true);
     expect(cfg.alwaysOnTop).toBe(true);
-    expect(cfg.githubBranch).toBe('prod');
+    expect(cfg.notesPath).toBe('/tmp/prod');
 
     const reloaded = loadConfig(configPath, notesPath);
     expect(reloaded.darkMode).toBe(true);
   });
 
-  it('[CHAOS 12/12] defaults darkMode to false when absent in corrupted config', () => {
-    fs.writeFileSync(configPath, '{"githubBranch": "main"}', 'utf8');
+  it('[CHAOS 12/13] defaults darkMode to false when absent in corrupted config', () => {
+    fs.writeFileSync(configPath, '{"alwaysOnTop": true}', 'utf8');
     const cfg = loadConfig(configPath, notesPath);
     expect(cfg.darkMode).toBe(false);
+  });
+
+  it('[CHAOS 13/13] drops legacy GitHub keys (including tokens) from old config files', () => {
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ alwaysOnTop: true, githubRepo: 'https://github.com/x/y.git', githubBranch: 'main', githubToken: 'ghp_secret', autoSyncOnSave: true }),
+      'utf8'
+    );
+    const loaded = loadConfig(configPath, notesPath);
+    expect(loaded).not.toHaveProperty('githubToken');
+
+    // Even if an old in-memory config still carries them, saving must not persist them
+    saveConfig(configPath, { ...loaded, githubToken: 'ghp_secret' }, { darkMode: true });
+    const raw = fs.readFileSync(configPath, 'utf8');
+    expect(raw).not.toMatch(/github|ghp_secret|autoSyncOnSave/);
+    expect(JSON.parse(raw).alwaysOnTop).toBe(true);
+  });
+
+  // --- Rename BoldNotes -> yanote ---
+  it('[MIGRATION] copies the old app-config.json into the new data folder once', () => {
+    const legacy = path.join(tempDir, 'boldnotes');
+    const fresh = path.join(tempDir, 'yanote');
+    fs.mkdirSync(legacy);
+    fs.writeFileSync(path.join(legacy, 'app-config.json'), JSON.stringify({ notesPath: 'C:\Notas', darkMode: true }));
+
+    expect(migrateLegacyConfig(fresh, [path.join(tempDir, 'nada'), legacy])).toBe(legacy);
+    expect(loadConfig(path.join(fresh, 'app-config.json'), notesPath)).toMatchObject({ notesPath: 'C:\Notas', darkMode: true });
+    // The old folder is left untouched
+    expect(fs.existsSync(path.join(legacy, 'app-config.json'))).toBe(true);
+  });
+
+  it('[MIGRATION] never overwrites an existing config and ignores missing legacy folders', () => {
+    const legacy = path.join(tempDir, 'boldnotes');
+    fs.mkdirSync(legacy);
+    fs.writeFileSync(path.join(legacy, 'app-config.json'), JSON.stringify({ notesPath: 'viejo' }));
+    fs.writeFileSync(configPath, JSON.stringify({ notesPath: 'nuevo' }));
+
+    expect(migrateLegacyConfig(tempDir, [legacy])).toBeNull();
+    expect(JSON.parse(fs.readFileSync(configPath, 'utf8')).notesPath).toBe('nuevo');
+    expect(migrateLegacyConfig(path.join(tempDir, 'otro'), [path.join(tempDir, 'no-existe')])).toBeNull();
   });
 });

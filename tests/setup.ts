@@ -13,6 +13,8 @@ if (typeof window !== 'undefined') {
       matches: false,
       addListener: function () {},
       removeListener: function () {},
+      addEventListener: function () {},
+      removeEventListener: function () {},
     };
   };
 

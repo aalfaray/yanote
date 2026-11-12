@@ -30,7 +30,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 min-[480px]:p-3 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-100">
       <div className="w-full max-w-sm bg-[#FAF8F5] dark:bg-[#18181B] border-3 border-black dark:border-zinc-700 rounded-lg shadow-[6px_6px_0px_#000] overflow-hidden flex flex-col transition-colors">
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 bg-[#FF6B6B] border-b-2 border-black text-white">

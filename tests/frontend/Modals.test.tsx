@@ -1,95 +1,59 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { NotesDrawer } from '../../src/components/NotesDrawer';
-import { GitModal } from '../../src/components/GitModal';
+import { RecentFilesDrawer } from '../../src/components/RecentFilesDrawer';
 import { SettingsModal } from '../../src/components/SettingsModal';
-import type { NoteFile } from '../../src/types/electron';
+import type { RecentFile } from '../../src/types/electron';
 
 describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
-  const sampleNotes: NoteFile[] = [
-    { name: 'Bienvenido.md', path: '/notes/Bienvenido.md', updatedAt: new Date().toISOString(), size: 1024 },
-    { name: 'Proyecto.md', path: '/notes/Proyecto.md', updatedAt: new Date().toISOString(), size: 2048 },
+  const sampleRecent: RecentFile[] = [
+    { name: 'Bienvenido.md', path: '/notes/Bienvenido.md', openedAt: Date.now() - 60_000 },
+    { name: 'ROADMAP.md', path: '/proyectos/nube-linda/roadmaps/ROADMAP.md', openedAt: Date.now() - 3 * 3_600_000 },
   ];
+
+  const renderDrawer = (overrides: Partial<React.ComponentProps<typeof RecentFilesDrawer>> = {}) => {
+    const props = {
+      isOpen: true,
+      onClose: vi.fn(),
+      recentFiles: sampleRecent,
+      openPaths: ['/notes/Bienvenido.md'],
+      onOpenRecent: vi.fn(),
+      onRemoveRecent: vi.fn(),
+      onClearRecent: vi.fn(),
+      onBrowse: vi.fn(),
+      ...overrides,
+    };
+    render(<RecentFilesDrawer {...props} />);
+    return props;
+  };
 
   beforeEach(() => {
     window.electronAPI = {
-      gitStatus: vi.fn().mockResolvedValue({
-        success: true,
-        currentBranch: 'main',
-        modified: ['Bienvenido.md'],
-        not_added: [],
-        staged: [],
-        hasChanges: true,
-      }),
-      gitHistory: vi.fn().mockResolvedValue({
-        success: true,
-        all: [{ hash: 'abcdef1', date: new Date().toISOString(), message: 'Initial commit', author_name: 'Developer' }],
-      }),
-      gitCommit: vi.fn().mockResolvedValue({ success: true }),
-      gitPush: vi.fn().mockResolvedValue({ success: true }),
-      gitPull: vi.fn().mockResolvedValue({ success: true }),
-      gitSync: vi.fn().mockResolvedValue({ success: true, synced: true, message: 'Sync done' }),
       getAppConfig: vi.fn().mockResolvedValue({
         notesPath: '/notes',
         alwaysOnTop: false,
-        githubRepo: 'https://github.com/test/repo.git',
-        githubBranch: 'main',
-        githubToken: '',
-        autoSyncOnSave: false,
+        darkMode: false,
       }),
       saveAppConfig: vi.fn().mockResolvedValue({}),
       selectFolder: vi.fn().mockResolvedValue('/custom/notes'),
-      gitSetRemote: vi.fn().mockResolvedValue({ success: true }),
     } as any;
   });
 
   // --- 20% HAPPY PATH TESTS ---
-  it('[HAPPY 1/3] NotesDrawer displays notes and triggers onOpenNote on click', () => {
-    const onOpenNote = vi.fn();
-    render(
-      <NotesDrawer
-        isOpen={true}
-        onClose={vi.fn()}
-        notes={sampleNotes}
-        onOpenNote={onOpenNote}
-        onNewNote={vi.fn()}
-        onDeleteNote={vi.fn()}
-      />
-    );
-
+  it('[HAPPY 1/2] RecentFilesDrawer lists history with folder and age, and opens on click', () => {
+    const props = renderDrawer();
     expect(screen.getByText('Bienvenido.md')).toBeInTheDocument();
-    expect(screen.getByText('Proyecto.md')).toBeInTheDocument();
+    expect(screen.getByText('/proyectos/nube-linda/roadmaps')).toBeInTheDocument();
+    expect(screen.getByText('hace 1 min')).toBeInTheDocument();
+    expect(screen.getByText('hace 3 h')).toBeInTheDocument();
+    expect(screen.getByText('abierto')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Bienvenido.md'));
-    expect(onOpenNote).toHaveBeenCalledWith(sampleNotes[0]);
+    fireEvent.click(screen.getByText('ROADMAP.md'));
+    expect(props.onOpenRecent).toHaveBeenCalledWith(sampleRecent[1]);
+    expect(props.onClose).toHaveBeenCalled();
   });
 
-  it('[HAPPY 2/3] GitModal loads branch name and triggers commit action', async () => {
-    render(
-      <GitModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onRefreshNotes={vi.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('main')).toBeInTheDocument();
-    });
-
-    const commitInput = screen.getByPlaceholderText(/Notas de la reunión/i);
-    fireEvent.change(commitInput, { target: { value: 'Fix typos' } });
-
-    const commitBtn = screen.getByText('Solo Commit');
-    fireEvent.click(commitBtn);
-
-    await waitFor(() => {
-      expect(window.electronAPI?.gitCommit).toHaveBeenCalledWith('Fix typos');
-    });
-  });
-
-  it('[HAPPY 3/3] SettingsModal loads config and allows folder selection', async () => {
+  it('[HAPPY 2/2] SettingsModal loads config and allows folder selection', async () => {
     render(
       <SettingsModal
         isOpen={true}
@@ -111,141 +75,64 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
   });
 
   // --- 80% DESTRUCTIVE / CHAOS / ADVERSARIAL TESTS ---
-  it('[CHAOS 1/8] NotesDrawer search with non-matching string displays empty state message', () => {
+  it('[CHAOS 1/6] RecentFilesDrawer search filters by name or folder, accent-insensitive, with empty state', () => {
+    renderDrawer();
+    const searchInput = screen.getByPlaceholderText(/Buscar por nombre o carpeta/i);
+    fireEvent.change(searchInput, { target: { value: 'NUBE-LINDA' } });
+    expect(screen.getByText('ROADMAP.md')).toBeInTheDocument();
+    expect(screen.queryByText('Bienvenido.md')).not.toBeInTheDocument();
+
+    fireEvent.change(searchInput, { target: { value: 'zzzz-no-existe' } });
+    expect(screen.getByText(/Ningún archivo reciente coincide/i)).toBeInTheDocument();
+  });
+
+  it('[CHAOS 2/6] RecentFilesDrawer removes an entry without opening it, and clears the history', () => {
+    const props = renderDrawer();
+    fireEvent.click(screen.getByLabelText('Quitar ROADMAP.md del historial'));
+    expect(props.onRemoveRecent).toHaveBeenCalledWith('/proyectos/nube-linda/roadmaps/ROADMAP.md');
+    expect(props.onOpenRecent).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('Limpiar historial'));
+    expect(props.onClearRecent).toHaveBeenCalled();
+  });
+
+  it('[CHAOS 3/6] RecentFilesDrawer "Abrir…" closes the history and opens the file picker', () => {
+    const props = renderDrawer();
+    fireEvent.click(screen.getByTitle(/Buscar un archivo en el disco/i));
+    expect(props.onClose).toHaveBeenCalled();
+    expect(props.onBrowse).toHaveBeenCalled();
+  });
+
+  it('[CHAOS 4/6] SettingsModal has no GitHub fields, never saves GitHub settings, and closes on save', async () => {
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
     render(
-      <NotesDrawer
+      <SettingsModal
         isOpen={true}
-        onClose={vi.fn()}
-        notes={sampleNotes}
-        onOpenNote={vi.fn()}
-        onNewNote={vi.fn()}
-        onDeleteNote={vi.fn()}
-      />
-    );
-
-    const searchInput = screen.getByPlaceholderText(/Buscar nota por nombre/i);
-    fireEvent.change(searchInput, { target: { value: 'zzzz-does-not-exist' } });
-
-    expect(screen.getByText(/No se encontraron notas/i)).toBeInTheDocument();
-  });
-
-  it('[CHAOS 2/8] NotesDrawer delete note button confirms and deletes on accept', () => {
-    const onDeleteNote = vi.fn();
-
-    const { container } = render(
-      <NotesDrawer
-        isOpen={true}
-        onClose={vi.fn()}
-        notes={sampleNotes}
-        onOpenNote={vi.fn()}
-        onNewNote={vi.fn()}
-        onDeleteNote={onDeleteNote}
-      />
-    );
-
-    const deleteBtns = container.querySelectorAll('button[title="Eliminar archivo"]');
-    expect(deleteBtns.length).toBe(2);
-    fireEvent.click(deleteBtns[0]);
-
-    expect(screen.getByText('Eliminar Nota')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Eliminar Archivo'));
-
-    expect(onDeleteNote).toHaveBeenCalledWith(sampleNotes[0].path);
-  });
-
-  it('[CHAOS 3/8] NotesDrawer delete note cancelled if user declines confirm prompt', () => {
-    const onDeleteNote = vi.fn();
-
-    const { container } = render(
-      <NotesDrawer
-        isOpen={true}
-        onClose={vi.fn()}
-        notes={sampleNotes}
-        onOpenNote={vi.fn()}
-        onNewNote={vi.fn()}
-        onDeleteNote={onDeleteNote}
-      />
-    );
-
-    const deleteBtns = container.querySelectorAll('button[title="Eliminar archivo"]');
-    fireEvent.click(deleteBtns[0]);
-
-    expect(screen.getByText('Eliminar Nota')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Cancelar'));
-
-    expect(onDeleteNote).not.toHaveBeenCalled();
-  });
-
-  it('[CHAOS 4/8] GitModal displays error message when git commit fails', async () => {
-    (window.electronAPI?.gitCommit as any).mockResolvedValueOnce({
-      success: false,
-      error: 'Lockfile already exists',
-    });
-
-    render(
-      <GitModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onRefreshNotes={vi.fn()}
+        onClose={onClose}
+        onConfigChanged={vi.fn()}
+        onSaved={onSaved}
       />
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Solo Commit')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('/notes')).toBeInTheDocument();
     });
+    expect(screen.queryByText(/github/i)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/ghp_/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Solo Commit'));
+    fireEvent.click(screen.getByText('Guardar Ajustes'));
 
     await waitFor(() => {
-      expect(screen.getByText(/Error al hacer commit: Lockfile already exists/i)).toBeInTheDocument();
+      expect(onClose).toHaveBeenCalledTimes(1);
     });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    const saved = (window.electronAPI?.saveAppConfig as any).mock.calls[0][0];
+    expect(saved).toEqual({ alwaysOnTop: false, darkMode: false });
   });
 
-  it('[CHAOS 5/8] GitModal history tab displays commit records safely', async () => {
-    render(
-      <GitModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onRefreshNotes={vi.fn()}
-      />
-    );
-
-    const historyTab = screen.getByText('Historial de Versiones');
-    fireEvent.click(historyTab);
-
-    await waitFor(() => {
-      expect(screen.getByText('Initial commit')).toBeInTheDocument();
-      expect(screen.getByText('Developer')).toBeInTheDocument();
-    });
-  });
-
-  it('[CHAOS 6/8] GitModal push failure shows descriptive alert', async () => {
-    (window.electronAPI?.gitPush as any).mockResolvedValueOnce({
-      success: false,
-      error: 'Authentication failed for remote repository',
-    });
-
-    render(
-      <GitModal
-        isOpen={true}
-        onClose={vi.fn()}
-        onRefreshNotes={vi.fn()}
-      />
-    );
-
-    const pushBtn = screen.getByText('Push a GitHub');
-    fireEvent.click(pushBtn);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Error en Push/i)).toBeInTheDocument();
-    });
-  });
-
-  it('[CHAOS 7/8] SettingsModal displays error banner if gitSetRemote fails', async () => {
-    (window.electronAPI?.gitSetRemote as any).mockResolvedValueOnce({
-      success: false,
-      error: 'Invalid remote repository format',
-    });
+  it('[CHAOS 5/6] SettingsModal displays error banner if saving config fails', async () => {
+    (window.electronAPI?.saveAppConfig as any).mockRejectedValueOnce(new Error('Disco lleno'));
 
     render(
       <SettingsModal
@@ -255,31 +142,19 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
       />
     );
 
-    // Wait for initial config to load into state
     await waitFor(() => {
-      expect(screen.getByDisplayValue('https://github.com/test/repo.git')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('/notes')).toBeInTheDocument();
     });
-
-    const saveBtn = screen.getByText('Guardar Ajustes');
-    fireEvent.click(saveBtn);
+    fireEvent.click(screen.getByText('Guardar Ajustes'));
 
     await waitFor(() => {
-      expect(screen.getByText(/error al vincular Git: Invalid remote repository format/i)).toBeInTheDocument();
+      expect(screen.getByText('Disco lleno')).toBeInTheDocument();
     });
   });
 
-  it('[CHAOS 8/8] NotesDrawer renders gracefully when 0 notes exist in repository', () => {
-    render(
-      <NotesDrawer
-        isOpen={true}
-        onClose={vi.fn()}
-        notes={[]}
-        onOpenNote={vi.fn()}
-        onNewNote={vi.fn()}
-        onDeleteNote={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText(/No hay notas en el repositorio aún/i)).toBeInTheDocument();
+  it('[CHAOS 6/6] RecentFilesDrawer renders gracefully with an empty history', () => {
+    renderDrawer({ recentFiles: [] });
+    expect(screen.getByText(/Todavía no abriste archivos/i)).toBeInTheDocument();
+    expect(screen.queryByText('Limpiar historial')).not.toBeInTheDocument();
   });
 });
