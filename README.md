@@ -118,3 +118,9 @@ El workflow comprueba que la etiqueta coincide con `package.json`, ejecuta los t
 
 ### Landing page
 La web está en [site/](site/) y se publica en GitHub Pages con [.github/workflows/pages.yml](.github/workflows/pages.yml) cada vez que cambia. Los botones de descarga apuntan siempre al `.exe` de la última release.
+
+## 📄 Licencia
+
+El código de yanote se publica bajo la licencia [MIT](LICENSE): puedes usarlo, modificarlo y redistribuirlo, también con fines comerciales, manteniendo el aviso de copyright.
+
+Los instaladores incluyen Claude Code, que es software de Anthropic y sigue bajo [sus propios términos](https://www.anthropic.com/legal/commercial-terms); la licencia MIT no se aplica a ese binario. Las demás dependencias mantienen sus licencias.
