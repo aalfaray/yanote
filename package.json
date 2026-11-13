@@ -1,7 +1,7 @@
 {
   "name": "yanote",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "yanote: editor de notas Markdown flotante con pestañas, terminal y chat con Claude Code",
   "type": "module",
   "main": "electron/main.cjs",
