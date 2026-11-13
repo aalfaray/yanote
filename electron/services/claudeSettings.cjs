@@ -1,6 +1,9 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { getLogger, isNotFound } = require('./logService.cjs');
+
+const log = getLogger('claudeSettings');
 
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
@@ -8,7 +11,8 @@ function readJson(file) {
   try {
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     return data && typeof data === 'object' ? data : null;
-  } catch {
+  } catch (err) {
+    if (!isNotFound(err)) log.warn('unreadable Claude settings file', err, { file });
     return null;
   }
 }

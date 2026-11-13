@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ClaudeUsage, ClaudeUsageWindow } from '../types/electron';
 import { describeWindow, formatPercent, usageTone } from '../lib/claudeUsage';
+import { logWarn } from '../lib/logger';
 
 const POLL_MS = 2 * 60 * 1000;
 /** Chat processes take a moment to start before they can answer */
@@ -28,8 +29,9 @@ export function useClaudeUsage(chatIds: string[], preferredId?: string): ClaudeU
         const res = await window.electronAPI!.claudeUsage!(preferredRef.current);
         // A failed refresh keeps the last good numbers
         if (!cancelled && res?.success) setUsage(res);
-      } catch {
-        // ignore: try again on the next tick
+      } catch (err) {
+        // keep the last numbers and try again on the next tick (every 2 min)
+        logWarn('ClaudeUsageMeter.refresh', `usage refresh failed: ${(err as Error)?.message ?? err}`);
       }
     };
     const refreshSoon = (ms: number) => {

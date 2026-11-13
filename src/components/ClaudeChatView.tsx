@@ -21,6 +21,9 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import type { ChatPin, ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionMode, ClaudePermissionRequest } from '../types/electron';
+import { loadChatPrefs, saveChatPrefs, loadEffortByModel, saveEffortByModel } from '../lib/claudeChatPrefs';
+import { copyText } from '../lib/clipboard';
+import { logError } from '../lib/logger';
 import {
   chatReducer,
   initialChatState,
@@ -109,7 +112,7 @@ const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         type="button"
         title="Copiar código"
         onClick={() => {
-          navigator.clipboard?.writeText(ref.current?.innerText ?? '').catch(() => {});
+          void copyText(ref.current?.innerText ?? '', 'ClaudeChatView.copyCode');
           setCopied(true);
           setTimeout(() => setCopied(false), 1200);
         }}
@@ -421,56 +424,6 @@ const PermissionCard: React.FC<{
 };
 
 /* ---------------------------------- Main view ---------------------------------- */
-
-/** Effort chosen per model, remembered across chats ('' = the model's default). */
-const EFFORT_STORAGE_KEY = 'yanote.claude.effortByModel';
-
-function loadEffortByModel(): Record<string, ClaudeEffortLevel> {
-  try {
-    const raw = localStorage.getItem(EFFORT_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveEffortByModel(map: Record<string, ClaudeEffortLevel>) {
-  try {
-    localStorage.setItem(EFFORT_STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    // storage unavailable: the choice just won't be remembered
-  }
-}
-
-const PREFS_STORAGE_KEY = 'yanote.claude.chatPrefs';
-
-/** Last permission mode and model picked in a chat: new chats start with them. */
-export interface ChatPrefs {
-  mode?: ClaudePermissionMode;
-  /** '' = Claude Code's default model */
-  model?: string;
-}
-
-export function loadChatPrefs(): ChatPrefs {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(PREFS_STORAGE_KEY) || '{}');
-    const prefs: ChatPrefs = {};
-    if (parsed && MODES.some((m) => m.value === parsed.mode)) prefs.mode = parsed.mode;
-    if (parsed && typeof parsed.model === 'string') prefs.model = parsed.model;
-    return prefs;
-  } catch {
-    return {};
-  }
-}
-
-function saveChatPrefs(partial: ChatPrefs) {
-  try {
-    localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ ...loadChatPrefs(), ...partial }));
-  } catch {
-    // storage unavailable: the choice just won't be remembered
-  }
-}
 
 function readImage(file: File): Promise<ClaudeImageInput & { url: string }> {
   return new Promise((resolve, reject) => {
@@ -797,8 +750,12 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const addFiles = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'));
     if (!imgs.length) return false;
-    const read = await Promise.all(imgs.map(readImage));
-    setImages((prev) => [...prev, ...read]);
+    try {
+      const read = await Promise.all(imgs.map(readImage));
+      setImages((prev) => [...prev, ...read]);
+    } catch (err) {
+      logError('ClaudeChatView.addFiles', err, { tabId, files: imgs.map((f) => ({ name: f.name, type: f.type, size: f.size })) });
+    }
     return true;
   };
 

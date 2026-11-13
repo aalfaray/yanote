@@ -6,6 +6,8 @@ import '@xterm/xterm/css/xterm.css';
 import type { TerminalShell } from '../types/electron';
 import { pasteFromClipboard } from '../lib/terminalPaste';
 import { registerTerminal } from '../lib/terminalRegistry';
+import { logError, logWarn } from '../lib/logger';
+import { copyText } from '../lib/clipboard';
 import { extractLastResponse } from '../lib/terminalSpeech';
 import { plainTextToSegments } from '../lib/speechText';
 import { useSpeech } from '../hooks/useSpeech';
@@ -121,8 +123,9 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     fitRef.current = fit;
     try {
       fit.fit();
-    } catch {
+    } catch (err) {
       // container may be hidden
+      logWarn('TerminalView.initialFit', `fit failed: ${(err as Error)?.message}`, { tabId });
     }
 
     if (!api?.termCreate) {
@@ -161,7 +164,7 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       }
       const key = e.key.toLowerCase();
       if (key === 'c' && term.hasSelection()) {
-        navigator.clipboard?.writeText(term.getSelection()).catch(() => {});
+        void copyText(term.getSelection(), 'TerminalView.copyShortcut');
         term.clearSelection();
         return false;
       }
@@ -177,18 +180,28 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     const unregister = registerTerminal(tabId, {
       getSelection: () => term.getSelection(),
       paste: () => {
-        term.focus();
-        pasteFromClipboard(term, api);
+        try {
+          term.focus();
+          pasteFromClipboard(term, api);
+        } catch (err) {
+          logError('TerminalView.menuPaste', err, { tabId });
+        }
       },
-      selectAll: () => term.selectAll(),
+      selectAll: () => {
+        try {
+          term.selectAll();
+        } catch (err) {
+          logError('TerminalView.menuSelectAll', err, { tabId });
+        }
+      },
     });
 
     const observer = new ResizeObserver(() => {
       if (container.offsetWidth > 0 && container.offsetHeight > 0) {
         try {
           fit.fit();
-        } catch {
-          // ignore
+        } catch (err) {
+          logWarn('TerminalView.resizeFit', `fit failed: ${(err as Error)?.message}`, { tabId });
         }
       }
     });
@@ -220,13 +233,13 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     const id = requestAnimationFrame(() => {
       try {
         fitRef.current?.fit();
-      } catch {
-        // ignore
+      } catch (err) {
+        logWarn('TerminalView.activateFit', `fit failed: ${(err as Error)?.message}`, { tabId });
       }
       termRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, [isActive]);
+  }, [isActive, tabId]);
 
   return (
     <div

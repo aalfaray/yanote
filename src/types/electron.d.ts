@@ -203,7 +203,11 @@ export interface ElectronAPI {
   notify?: (payload: { title: string; body?: string; tabId?: string; skipIfFocused?: boolean }) => Promise<boolean>;
   onFocusTab?: (callback: (tabId: string) => void) => () => void;
   /** Editing command for the app's right-click menu, run on the focused field / page selection */
-  editCommand?: (command: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll') => Promise<boolean>;
+  editCommand?: (command: import('../lib/contextMenu').EditCommand) => Promise<boolean>;
+  /** Writes an entry to the system log (yanote.log, shared with the main process) */
+  log?: (entry: { level: 'error' | 'warn' | 'info'; scope: string; message: string; stack?: string; context?: Record<string, unknown> }) => Promise<boolean>;
+  /** Shows yanote.log in Explorer */
+  revealLog?: () => Promise<void>;
   /** Disk path of a dropped File, or null when it has none */
   getPathForFile?: (file: File) => string | null;
   // "Abrir con yanote" (Explorer context menu / command line)

@@ -2,6 +2,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFile } = require('child_process');
+const { getLogger, isNotFound } = require('./logService.cjs');
+
+const log = getLogger('claudeAccountService');
 
 /**
  * Several Claude accounts side by side. Each extra account is a separate Claude Code config
@@ -88,7 +91,8 @@ function createClaudeAccountService({
         plan: typeof info.subscriptionType === 'string' ? info.subscriptionType : null,
         method: typeof info.authMethod === 'string' ? info.authMethod : null,
       };
-    } catch {
+    } catch (parseErr) {
+      log.error('auth status: unreadable answer from Claude Code', err || parseErr, { stdout: String(stdout || '').slice(0, 300) });
       return { success: false, error: err ? err.message : 'Respuesta inesperada de Claude Code' };
     }
   }
@@ -102,8 +106,9 @@ function createClaudeAccountService({
       const src = path.join(from, item);
       try {
         if (fs.existsSync(src)) fs.cpSync(src, path.join(configDir, item), { recursive: true });
-      } catch {
+      } catch (err) {
         // best effort: the account works without them
+        log.warn('could not copy shared item into new account', err, { item, configDir });
       }
     }
     const account = { id, name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 40) : `Cuenta ${extras().length + 2}`, configDir };
@@ -130,8 +135,9 @@ function createClaudeAccountService({
     if (path.resolve(acc.configDir).startsWith(path.resolve(accountsRoot) + path.sep)) {
       try {
         fs.rmSync(acc.configDir, { recursive: true, force: true });
-      } catch {
+      } catch (err) {
         // leave it; it's no longer referenced
+        log.warn('could not delete removed account folder', err, { configDir: acc.configDir });
       }
     }
     return true;
@@ -168,7 +174,8 @@ function createClaudeAccountService({
     let folders = [];
     try {
       folders = fs.readdirSync(projects, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
-    } catch {
+    } catch (err) {
+      log.error('copySession: cannot read projects folder', err, { projects, sessionId });
       return { success: false, error: 'No encontré la conversación' };
     }
     for (const folder of folders) {
@@ -193,7 +200,8 @@ function createClaudeAccountService({
     let folders = [];
     try {
       folders = fs.readdirSync(projects, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
-    } catch {
+    } catch (err) {
+      if (!isNotFound(err)) log.error('findTranscript: cannot read projects folder', err, { projects, sessionId });
       return null;
     }
     for (const folder of folders) {
@@ -214,7 +222,8 @@ function createClaudeAccountService({
     let lines = [];
     try {
       lines = fs.readFileSync(file, 'utf8').split('\n');
-    } catch {
+    } catch (err) {
+      log.error('readHistory: cannot read transcript', err, { file, sessionId });
       return [];
     }
     const out = [];
@@ -223,7 +232,8 @@ function createClaudeAccountService({
       let entry;
       try {
         entry = JSON.parse(line);
-      } catch {
+      } catch (err) {
+        log.warn('readHistory: skipped malformed transcript line', err, { file, chars: line.length });
         continue;
       }
       if (!entry || (entry.type !== 'user' && entry.type !== 'assistant') || entry.isSidechain || entry.isMeta) continue;

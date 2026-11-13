@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SpeechSegment } from '../lib/speechText';
+import { logError } from '../lib/logger';
 
 export type SpeechStatus = 'idle' | 'speaking' | 'paused';
 export type SpeechEngine = 'web' | 'native';
@@ -51,7 +52,8 @@ export function loadSpeechRate(): number {
   try {
     const saved = Number(localStorage.getItem(RATE_STORAGE_KEY));
     return (SPEECH_RATES as readonly number[]).includes(saved) ? saved : 1;
-  } catch {
+  } catch (err) {
+    logError('useSpeech.loadSpeechRate', err);
     return 1;
   }
 }
@@ -59,8 +61,9 @@ export function loadSpeechRate(): number {
 function saveSpeechRate(rate: number) {
   try {
     localStorage.setItem(RATE_STORAGE_KEY, String(rate));
-  } catch {
+  } catch (err) {
     // storage unavailable: it just won't be remembered
+    logError('useSpeech.saveSpeechRate', err, { rate });
   }
 }
 

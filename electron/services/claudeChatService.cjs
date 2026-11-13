@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const { withFreshPath, resolveCwd } = require('./terminalService.cjs');
+const { getLogger } = require('./logService.cjs');
+
+const log = getLogger('claudeChatService');
 
 /**
  * Structured Claude Code sessions (same approach as Orca's "native chat"):
@@ -36,8 +39,9 @@ function findBundledExecutable(platform = process.platform, arch = process.arch,
     const exe = path.join(path.dirname(pkg), platform === 'win32' ? 'claude.exe' : 'claude');
     const unpacked = exe.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
     for (const candidate of [unpacked, exe]) if (exists(candidate)) return candidate;
-  } catch {
+  } catch (err) {
     // optional dependency not installed for this platform
+    log.info('bundled Claude Code not available', { platform, arch, reason: err && err.message });
   }
   return undefined;
 }
@@ -92,7 +96,8 @@ function buildUserContent(text, images = []) {
 function toPlain(value) {
   try {
     return JSON.parse(JSON.stringify(value));
-  } catch {
+  } catch (err) {
+    log.warn('message could not be serialized for IPC', err, { type: value && value.type });
     return { type: 'unserializable' };
   }
 }
@@ -315,8 +320,9 @@ function createClaudeChatService({
     session.inbox.close();
     try {
       session.query?.close?.();
-    } catch {
+    } catch (err) {
       // already gone
+      log.warn('closing Claude query failed', err, { id });
     }
     return true;
   }

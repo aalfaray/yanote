@@ -1,6 +1,9 @@
 const os = require('os');
 const fs = require('fs');
 const { execFileSync } = require('child_process');
+const { getLogger, isNotFound } = require('./logService.cjs');
+
+const log = getLogger('terminalService');
 
 /** Reads a PATH value from the Windows registry (REG_SZ or REG_EXPAND_SZ). */
 function readRegistryPath(key) {
@@ -8,7 +11,8 @@ function readRegistryPath(key) {
     const out = execFileSync('reg.exe', ['query', key, '/v', 'Path'], { encoding: 'utf8', windowsHide: true, timeout: 3000 });
     const match = /^\s*Path\s+REG_(?:EXPAND_)?SZ\s+(.*)$/im.exec(out);
     return match ? match[1].trim() : '';
-  } catch {
+  } catch (err) {
+    log.warn('cannot read PATH from registry', err, { key });
     return '';
   }
 }
@@ -48,7 +52,8 @@ function withFreshPath(env, platform = process.platform, readPath = readRegistry
 function resolveCwd(candidates, isDir = (p) => {
   try {
     return fs.statSync(p).isDirectory();
-  } catch {
+  } catch (err) {
+    if (!isNotFound(err)) log.warn('cannot stat terminal cwd candidate', err, { path: p });
     return false;
   }
 }) {
@@ -121,8 +126,9 @@ function createTerminalService({ ptyModule, platform = process.platform, env = p
     if (proc && cols > 1 && rows > 1) {
       try {
         proc.resize(cols | 0, rows | 0);
-      } catch {
+      } catch (err) {
         // pty may already be gone
+        log.warn('terminal resize failed', err, { id, cols, rows });
       }
     }
   }
@@ -133,8 +139,9 @@ function createTerminalService({ ptyModule, platform = process.platform, env = p
     sessions.delete(id);
     try {
       proc.kill();
-    } catch {
+    } catch (err) {
       // already exited
+      log.warn('terminal kill failed', err, { id });
     }
     return true;
   }

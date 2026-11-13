@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { getLogger } = require('./logService.cjs');
+
+const log = getLogger('fileService');
 
 // Spanish messages for the most common Node.js file system error codes
 const FS_ERROR_MESSAGES = {
@@ -68,7 +71,8 @@ function listNotes(notesDir) {
             updatedAt: stats.mtime.toISOString(),
             size: stats.size,
           };
-        } catch {
+        } catch (err) {
+          log.warn('listNotes: skipped unreadable file', err, { notesDir, file });
           return null;
         }
       })

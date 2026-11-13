@@ -1,12 +1,16 @@
 const fs = require('fs');
 const path = require('path');
+const { getLogger, isNotFound } = require('./logService.cjs');
+
+const log = getLogger('openTargetService');
 
 const MARKDOWN_EXT = new Set(['.md', '.markdown', '.mdx', '.txt']);
 
 function statSafe(p) {
   try {
     return fs.statSync(p);
-  } catch {
+  } catch (err) {
+    if (!isNotFound(err)) log.warn('cannot stat open target', err, { path: p });
     return null;
   }
 }

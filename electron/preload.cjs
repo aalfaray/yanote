@@ -28,7 +28,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getPathForFile: (file) => {
     try {
       return webUtils.getPathForFile(file) || null;
-    } catch {
+    } catch (err) {
+      // preload can't load the log service: send it to the system log through IPC
+      ipcRenderer
+        .invoke('log:write', { level: 'warn', scope: 'preload.getPathForFile', message: `no disk path for dropped file: ${err && err.message}`, stack: err && err.stack })
+        .catch((logErr) => console.error('[preload] could not log', logErr));
       return null;
     }
   },
@@ -43,6 +47,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Undo/redo/cut/copy/paste/select all for the app's right-click menu
   editCommand: (command) => ipcRenderer.invoke('app:editCommand', command),
+
+  // System log: renderer failures land in the same file as the main process ones
+  log: (entry) => ipcRenderer.invoke('log:write', entry),
+  revealLog: () => ipcRenderer.invoke('log:reveal'),
 
   // "Abrir con yanote" from Explorer: the launch target, then any later ones
   takeOpenTarget: () => ipcRenderer.invoke('app:takeOpenTarget'),

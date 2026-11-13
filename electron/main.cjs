@@ -13,6 +13,17 @@ const { withFreshPath } = require('./services/terminalService.cjs');
 const { readClaudeDefaults } = require('./services/claudeSettings.cjs');
 const { createUpdateService } = require('./services/updateService.cjs');
 const { parseOpenTarget } = require('./services/openTargetService.cjs');
+const { configureSharedLog } = require('./services/logService.cjs');
+const { createSafeIpc } = require('./services/safeIpc.cjs');
+const { createEditCommandService } = require('./services/editCommandService.cjs');
+
+// System log (%APPDATA%/yanote/logs/yanote.log): every layer reports its failures here
+const logService = configureSharedLog({ dir: app.getPath('logs') });
+const mainLog = logService.scoped('main');
+process.on('uncaughtException', (err) => mainLog.error('uncaught exception', err));
+process.on('unhandledRejection', (reason) => mainLog.error('unhandled promise rejection', reason));
+const ipc = createSafeIpc(ipcMain, logService.scoped('main:ipc'));
+const editCommandService = createEditCommandService(logService.scoped('editCommandService'));
 
 // Unpackaged runs are `electron . <args>`: the app path is not something to open
 const ARG_SKIP = app.isPackaged ? 1 : 2;
@@ -125,7 +136,7 @@ function setupUpdates() {
     try {
       ({ autoUpdater } = require('electron-updater'));
     } catch (err) {
-      console.error('electron-updater no disponible:', err.message);
+      mainLog.error('electron-updater no disponible', err);
     }
   }
   updateService = createUpdateService({
@@ -163,14 +174,13 @@ app.on('second-instance', (_event, argv, workingDirectory) => {
 });
 
 // Editing commands for the app's own right-click menu (the page has no native menu)
-const EDIT_COMMANDS = new Set(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll']);
-ipcMain.handle('app:editCommand', (event, command) => {
-  if (!EDIT_COMMANDS.has(command)) return false;
-  event.sender[command]();
-  return true;
-});
+ipc.handle('app:editCommand', (event, command) => editCommandService.run(event.sender, command));
 
-ipcMain.handle('app:takeOpenTarget', () => {
+// Renderer failures go to the same system log
+ipc.handle('log:write', (_, entry) => logService.writeFromRenderer(entry));
+ipc.handle('log:reveal', () => shell.showItemInFolder(logService.filePath));
+
+ipc.handle('app:takeOpenTarget', () => {
   const target = applyOpenTarget(pendingOpenTarget);
   pendingOpenTarget = null;
   return target;
@@ -195,11 +205,11 @@ app.on('window-all-closed', () => {
 });
 
 // IPC - Window controls
-ipcMain.handle('window:minimize', () => {
+ipc.handle('window:minimize', () => {
   if (mainWindow) mainWindow.minimize();
 });
 
-ipcMain.handle('window:maximize', () => {
+ipc.handle('window:maximize', () => {
   if (mainWindow) {
     if (mainWindow.isMaximized()) {
       mainWindow.unmaximize();
@@ -211,15 +221,15 @@ ipcMain.handle('window:maximize', () => {
   return false;
 });
 
-ipcMain.handle('window:close', () => {
+ipc.handle('window:close', () => {
   if (mainWindow) mainWindow.close();
 });
 
-ipcMain.handle('window:isMaximized', () => {
+ipc.handle('window:isMaximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
 });
 
-ipcMain.handle('window:setAlwaysOnTop', (_, flag) => {
+ipc.handle('window:setAlwaysOnTop', (_, flag) => {
   if (mainWindow) {
     isAlwaysOnTop = Boolean(flag);
     mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
@@ -228,13 +238,13 @@ ipcMain.handle('window:setAlwaysOnTop', (_, flag) => {
   return isAlwaysOnTop;
 });
 
-ipcMain.handle('window:getAlwaysOnTop', () => {
+ipc.handle('window:getAlwaysOnTop', () => {
   return isAlwaysOnTop;
 });
 
 // Window transparency: applied live while the slider moves, persisted once it settles
 let opacitySaveTimer = null;
-ipcMain.handle('window:setOpacity', (_, value) => {
+ipc.handle('window:setOpacity', (_, value) => {
   const opacity = clampOpacity(value);
   if (mainWindow) mainWindow.setOpacity(opacity);
   clearTimeout(opacitySaveTimer);
@@ -243,11 +253,11 @@ ipcMain.handle('window:setOpacity', (_, value) => {
 });
 
 // IPC - File System
-ipcMain.handle('fs:getNotesPath', () => {
+ipc.handle('fs:getNotesPath', () => {
   return appConfig.notesPath;
 });
 
-ipcMain.handle('fs:setNotesPath', async (_, newPath) => {
+ipc.handle('fs:setNotesPath', async (_, newPath) => {
   if (newPath && fs.existsSync(newPath)) {
     updateConfig({ notesPath: newPath });
     fileService.ensureNotesDir(newPath);
@@ -256,7 +266,7 @@ ipcMain.handle('fs:setNotesPath', async (_, newPath) => {
   return { success: false, error: 'La ruta no existe' };
 });
 
-ipcMain.handle('fs:selectFolder', async () => {
+ipc.handle('fs:selectFolder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory', 'createDirectory'],
     title: 'Seleccionar carpeta para notas',
@@ -270,7 +280,7 @@ ipcMain.handle('fs:selectFolder', async () => {
   return null;
 });
 
-ipcMain.handle('fs:openMarkdownFile', async () => {
+ipc.handle('fs:openMarkdownFile', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Abrir archivo Markdown',
     defaultPath: appConfig.notesPath,
@@ -292,36 +302,36 @@ ipcMain.handle('fs:openMarkdownFile', async () => {
   return { files, errors };
 });
 
-ipcMain.handle('fs:listNotes', () => {
+ipc.handle('fs:listNotes', () => {
   return fileService.listNotes(appConfig.notesPath);
 });
 
-ipcMain.handle('fs:readFile', (_, filePath) => {
+ipc.handle('fs:readFile', (_, filePath) => {
   return fileService.readFile(filePath);
 });
 
-ipcMain.handle('fs:writeFile', (_, filePath, content) => {
+ipc.handle('fs:writeFile', (_, filePath, content) => {
   return fileService.writeFile(filePath, content);
 });
 
-ipcMain.handle('fs:deleteFile', (_, filePath) => {
+ipc.handle('fs:deleteFile', (_, filePath) => {
   return fileService.deleteFile(filePath);
 });
 
-ipcMain.handle('fs:renameFile', (_, oldPath, newPath) => {
+ipc.handle('fs:renameFile', (_, oldPath, newPath) => {
   return fileService.renameFile(oldPath, newPath);
 });
 
-ipcMain.handle('fs:getAppConfig', () => {
+ipc.handle('fs:getAppConfig', () => {
   return appConfig;
 });
 
-ipcMain.handle('fs:saveAppConfig', (_, config) => {
+ipc.handle('fs:saveAppConfig', (_, config) => {
   return updateConfig(config);
 });
 
 // IPC - Shell & Explorer
-ipcMain.handle('app:revealInExplorer', async (_, filePath) => {
+ipc.handle('app:revealInExplorer', async (_, filePath) => {
   try {
     if (filePath && typeof filePath === 'string' && fs.existsSync(filePath)) {
       shell.showItemInFolder(filePath);
@@ -337,7 +347,7 @@ ipcMain.handle('app:revealInExplorer', async (_, filePath) => {
 });
 
 // IPC - Text to speech (native System.Speech fallback)
-ipcMain.handle('tts:speak', (event, request) => {
+ipc.handle('tts:speak', (event, request) => {
   const id = request && request.id;
   const sender = event.sender;
   return speechService.speak(request, (ttsEvent) => {
@@ -345,23 +355,24 @@ ipcMain.handle('tts:speak', (event, request) => {
   });
 });
 
-ipcMain.handle('tts:stop', () => {
+ipc.handle('tts:stop', () => {
   return speechService.stop();
 });
 
 // Clipboard image -> temp PNG path, so Ctrl+V in a terminal can hand images to CLIs like Claude Code
-ipcMain.handle('clipboard:saveImage', () => {
+ipc.handle('clipboard:saveImage', () => {
   try {
     const image = clipboard.readImage();
     if (image.isEmpty()) return null;
     return savePastedImage(image.toPNG());
-  } catch {
+  } catch (err) {
+    mainLog.error('could not save the clipboard image', err);
     return null;
   }
 });
 
 // IPC - Integrated terminals (PowerShell / CMD)
-ipcMain.handle('term:create', (event, options) => {
+ipc.handle('term:create', (event, options) => {
   const sender = event.sender;
   // No folder from the renderer (or it no longer exists) -> open in the notes folder
   return terminalService.create({ ...options, fallbackCwd: appConfig.notesPath }, (termEvent) => {
@@ -369,20 +380,20 @@ ipcMain.handle('term:create', (event, options) => {
   });
 });
 
-ipcMain.on('term:write', (_, id, data) => {
+ipc.on('term:write', (_, id, data) => {
   terminalService.write(id, data);
 });
 
-ipcMain.on('term:resize', (_, id, cols, rows) => {
+ipc.on('term:resize', (_, id, cols, rows) => {
   terminalService.resize(id, cols, rows);
 });
 
-ipcMain.handle('term:kill', (_, id) => {
+ipc.handle('term:kill', (_, id) => {
   return terminalService.kill(id);
 });
 
 // IPC - Claude chat (structured Claude Code session through the Agent SDK)
-ipcMain.handle('claude:start', (event, options) => {
+ipc.handle('claude:start', (event, options) => {
   const sender = event.sender;
   const configDir = claudeAccountService.configDirFor(options && options.accountId);
   return claudeChatService.start({ ...options, configDir, fallbackCwd: appConfig.notesPath }, (chatEvent) => {
@@ -390,35 +401,35 @@ ipcMain.handle('claude:start', (event, options) => {
   });
 });
 
-ipcMain.handle('claude:send', (_, id, payload) => claudeChatService.sendMessage(id, payload));
-ipcMain.handle('claude:respondPermission', (_, id, requestId, decision) =>
+ipc.handle('claude:send', (_, id, payload) => claudeChatService.sendMessage(id, payload));
+ipc.handle('claude:respondPermission', (_, id, requestId, decision) =>
   claudeChatService.respondPermission(id, requestId, decision)
 );
-ipcMain.handle('claude:interrupt', (_, id) => claudeChatService.interrupt(id));
-ipcMain.handle('claude:setPermissionMode', (_, id, mode) => claudeChatService.setPermissionMode(id, mode));
-ipcMain.handle('claude:setModel', (_, id, model) => claudeChatService.setModel(id, model));
-ipcMain.handle('claude:setEffort', (_, id, level) => claudeChatService.setEffort(id, level));
-ipcMain.handle('claude:stop', (_, id) => claudeChatService.stop(id));
-ipcMain.handle('claude:usage', (_, id) => claudeChatService.usage(id));
-ipcMain.handle('claude:history', (_, sessionId, accountId) => claudeAccountService.readHistory(sessionId, accountId));
+ipc.handle('claude:interrupt', (_, id) => claudeChatService.interrupt(id));
+ipc.handle('claude:setPermissionMode', (_, id, mode) => claudeChatService.setPermissionMode(id, mode));
+ipc.handle('claude:setModel', (_, id, model) => claudeChatService.setModel(id, model));
+ipc.handle('claude:setEffort', (_, id, level) => claudeChatService.setEffort(id, level));
+ipc.handle('claude:stop', (_, id) => claudeChatService.stop(id));
+ipc.handle('claude:usage', (_, id) => claudeChatService.usage(id));
+ipc.handle('claude:history', (_, sessionId, accountId) => claudeAccountService.readHistory(sessionId, accountId));
 // Model / effort Claude Code will use, so the chat can show them before the first reply
-ipcMain.handle('claude:defaults', (_, accountId, cwd) =>
+ipc.handle('claude:defaults', (_, accountId, cwd) =>
   readClaudeDefaults({ configDir: claudeAccountService.configDirFor(accountId), cwd: cwd || appConfig.notesPath })
 );
 
 // IPC - Claude accounts
-ipcMain.handle('claudeAccounts:list', () => claudeAccountService.list());
-ipcMain.handle('claudeAccounts:status', (_, id) => claudeAccountService.status(id));
-ipcMain.handle('claudeAccounts:add', (_, name) => claudeAccountService.add(name));
-ipcMain.handle('claudeAccounts:rename', (_, id, name) => claudeAccountService.rename(id, name));
-ipcMain.handle('claudeAccounts:remove', (_, id) => claudeAccountService.remove(id));
-ipcMain.handle('claudeAccounts:setActive', (_, id) => claudeAccountService.setActive(id));
-ipcMain.handle('claudeAccounts:loginCommand', (_, id) => claudeAccountService.loginCommand(id));
-ipcMain.handle('claudeAccounts:copySession', (_, sessionId, fromId, toId) => claudeAccountService.copySession(sessionId, fromId, toId));
+ipc.handle('claudeAccounts:list', () => claudeAccountService.list());
+ipc.handle('claudeAccounts:status', (_, id) => claudeAccountService.status(id));
+ipc.handle('claudeAccounts:add', (_, name) => claudeAccountService.add(name));
+ipc.handle('claudeAccounts:rename', (_, id, name) => claudeAccountService.rename(id, name));
+ipc.handle('claudeAccounts:remove', (_, id) => claudeAccountService.remove(id));
+ipc.handle('claudeAccounts:setActive', (_, id) => claudeAccountService.setActive(id));
+ipc.handle('claudeAccounts:loginCommand', (_, id) => claudeAccountService.loginCommand(id));
+ipc.handle('claudeAccounts:copySession', (_, sessionId, fromId, toId) => claudeAccountService.copySession(sessionId, fromId, toId));
 
 // IPC - Windows notifications (e.g. a Claude chat finished); clicking one brings that tab back
 const liveNotifications = new Set(); // keep references: a collected notification loses its click handler
-ipcMain.handle('app:notify', (_, { title, body, tabId, skipIfFocused } = {}) => {
+ipc.handle('app:notify', (_, { title, body, tabId, skipIfFocused } = {}) => {
   if (!Notification.isSupported() || typeof title !== 'string') return false;
   // The renderer can't tell reliably (a minimized window may still report focus): ask the window
   const looking = mainWindow && mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused();
@@ -445,8 +456,8 @@ ipcMain.handle('app:notify', (_, { title, body, tabId, skipIfFocused } = {}) => 
 });
 
 // IPC - App version & updates
-ipcMain.handle('app:getVersion', () => app.getVersion());
-ipcMain.handle('update:getMode', () => (updateService ? updateService.mode : app.isPackaged ? 'auto' : 'disabled'));
-ipcMain.handle('update:check', () => (updateService ? updateService.check({ manual: true }) : { success: false }));
-ipcMain.handle('update:accept', () => (updateService ? updateService.accept() : { success: false }));
-ipcMain.handle('update:install', () => (updateService ? updateService.install() : false));
+ipc.handle('app:getVersion', () => app.getVersion());
+ipc.handle('update:getMode', () => (updateService ? updateService.mode : app.isPackaged ? 'auto' : 'disabled'));
+ipc.handle('update:check', () => (updateService ? updateService.check({ manual: true }) : { success: false }));
+ipc.handle('update:accept', () => (updateService ? updateService.accept() : { success: false }));
+ipc.handle('update:install', () => (updateService ? updateService.install() : false));

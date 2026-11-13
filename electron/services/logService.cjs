@@ -23,8 +23,8 @@ function describeError(error) {
     if (error === undefined || error === null) return { message: '', stack: '' };
     if (typeof error === 'string') return { message: error, stack: '' };
     return { message: JSON.stringify(error), stack: '' };
-  } catch (_err) {
-    return { message: String(error), stack: '' };
+  } catch (err) {
+    return { message: `${String(error)} (not serializable: ${err && err.message})`, stack: '' };
   }
 }
 
@@ -110,4 +110,40 @@ function createLogService({ dir, fileName = 'yanote.log', maxBytes = DEFAULT_MAX
   return { filePath, write, scoped, writeFromRenderer };
 }
 
-module.exports = { createLogService, describeError, formatEntry };
+/** "Not there" errors (missing file/folder): an answer for probing functions, not a failure. */
+function isNotFound(err) {
+  return Boolean(err && (err.code === 'ENOENT' || err.code === 'ENOTDIR'));
+}
+
+// --- Shared log: configured once by main.cjs, used by every service through getLogger(scope) ---
+let shared = null;
+
+/** Creates the app-wide log (main.cjs, at startup). */
+function configureSharedLog(options) {
+  shared = createLogService(options);
+  return shared;
+}
+
+/**
+ * Logger for one module. Before configureSharedLog (unit tests, scripts) entries go to the
+ * console only, and are silent under vitest so expected failures don't flood test output.
+ */
+function getLogger(scope) {
+  const emit = (level, message, error, context) => {
+    try {
+      if (shared) return shared.write(level, scope, message, error, context);
+      if (process.env.VITEST) return;
+      const err = describeError(error);
+      (level === 'error' ? console.error : console.warn)(`[${scope}] ${[message, err.message].filter(Boolean).join(': ')}`, context || '');
+    } catch (err) {
+      console.error('[log] getLogger emit failed:', err && err.message);
+    }
+  };
+  return {
+    error: (message, error, context) => emit('error', message, error, context),
+    warn: (message, error, context) => emit('warn', message, error, context),
+    info: (message, context) => emit('info', message, undefined, context),
+  };
+}
+
+module.exports = { createLogService, describeError, formatEntry, isNotFound, configureSharedLog, getLogger };

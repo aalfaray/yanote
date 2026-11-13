@@ -169,27 +169,10 @@ export const TabBar: React.FC<TabBarProps> = ({
     setEditingTabId(null);
   };
 
-  const handleCopyId = (targetTab: TabItem) => {
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(targetTab.id).catch(() => {});
-    }
-    onCopyId?.(targetTab);
-  };
-
-  const handleCopyPath = (targetTab: TabItem) => {
-    const pathToCopy = targetTab.path || targetTab.title;
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(pathToCopy).catch(() => {});
-    }
-    onCopyPath?.(targetTab);
-  };
-
-  const handleCopyRelativePath = (targetTab: TabItem) => {
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(targetTab.title).catch(() => {});
-    }
-    onCopyRelativePath?.(targetTab);
-  };
+  // Copying (and telling the user) is App's job: the tab bar only reports which tab
+  const handleCopyId = (targetTab: TabItem) => onCopyId?.(targetTab);
+  const handleCopyPath = (targetTab: TabItem) => onCopyPath?.(targetTab);
+  const handleCopyRelativePath = (targetTab: TabItem) => onCopyRelativePath?.(targetTab);
 
   const canCloseOthers = contextMenu.tab
     ? tabs.filter((t) => t.id !== contextMenu.tab?.id && !t.isPinned).length > 0

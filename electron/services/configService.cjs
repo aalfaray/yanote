@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { getLogger } = require('./logService.cjs');
+
+const log = getLogger('configService');
 
 const MIN_OPACITY = 0.3;
 const MAX_OPACITY = 1;
@@ -128,7 +131,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
     }
   } catch (err) {
     // If config file is corrupted, recovery gracefully with defaults
-    console.warn('Warning loading config, using defaults:', err.message);
+    log.warn('config unreadable, using defaults', err, { configFilePath });
   }
 
   return {
@@ -168,7 +171,7 @@ function saveConfig(configFilePath, currentConfig, newConfig) {
     fs.writeFileSync(configFilePath, JSON.stringify(merged, null, 2), 'utf8');
     return merged;
   } catch (err) {
-    console.error('Error saving config:', err.message);
+    log.error('saving config failed', err, { configFilePath });
     return currentConfig;
   }
 }
@@ -193,7 +196,7 @@ function migrateLegacyConfig(dataDir, legacyDirs) {
       }
     }
   } catch (err) {
-    console.error('Error migrating legacy config:', err.message);
+    log.error('migrating legacy config failed', err, { dataDir });
   }
   return null;
 }

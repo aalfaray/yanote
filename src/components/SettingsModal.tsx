@@ -3,6 +3,7 @@ import { Shield, Save, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import type { AppConfig } from '../types/electron';
+import { logError } from '../lib/logger';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -29,8 +30,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
-    window.electronAPI?.getAppVersion?.().then(setVersion).catch(() => {});
-    window.electronAPI?.getUpdateMode?.().then(setUpdateMode).catch(() => {});
+    window.electronAPI?.getAppVersion?.().then(setVersion).catch((err) => logError('SettingsModal.getAppVersion', err));
+    window.electronAPI?.getUpdateMode?.().then(setUpdateMode).catch((err) => logError('SettingsModal.getUpdateMode', err));
   }, [isOpen]);
 
   const handleCheckUpdates = async () => {

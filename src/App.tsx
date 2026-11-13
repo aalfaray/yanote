@@ -11,15 +11,16 @@ import { addRecentFile, removeRecentFile } from './lib/recentFiles';
 import { ConfirmModal } from './components/ui/ConfirmModal';
 import type { TabItem, TerminalShell, RecentFile, OpenTarget, SavedIdea } from './types/electron';
 import { Save, Check, AlertCircle, FileText } from 'lucide-react';
-import { parentDir, isMarkdownFile, baseName } from './lib/paths';
+import { parentDir, isMarkdownFile, baseName, notePathOf } from './lib/paths';
+import { copyText } from './lib/clipboard';
 import { ClaudeUsageMeter, useClaudeUsage } from './components/ClaudeUsageMeter';
 import { chatNotificationFor } from './lib/claudeNotify';
 import { DismissButton } from './components/ui/DismissButton';
 import { IdeasDrawer } from './components/IdeasDrawer';
 import { addIdea, removeIdea } from './lib/ideas';
 import { toSavedTabs, restoreTab } from './lib/session';
-import { buildMenu, type MenuAction, type MenuContext, type MenuEntry } from './lib/contextMenu';
-import { terminalActions } from './lib/terminalRegistry';
+import { useAppContextMenu } from './hooks/useAppContextMenu';
+import { logError } from './lib/logger';
 import { AppContextMenu } from './components/ui/AppContextMenu';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
@@ -104,7 +105,7 @@ export const App: React.FC = () => {
       const config = await window.electronAPI.getAppConfig();
       notifyClaudeRef.current = config?.notifyClaude !== false;
     } catch (err) {
-      console.error('Error refreshing notes:', err);
+      logError('App.refreshNotes', err);
     }
   }, []);
 
@@ -171,7 +172,7 @@ export const App: React.FC = () => {
             void window.electronAPI.saveAppConfig({ welcomeSeen: true });
           }
         } catch (err) {
-          console.error('Init error:', err);
+          logError('App.init', err);
         }
         sessionReadyRef.current = true;
         // Launched with a folder/file ("Abrir con yanote"): open it once the notes are in place
@@ -179,7 +180,7 @@ export const App: React.FC = () => {
           const target = await window.electronAPI.takeOpenTarget?.();
           if (target) await openTargetRef.current(target);
         } catch (err) {
-          console.error('Open target error:', err);
+          logError('App.openTarget', err);
         }
       }
     };
@@ -211,7 +212,7 @@ export const App: React.FC = () => {
       }
       if (window.electronAPI) {
         window.electronAPI.saveAppConfig({ darkMode: next }).catch((err) => {
-          console.error('Error saving darkMode setting:', err);
+          logError('App.saveDarkMode', err);
         });
       }
       setNotification({
@@ -227,7 +228,7 @@ export const App: React.FC = () => {
     const next = Math.min(1, Math.max(0.3, value));
     setWindowOpacity(next);
     window.electronAPI?.setOpacity?.(next).catch((err) => {
-      console.error('Error setting window opacity:', err);
+      logError('App.setOpacity', err);
     });
   }, []);
 
@@ -435,41 +436,20 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  const handleCopyId = useCallback((tab: TabItem) => {
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(tab.id).catch(() => {});
-    }
-    setNotification({
-      type: 'success',
-      text: `✓ ID copiado: ${tab.id}`,
-    });
+  // Tab menu > copy id / path / relative path (TabBar only forwards the click)
+  const copyAndNotify = useCallback(async (text: string, done: string, scope: string) => {
+    const ok = await copyText(text, scope);
+    setNotification(ok ? { type: 'success', text: `✓ ${done}: ${text}` } : { type: 'error', text: 'No se pudo copiar al portapapeles' });
   }, []);
-
-  const handleCopyPath = useCallback((tab: TabItem) => {
-    let pathToCopy = tab.path;
-    if (!pathToCopy) {
-      const baseDir = notesDir || '';
-      const sep = baseDir.includes('\\') ? '\\' : '/';
-      pathToCopy = baseDir ? `${baseDir}${sep}${tab.title}` : tab.title;
-    }
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(pathToCopy).catch(() => {});
-    }
-    setNotification({
-      type: 'success',
-      text: `✓ Ruta copiada: ${pathToCopy}`,
-    });
-  }, [notesDir]);
-
-  const handleCopyRelativePath = useCallback((tab: TabItem) => {
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(tab.title).catch(() => {});
-    }
-    setNotification({
-      type: 'success',
-      text: `✓ Ruta relativa copiada: ${tab.title}`,
-    });
-  }, []);
+  const handleCopyId = useCallback((tab: TabItem) => void copyAndNotify(tab.id, 'ID copiado', 'App.copyId'), [copyAndNotify]);
+  const handleCopyPath = useCallback(
+    (tab: TabItem) => void copyAndNotify(notePathOf(tab, notesDir), 'Ruta copiada', 'App.copyPath'),
+    [copyAndNotify, notesDir]
+  );
+  const handleCopyRelativePath = useCallback(
+    (tab: TabItem) => void copyAndNotify(tab.title, 'Ruta relativa copiada', 'App.copyRelativePath'),
+    [copyAndNotify]
+  );
 
   const handleRevealInExplorer = useCallback(async (tab: TabItem) => {
     if (window.electronAPI?.revealInExplorer) {
@@ -724,26 +704,35 @@ export const App: React.FC = () => {
   const updateIdeas = (next: SavedIdea[]) => {
     ideasRef.current = next;
     setIdeas(next);
-    void window.electronAPI?.saveAppConfig({ ideas: next });
+    window.electronAPI?.saveAppConfig({ ideas: next })?.catch((err) => logError('App.updateIdeas', err, { count: next.length }));
   };
   const saveIdeaRef = useRef<(p: { text: string; chatTabId: string | null }) => void>(() => {});
   saveIdeaRef.current = ({ text, chatTabId }) => {
-    // Where it came from: the chat it was selected in, else the tab on screen
-    const from = tabs.find((t) => t.id === chatTabId) || tabs.find((t) => t.id === activeTabId);
-    const cwd = from?.kind === 'claude' || from?.kind === 'terminal' ? from.cwd || notesDir : parentDir(from?.path ?? null) ?? undefined;
-    updateIdeas(addIdea(ideasRef.current, { text, source: from?.title, cwd: cwd || undefined }));
-    setNotification({ type: 'success', text: '💡 Idea guardada' });
+    try {
+      // Where it came from: the chat it was selected in, else the tab on screen
+      const from = tabs.find((t) => t.id === chatTabId) || tabs.find((t) => t.id === activeTabId);
+      const cwd = from?.kind === 'claude' || from?.kind === 'terminal' ? from.cwd || notesDir : parentDir(from?.path ?? null) ?? undefined;
+      updateIdeas(addIdea(ideasRef.current, { text, source: from?.title, cwd: cwd || undefined }));
+      setNotification({ type: 'success', text: '💡 Idea guardada' });
+    } catch (err) {
+      logError('App.saveIdea', err, { chatTabId });
+      setNotification({ type: 'error', text: 'No se pudo guardar la idea' });
+    }
   };
   const pinInChat = (text: string, tabId: string) => {
-    const clean = text.trim();
-    if (!clean) return;
-    setTabs((prev) =>
-      prev.map((t) =>
-        t.id === tabId && !(t.chatPins || []).some((p) => p.text === clean)
-          ? { ...t, chatPins: [...(t.chatPins || []), { id: `pin-${Date.now().toString(36)}`, text: clean }] }
-          : t
-      )
-    );
+    try {
+      const clean = text.trim();
+      if (!clean) return;
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId && !(t.chatPins || []).some((p) => p.text === clean)
+            ? { ...t, chatPins: [...(t.chatPins || []), { id: `pin-${Date.now().toString(36)}`, text: clean }] }
+            : t
+        )
+      );
+    } catch (err) {
+      logError('App.pinInChat', err, { tabId });
+    }
   };
   // A chat's Claude Code session, kept so the chat comes back after a restart
   const handleChatSessionId = useCallback((tabId: string, sessionId: string) => {
@@ -752,61 +741,11 @@ export const App: React.FC = () => {
   const handleUnpin = (tabId: string, pinId: string) =>
     setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, chatPins: (t.chatPins || []).filter((p) => p.id !== pinId) } : t)));
   // --- Right-click menu in yanote's own style (replaces the native one everywhere) ---
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; ctx: MenuContext; termTabId: string | null; entries: MenuEntry[] } | null>(null);
-  const closeContextMenu = useCallback(() => setContextMenu(null), []);
-  useEffect(() => {
-    const onContext = (e: MouseEvent) => {
-      // Menus of their own (e.g. a tab's) already handled it
-      if (e.defaultPrevented) return;
-      const el = e.target instanceof Element ? e.target : null;
-      const termTabId = el?.closest<HTMLElement>('[data-term-tab]')?.dataset.termTab ?? null;
-      const field = el?.closest<HTMLElement>('textarea, input, [contenteditable="true"]') ?? null;
-      const chatEl = el?.closest<HTMLElement>('[data-chat-tab]');
-      let ctx: MenuContext;
-      if (termTabId) {
-        ctx = { kind: 'terminal', selection: terminalActions(termTabId)?.getSelection() ?? '', chatTabId: null };
-      } else if (field) {
-        const input = field as HTMLInputElement | HTMLTextAreaElement;
-        const typed = typeof input.selectionStart === 'number' && 'value' in input;
-        const selection = typed ? input.value.slice(input.selectionStart ?? 0, input.selectionEnd ?? 0) : window.getSelection()?.toString() ?? '';
-        ctx = { kind: 'editable', selection, chatTabId: null };
-      } else {
-        ctx = { kind: 'page', selection: window.getSelection()?.toString() ?? '', chatTabId: chatEl?.dataset.chatTab ?? null };
-      }
-      const entries = buildMenu(ctx);
-      e.preventDefault();
-      setContextMenu(entries ? { x: e.clientX, y: e.clientY, ctx, termTabId, entries } : null);
-    };
-    window.addEventListener('contextmenu', onContext);
-    return () => window.removeEventListener('contextmenu', onContext);
-  }, []);
-  const runMenuAction = (action: MenuAction) => {
-    const menu = contextMenu;
-    setContextMenu(null);
-    if (!menu) return;
-    const { ctx, termTabId } = menu;
-    const text = ctx.selection;
-    const term = terminalActions(termTabId);
-    switch (action) {
-      case 'sendToChat':
-        handleNewClaude(undefined, text.trim());
-        return;
-      case 'saveIdea':
-        saveIdeaRef.current({ text, chatTabId: ctx.chatTabId });
-        return;
-      case 'pin':
-        if (ctx.chatTabId) pinInChat(text, ctx.chatTabId);
-        return;
-    }
-    if (term) {
-      if (action === 'copy') void navigator.clipboard?.writeText(text);
-      else if (action === 'paste') term.paste();
-      else if (action === 'selectAll') term.selectAll();
-      return;
-    }
-    // undo / redo / cut / copy / paste / selectAll on the focused field or the page selection
-    void window.electronAPI?.editCommand?.(action);
-  };
+  const contextMenu = useAppContextMenu({
+    sendToChat: (text) => handleNewClaude(undefined, text),
+    saveIdea: (text, chatTabId) => saveIdeaRef.current({ text, chatTabId }),
+    pin: pinInChat,
+  });
 
   // Clicking the notification brings that chat to the front
   useEffect(
@@ -1082,8 +1021,14 @@ export const App: React.FC = () => {
         onSaved={() => setNotification({ type: 'success', text: '¡Ajustes guardados correctamente!' })}
       />
 
-      {contextMenu && (
-        <AppContextMenu x={contextMenu.x} y={contextMenu.y} entries={contextMenu.entries} onAction={runMenuAction} onClose={closeContextMenu} />
+      {contextMenu.menu && (
+        <AppContextMenu
+          x={contextMenu.menu.x}
+          y={contextMenu.menu.y}
+          entries={contextMenu.menu.entries}
+          onAction={contextMenu.runAction}
+          onClose={contextMenu.close}
+        />
       )}
 
       <IdeasDrawer

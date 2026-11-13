@@ -92,6 +92,8 @@ function parsePartial(json: string): Record<string, unknown> | null {
     const v = JSON.parse(json);
     return isObj(v) ? v : null;
   } catch {
+    // Not logged on purpose: called on every streaming delta, and an incomplete JSON
+    // is the normal state until the tool input finishes arriving.
     return null;
   }
 }

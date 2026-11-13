@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { ClaudeChatView, loadChatPrefs } from '../../src/components/ClaudeChatView';
+import { ClaudeChatView } from '../../src/components/ClaudeChatView';
+import { loadChatPrefs } from '../../src/lib/claudeChatPrefs';
 
 const models = [
   { value: 'default', displayName: 'Default', description: 'Opus 5.5 · Best', resolvedModel: 'claude-opus-5-5', supportedEffortLevels: ['low', 'medium', 'high'] },
