@@ -82,6 +82,11 @@ function createWindow() {
 
   mainWindow.webContents.once('did-finish-load', () => setupUpdates());
 
+  // A file dropped where nothing handles it would replace the app with that file: stay on the app
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL()) event.preventDefault();
+  });
+
   // Electron has no default right-click menu: offer copy/paste on selections and editable fields
   mainWindow.webContents.on('context-menu', (_event, params) => {
     const hasSelection = Boolean(params.selectionText && params.selectionText.trim());

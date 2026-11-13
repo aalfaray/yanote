@@ -165,6 +165,8 @@ export interface ElectronAPI {
   /** Restart into the downloaded version */
   installUpdate?: () => Promise<boolean>;
   onUpdateEvent?: (callback: (event: UpdateEvent) => void) => () => void;
+  /** Disk path of a dropped File, or null when it has none */
+  getPathForFile?: (file: File) => string | null;
   // "Abrir con yanote" (Explorer context menu / command line)
   takeOpenTarget?: () => Promise<OpenTarget | null>;
   onOpenTarget?: (callback: (target: OpenTarget) => void) => () => void;

@@ -10,8 +10,8 @@ import { RecentFilesDrawer } from './components/RecentFilesDrawer';
 import { addRecentFile, removeRecentFile } from './lib/recentFiles';
 import { ConfirmModal } from './components/ui/ConfirmModal';
 import type { TabItem, TerminalShell, RecentFile, OpenTarget } from './types/electron';
-import { Save, Check, AlertCircle } from 'lucide-react';
-import { parentDir } from './lib/paths';
+import { Save, Check, AlertCircle, FileText } from 'lucide-react';
+import { parentDir, isMarkdownFile, baseName } from './lib/paths';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
@@ -662,6 +662,80 @@ export const App: React.FC = () => {
   });
   useEffect(() => window.electronAPI?.onOpenTarget?.((target) => void openTargetRef.current(target)), []);
 
+  // --- Drag & drop .md files from Explorer onto the window: each opens in a tab ---
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const openDroppedFiles = async (files: File[]) => {
+    const opened: { path: string; name: string }[] = [];
+    const errors: string[] = [];
+    for (const file of files) {
+      const filePath = window.electronAPI?.getPathForFile?.(file);
+      if (!filePath) {
+        errors.push(file.name);
+        continue;
+      }
+      const res = await window.electronAPI!.readFile(filePath);
+      if (res.success && res.content !== undefined) {
+        openFileInTab(filePath, baseName(filePath), res.content);
+        opened.push({ path: filePath, name: baseName(filePath) });
+      } else {
+        errors.push(`${file.name}: ${res.error || 'no se pudo leer'}`);
+      }
+    }
+    recordRecentFiles(opened);
+    if (errors.length) setNotification({ type: 'error', text: `No se pudo abrir: ${errors.join(' · ')}` });
+    else if (opened.length > 1) setNotification({ type: 'success', text: `✓ ${opened.length} notas abiertas` });
+  };
+  const openDroppedRef = useRef(openDroppedFiles);
+  useEffect(() => {
+    openDroppedRef.current = openDroppedFiles;
+  });
+  useEffect(() => {
+    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files');
+    let depth = 0; // dragenter/leave fire for every child element
+    const onEnter = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth++;
+      setIsDraggingFiles(true);
+    };
+    const onLeave = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setIsDraggingFiles(false);
+    };
+    const onOver = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); // allows dropping anywhere
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    };
+    // Capture phase: markdown files are ours even when dropped on the editor or a terminal
+    const onDropCapture = (e: DragEvent) => {
+      depth = 0;
+      setIsDraggingFiles(false);
+      const files = Array.from(e.dataTransfer?.files || []);
+      const markdown = files.filter((f) => isMarkdownFile(f.name));
+      if (!markdown.length) return; // e.g. images for the Claude chat keep their own handler
+      e.preventDefault();
+      e.stopPropagation();
+      void openDroppedRef.current(markdown);
+    };
+    // Bubble phase: any other file nobody handled must not navigate away from the app
+    const onDropBubble = (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault();
+    };
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('drop', onDropCapture, true);
+    window.addEventListener('drop', onDropBubble);
+    return () => {
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('drop', onDropCapture, true);
+      window.removeEventListener('drop', onDropBubble);
+    };
+  }, []);
+
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
   const isClaudeActive = activeTab?.kind === 'claude';
   const isTerminalActive = activeTab?.kind === 'terminal' || isClaudeActive;
@@ -740,6 +814,19 @@ export const App: React.FC = () => {
         ) : (
           <div className="flex-1 flex items-center justify-center text-xs font-bold text-neutral-500">
             Ninguna nota abierta. Haz clic en "+" para crear una nueva pestaña.
+          </div>
+        )}
+
+        {/* Drop hint while dragging files over the window (doesn't block the drop target below) */}
+        {isDraggingFiles && (
+          <div
+            data-testid="drop-overlay"
+            className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded border-[3px] border-dashed border-black dark:border-[#FFE500] bg-[#FFE500]/25 dark:bg-[#FFE500]/10"
+          >
+            <div className="flex items-center gap-2 px-3 py-2 bg-[#FFE500] text-black border-2 border-black rounded shadow-[3px_3px_0px_#000] font-black text-xs text-center">
+              <FileText size={16} strokeWidth={3} className="shrink-0" />
+              <span>Suelta tus .md para abrirlos</span>
+            </div>
           </div>
         )}
 

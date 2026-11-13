@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Window controls
@@ -23,6 +23,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppConfig: () => ipcRenderer.invoke('fs:getAppConfig'),
   saveAppConfig: (config) => ipcRenderer.invoke('fs:saveAppConfig', config),
   revealInExplorer: (filePath) => ipcRenderer.invoke('app:revealInExplorer', filePath),
+
+  // Real disk path of a file dropped on the window (File.path no longer exists in Electron 32+)
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || null;
+    } catch {
+      return null;
+    }
+  },
 
   // "Abrir con yanote" from Explorer: the launch target, then any later ones
   takeOpenTarget: () => ipcRenderer.invoke('app:takeOpenTarget'),

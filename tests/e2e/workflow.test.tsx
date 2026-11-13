@@ -609,4 +609,70 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       );
     });
   });
+
+  describe('drag & drop of .md files', () => {
+    const dropOn = (target: Element | Window, files: File[]) => {
+      const dataTransfer = { files, types: ['Files'], dropEffect: 'none' };
+      fireEvent.dragEnter(target, { dataTransfer });
+      fireEvent.dragOver(target, { dataTransfer });
+      return fireEvent.drop(target, { dataTransfer });
+    };
+
+    beforeEach(() => {
+      window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({ notesPath: '/notes', alwaysOnTop: false, welcomeSeen: true });
+      window.electronAPI!.getPathForFile = vi.fn((f: File) => `/docs/${f.name}`);
+      writtenFiles['/docs/plan.md'] = '# Plan soltado';
+      writtenFiles['/docs/ideas.markdown'] = '# Ideas';
+    });
+
+    it('opens every dropped markdown file in its own tab, even when dropped on the editor', async () => {
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      const editor = screen.getByTestId('mock-markdown-textarea');
+      const notDefault = dropOn(editor, [new File(['x'], 'plan.md'), new File(['x'], 'ideas.markdown'), new File(['x'], 'foto.png')]);
+      // the app handled it (no navigation to the file)
+      expect(notDefault).toBe(false);
+      await waitFor(() => expect(screen.getAllByText('ideas.markdown').length).toBeGreaterThanOrEqual(1));
+      expect(screen.getAllByText('plan.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('foto.png')).not.toBeInTheDocument();
+      // the empty start-up note was replaced, not kept next to them
+      expect(screen.queryByText('scratch-1.md')).not.toBeInTheDocument();
+      expect(window.electronAPI?.readFile).toHaveBeenCalledWith('/docs/plan.md');
+      await waitFor(() =>
+        expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith(
+          expect.objectContaining({ recentFiles: expect.arrayContaining([expect.objectContaining({ path: '/docs/plan.md' })]) })
+        )
+      );
+    });
+
+    it('focuses an already open note instead of duplicating it', async () => {
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      dropOn(window, [new File(['x'], 'plan.md')]);
+      await waitFor(() => expect(screen.getAllByText('plan.md').length).toBeGreaterThanOrEqual(1));
+      const count = screen.getAllByText('plan.md').length;
+      dropOn(window, [new File(['x'], 'plan.md')]);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.getAllByText('plan.md').length).toBe(count);
+    });
+
+    it('shows the drop hint while dragging files and hides it after the drop', async () => {
+      render(<App />);
+      const dataTransfer = { files: [], types: ['Files'] };
+      fireEvent.dragEnter(window, { dataTransfer });
+      expect(await screen.findByTestId('drop-overlay')).toBeInTheDocument();
+      fireEvent.drop(window, { dataTransfer });
+      await waitFor(() => expect(screen.queryByTestId('drop-overlay')).not.toBeInTheDocument());
+    });
+
+    it('ignores non-markdown files and reports files without a disk path', async () => {
+      window.electronAPI!.getPathForFile = vi.fn(() => null);
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      dropOn(window, [new File(['x'], 'foto.png')]);
+      expect(window.electronAPI?.readFile).not.toHaveBeenCalled();
+      dropOn(window, [new File(['x'], 'nota.md')]);
+      expect(await screen.findByText(/No se pudo abrir: nota\.md/)).toBeInTheDocument();
+    });
+  });
 });
