@@ -150,7 +150,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               size="sm"
               onClick={handleCheckUpdates}
               disabled={checking}
-              className="dark:bg-zinc-700 dark:text-zinc-200 dark:border-zinc-500"
             >
               <RefreshCw size={12} strokeWidth={2.5} className={checking ? 'animate-spin' : ''} />
               {checking ? 'Buscando…' : 'Buscar actualizaciones'}

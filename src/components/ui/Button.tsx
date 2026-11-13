@@ -19,12 +19,14 @@ export const Button: React.FC<ButtonProps> = ({
 }) => {
   const variantClasses = {
     primary: 'bg-[#FFE500] hover:bg-[#FFD700] text-black',
-    secondary: 'bg-white hover:bg-neutral-100 text-black',
+    // Dark mode needs its own hover: a light hover background under light text made labels vanish
+    secondary:
+      'bg-white hover:bg-neutral-100 text-black dark:bg-zinc-700 dark:text-zinc-200 dark:border-zinc-500 dark:hover:bg-[#FFE500] dark:hover:text-black dark:hover:border-black',
     danger: 'bg-[#FF6B6B] hover:bg-[#FF5252] text-white',
     success: 'bg-[#78E08F] hover:bg-[#68d17f] text-black',
     purple: 'bg-[#D8B4FE] hover:bg-[#C084FC] text-black',
     cyan: 'bg-[#7DF9FF] hover:bg-[#5CE1E6] text-black',
-    ghost: 'bg-transparent hover:bg-neutral-200/60 text-black border-transparent shadow-none',
+    ghost: 'bg-transparent hover:bg-neutral-200/60 text-black border-transparent shadow-none dark:text-zinc-200 dark:hover:bg-zinc-700',
   };
 
   const sizeClasses = {
