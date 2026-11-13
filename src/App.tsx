@@ -13,6 +13,7 @@ import type { TabItem, TerminalShell, RecentFile, OpenTarget } from './types/ele
 import { Save, Check, AlertCircle, FileText } from 'lucide-react';
 import { parentDir, isMarkdownFile, baseName } from './lib/paths';
 import { ClaudeUsageMeter, useClaudeUsage } from './components/ClaudeUsageMeter';
+import { chatNotificationFor } from './lib/claudeNotify';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
@@ -45,6 +46,8 @@ export const App: React.FC = () => {
   const [activeTabId, setActiveTabId] = useState<string>(WELCOME_TAB_ID);
   // Set once the previous session is restored: saving before that would wipe it
   const sessionReadyRef = useRef(false);
+  // Settings > "Avisarme cuando Claude termine" (on by default)
+  const notifyClaudeRef = useRef(true);
 
   // App & Window State
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
@@ -86,6 +89,8 @@ export const App: React.FC = () => {
     try {
       const dir = await window.electronAPI.getNotesPath();
       setNotesDir(dir);
+      const config = await window.electronAPI.getAppConfig();
+      notifyClaudeRef.current = config?.notifyClaude !== false;
     } catch (err) {
       console.error('Error refreshing notes:', err);
     }
@@ -101,6 +106,7 @@ export const App: React.FC = () => {
             setRecentFiles(config.recentFiles);
           }
           setIsAlwaysOnTop(config.alwaysOnTop || false);
+          notifyClaudeRef.current = config.notifyClaude !== false;
           if (typeof config.opacity === 'number') setWindowOpacity(config.opacity);
           const dark = Boolean(config.darkMode);
           setIsDarkMode(dark);
@@ -663,6 +669,27 @@ export const App: React.FC = () => {
     openTargetRef.current = handleOpenTarget;
   });
   useEffect(() => window.electronAPI?.onOpenTarget?.((target) => void openTargetRef.current(target)), []);
+
+  // --- Windows notification when a Claude chat finishes or waits for you, unless you're looking at it ---
+  useEffect(
+    () =>
+      window.electronAPI?.onClaudeEvent?.((evt) => {
+        if (!notifyClaudeRef.current) return;
+        const tab = tabsRef.current.find((t) => t.id === evt.id);
+        const note = chatNotificationFor(evt, tab?.title ?? 'Claude');
+        // Skipped by the main process when this chat is the active tab of the focused window
+        if (note) void window.electronAPI?.notify?.({ ...note, tabId: evt.id, skipIfFocused: activeTabIdRef.current === evt.id });
+      }),
+    []
+  );
+  // Clicking the notification brings that chat to the front
+  useEffect(
+    () =>
+      window.electronAPI?.onFocusTab?.((id) => {
+        if (tabsRef.current.some((t) => t.id === id)) setActiveTabId(id);
+      }),
+    []
+  );
 
   // --- Drag & drop .md files from Explorer onto the window: each opens in a tab ---
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);

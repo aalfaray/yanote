@@ -20,6 +20,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [notifyClaude, setNotifyClaude] = useState(true);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [version, setVersion] = useState('');
@@ -47,6 +48,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       window.electronAPI.getAppConfig().then((cfg) => {
         setAlwaysOnTop(cfg.alwaysOnTop || false);
         setIsDarkMode(Boolean(cfg.darkMode));
+        setNotifyClaude(cfg.notifyClaude !== false);
       });
       setStatusMessage(null);
     }
@@ -60,6 +62,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       const updated: Partial<AppConfig> = {
         alwaysOnTop,
         darkMode: isDarkMode,
+        notifyClaude,
       };
 
       if (isDarkMode) {
@@ -128,6 +131,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
             <span className="font-bold text-black dark:text-zinc-200">
               Iniciar siempre en modo superposición (Always on Top)
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={notifyClaude}
+              onChange={(e) => setNotifyClaude(e.target.checked)}
+              className="w-4 h-4 rounded border-2 border-black text-[#FFE500] focus:ring-0 cursor-pointer accent-[#FFE500]"
+            />
+            <span className="font-bold text-black dark:text-zinc-200">
+              🔔 Avisarme en Windows cuando Claude termine o necesite mi respuesta
             </span>
           </label>
         </div>

@@ -64,6 +64,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
       return {
         notesPath: parsed.notesPath || defaultNotesPath,
         alwaysOnTop: Boolean(parsed.alwaysOnTop),
+        notifyClaude: parsed.notifyClaude !== false,
         darkMode: Boolean(parsed.darkMode),
         opacity: parsed.opacity === undefined ? MAX_OPACITY : clampOpacity(parsed.opacity),
         openTabs: sanitizeOpenTabs(parsed.openTabs),
@@ -80,6 +81,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
   return {
     notesPath: defaultNotesPath,
     alwaysOnTop: false,
+    notifyClaude: true,
     darkMode: false,
     opacity: MAX_OPACITY,
     openTabs: [],

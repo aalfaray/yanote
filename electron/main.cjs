@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Menu, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -17,6 +17,9 @@ const ARG_SKIP = app.isPackaged ? 1 : 2;
 // One yanote at a time (they share app-config.json and the updater needs to close them all):
 // launching it again — e.g. "Abrir con yanote" in Explorer — hands the folder/file to the open window.
 const hasInstanceLock = !app.isPackaged || app.requestSingleInstanceLock();
+
+// Windows shows notifications under this id (the installer registers the same one)
+if (process.platform === 'win32') app.setAppUserModelId('com.yanote.app');
 if (!hasInstanceLock) app.quit();
 
 const speechService = createSpeechService();
@@ -401,6 +404,34 @@ ipcMain.handle('claude:setModel', (_, id, model) => claudeChatService.setModel(i
 ipcMain.handle('claude:setEffort', (_, id, level) => claudeChatService.setEffort(id, level));
 ipcMain.handle('claude:stop', (_, id) => claudeChatService.stop(id));
 ipcMain.handle('claude:usage', (_, id) => claudeChatService.usage(id));
+
+// IPC - Windows notifications (e.g. a Claude chat finished); clicking one brings that tab back
+const liveNotifications = new Set(); // keep references: a collected notification loses its click handler
+ipcMain.handle('app:notify', (_, { title, body, tabId, skipIfFocused } = {}) => {
+  if (!Notification.isSupported() || typeof title !== 'string') return false;
+  // The renderer can't tell reliably (a minimized window may still report focus): ask the window
+  const looking = mainWindow && mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused();
+  if (skipIfFocused && looking) return false;
+  const note = new Notification({
+    title: title.slice(0, 120),
+    body: typeof body === 'string' ? body.slice(0, 300) : '',
+    icon: path.join(__dirname, '../build/icon.png'),
+  });
+  liveNotifications.add(note);
+  const forget = () => liveNotifications.delete(note);
+  note.on('click', () => {
+    forget();
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    if (tabId) mainWindow.webContents.send('app:focusTab', tabId);
+  });
+  note.on('close', forget);
+  note.on('failed', forget);
+  note.show();
+  return true;
+});
 
 // IPC - App version & updates
 ipcMain.handle('app:getVersion', () => app.getVersion());

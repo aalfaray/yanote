@@ -14,6 +14,8 @@ export interface AppConfig {
   /** Notes left open last time; they reopen on the next start */
   openTabs?: SavedTab[];
   activeTabPath?: string | null;
+  /** Windows notification when a Claude chat finishes or waits for you (default on) */
+  notifyClaude?: boolean;
   /** The welcome note is shown only on the very first start */
   welcomeSeen?: boolean;
   /** History of opened files, newest first */
@@ -165,6 +167,9 @@ export interface ElectronAPI {
   /** Restart into the downloaded version */
   installUpdate?: () => Promise<boolean>;
   onUpdateEvent?: (callback: (event: UpdateEvent) => void) => () => void;
+  /** `skipIfFocused`: don't show it if the yanote window has focus (you're already looking at that chat) */
+  notify?: (payload: { title: string; body?: string; tabId?: string; skipIfFocused?: boolean }) => Promise<boolean>;
+  onFocusTab?: (callback: (tabId: string) => void) => () => void;
   /** Disk path of a dropped File, or null when it has none */
   getPathForFile?: (file: File) => string | null;
   // "Abrir con yanote" (Explorer context menu / command line)

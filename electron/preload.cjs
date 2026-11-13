@@ -33,6 +33,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  // Windows notification; clicking it focuses the window and asks to show `tabId`
+  notify: (payload) => ipcRenderer.invoke('app:notify', payload),
+  onFocusTab: (callback) => {
+    const listener = (_event, tabId) => callback(tabId);
+    ipcRenderer.on('app:focusTab', listener);
+    return () => ipcRenderer.removeListener('app:focusTab', listener);
+  },
+
   // "Abrir con yanote" from Explorer: the launch target, then any later ones
   takeOpenTarget: () => ipcRenderer.invoke('app:takeOpenTarget'),
   onOpenTarget: (callback) => {
