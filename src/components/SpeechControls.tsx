@@ -189,7 +189,7 @@ export const SpeechPlayerBar: React.FC<{ speech: SpeechController }> = ({ speech
     return (
       <div
         role="alert"
-        className="absolute bottom-2 inset-x-2 min-[480px]:inset-x-auto min-[480px]:left-3 min-[480px]:bottom-3 z-30 px-3 py-1.5 rounded border-2 border-black font-black text-xs shadow-[3px_3px_0px_#000] bg-[#FF6B6B] text-white flex items-center justify-between gap-2"
+        className="absolute bottom-2 inset-x-2 min-[480px]:inset-x-auto min-[480px]:right-3 min-[480px]:bottom-3 z-30 px-3 py-1.5 rounded border-2 border-black font-black text-xs shadow-[3px_3px_0px_#000] bg-[#FF6B6B] text-white flex items-center justify-between gap-2"
       >
         <span className="min-w-0">{state.error}</span>
         <DismissButton onClick={speech.clearError} />
@@ -205,7 +205,7 @@ export const SpeechPlayerBar: React.FC<{ speech: SpeechController }> = ({ speech
   return (
     <div
       data-testid="speech-player"
-      className="absolute bottom-2 inset-x-2 min-[480px]:inset-x-auto min-[480px]:left-3 min-[480px]:bottom-3 z-30 flex items-center justify-between min-[480px]:justify-start gap-1 p-1 rounded border-2 border-black dark:border-zinc-700 bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 shadow-[3px_3px_0px_#000] text-xs font-black select-none"
+      className="absolute bottom-2 right-2 min-[480px]:right-3 min-[480px]:bottom-3 max-w-[calc(100%-16px)] z-30 flex items-center justify-end gap-1 p-1 rounded border-2 border-black dark:border-zinc-700 bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 shadow-[3px_3px_0px_#000] text-xs font-black select-none"
     >
       <Volume2 size={14} strokeWidth={2.5} className="mx-1 shrink-0 animate-pulse hidden min-[380px]:block" />
       <button type="button" className={playerButton} onClick={speech.previous} disabled={state.index === 0} title="Párrafo anterior" aria-label="Párrafo anterior">
