@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, Shield, Save, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Shield, Save, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import type { AppConfig } from '../types/electron';
@@ -18,7 +18,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onConfigChanged,
   onSaved,
 }) => {
-  const [notesPath, setNotesPath] = useState('');
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -46,23 +45,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (isOpen && window.electronAPI) {
       window.electronAPI.getAppConfig().then((cfg) => {
-        setNotesPath(cfg.notesPath || '');
         setAlwaysOnTop(cfg.alwaysOnTop || false);
         setIsDarkMode(Boolean(cfg.darkMode));
       });
       setStatusMessage(null);
     }
   }, [isOpen]);
-
-  const handleSelectFolder = async () => {
-    if (!window.electronAPI) return;
-    const path = await window.electronAPI.selectFolder();
-    if (path) {
-      setNotesPath(path);
-      setStatusMessage({ type: 'success', text: `Carpeta actualizada a: ${path}` });
-      onConfigChanged();
-    }
-  };
 
   const handleSaveSettings = async () => {
     if (!window.electronAPI) return;
@@ -112,27 +100,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <span>{statusMessage.text}</span>
           </div>
         )}
-
-        {/* Section: Notes Directory */}
-        <div className="flex flex-col gap-1.5 p-3 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded shadow-[2px_2px_0px_#000]">
-          <span className="font-black flex items-center gap-1.5 uppercase text-black dark:text-zinc-200">
-            <Folder size={14} strokeWidth={2.5} /> Carpeta de Notas
-          </span>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              readOnly
-              value={notesPath}
-              className="flex-1 bg-neutral-100 dark:bg-zinc-700 text-black dark:text-zinc-200 border border-black dark:border-zinc-600 px-2 py-1.5 text-xs font-mono rounded truncate"
-            />
-            <Button variant="secondary" size="sm" onClick={handleSelectFolder} className="dark:bg-zinc-700 dark:text-zinc-200 dark:border-zinc-500">
-              Examinar
-            </Button>
-          </div>
-          <span className="text-[10px] text-neutral-500 dark:text-zinc-400 font-medium">
-            Aquí se almacenan los archivos .md de tus notas. Puedes seleccionar cualquier carpeta existente.
-          </span>
-        </div>
 
         {/* Section: Options & Portability */}
         <div className="flex flex-col gap-2 p-3 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded shadow-[2px_2px_0px_#000]">

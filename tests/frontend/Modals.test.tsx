@@ -53,7 +53,7 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     expect(props.onClose).toHaveBeenCalled();
   });
 
-  it('[HAPPY 2/2] SettingsModal loads config and allows folder selection', async () => {
+  it('[HAPPY 2/2] SettingsModal loads the options and no longer shows the notes folder', async () => {
     render(
       <SettingsModal
         isOpen={true}
@@ -63,15 +63,12 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('/notes')).toBeInTheDocument();
+      expect(window.electronAPI?.getAppConfig).toHaveBeenCalled();
     });
-
-    const browseBtn = screen.getByText('Examinar');
-    fireEvent.click(browseBtn);
-
-    await waitFor(() => {
-      expect(window.electronAPI?.selectFolder).toHaveBeenCalled();
-    });
+    expect(screen.getByText(/Modo Oscuro/)).toBeInTheDocument();
+    expect(screen.queryByText(/Carpeta de Notas/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Examinar')).not.toBeInTheDocument();
+    expect(screen.queryByDisplayValue('/notes')).not.toBeInTheDocument();
   });
 
   // --- 80% DESTRUCTIVE / CHAOS / ADVERSARIAL TESTS ---
@@ -116,7 +113,7 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('/notes')).toBeInTheDocument();
+      expect(window.electronAPI?.getAppConfig).toHaveBeenCalled();
     });
     expect(screen.queryByText(/github/i)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/ghp_/i)).not.toBeInTheDocument();
@@ -143,7 +140,7 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('/notes')).toBeInTheDocument();
+      expect(window.electronAPI?.getAppConfig).toHaveBeenCalled();
     });
     fireEvent.click(screen.getByText('Guardar Ajustes'));
 
