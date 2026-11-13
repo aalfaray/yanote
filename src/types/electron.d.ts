@@ -11,8 +11,20 @@ export interface AppConfig {
   darkMode?: boolean;
   /** Window opacity 0.3–1 */
   opacity?: number;
-  openTabs?: TabItem[];
-  activeTabId?: string | null;
+  /** Notes left open last time; they reopen on the next start */
+  openTabs?: SavedTab[];
+  activeTabPath?: string | null;
+  /** Position of the active tab in openTabs */
+  activeTabIndex?: number;
+  /** Extra Claude accounts and the one new chats use */
+  claudeAccounts?: { id: string; name: string; configDir: string }[];
+  activeClaudeAccount?: string;
+  /** Saved ideas, newest first */
+  ideas?: SavedIdea[];
+  /** Windows notification when a Claude chat finishes or waits for you (default on) */
+  notifyClaude?: boolean;
+  /** The welcome note is shown only on the very first start */
+  welcomeSeen?: boolean;
   /** History of opened files, newest first */
   recentFiles?: RecentFile[];
 }
@@ -23,6 +35,29 @@ export interface ExportResult {
   /** The user closed the "Save as" dialog */
   canceled?: boolean;
   error?: string;
+}
+
+/** A tab remembered for the next start (entries without `kind` are notes, the old format) */
+export type SavedTab =
+  | { kind?: 'note'; path: string; title: string; isPinned?: boolean }
+  | { kind: 'scratch'; title: string; content: string; isPinned?: boolean }
+  | { kind: 'terminal'; title: string; shell: TerminalShell; cwd?: string }
+  | { kind: 'claude'; title: string; cwd?: string; sessionId?: string; accountId?: string; pins?: ChatPin[]; provider?: ChatProvider };
+
+/** A text saved with right-click > "Guardar idea" */
+export interface SavedIdea {
+  id: string;
+  text: string;
+  /** Where it came from, e.g. the chat or note title */
+  source?: string;
+  /** Folder of that chat/note: a new chat from the idea starts there */
+  cwd?: string;
+  createdAt: number;
+}
+
+export interface ChatPin {
+  id: string;
+  text: string;
 }
 
 export interface RecentFile {
@@ -47,7 +82,13 @@ export interface TabItem {
   cwd?: string;
   /** Command typed into a new terminal right after it starts (e.g. Claude sign-in) */
   initialCommand?: string;
-  /** Claude Code session of a chat tab, resumed when the app reopens */
+  /** Claude account a chat tab uses (kind === 'claude') */
+  accountId?: string;
+  /** Text a new chat starts with in its message box (not sent until the user sends it) */
+  initialDraft?: string;
+  /** Paragraphs pinned on top of a chat */
+  chatPins?: ChatPin[];
+  /** Claude Code session of a chat tab, to resume it after a restart */
   sessionId?: string;
   /** Agent behind a chat tab (kind === 'claude'); Claude when absent */
   provider?: ChatProvider;
@@ -187,9 +228,23 @@ export interface ElectronAPI {
   /** Restart into the downloaded version */
   installUpdate?: () => Promise<boolean>;
   onUpdateEvent?: (callback: (event: UpdateEvent) => void) => () => void;
+  /** `skipIfFocused`: don't show it if the yanote window has focus (you're already looking at that chat) */
+  notify?: (payload: { title: string; body?: string; tabId?: string; skipIfFocused?: boolean }) => Promise<boolean>;
+  onFocusTab?: (callback: (tabId: string) => void) => () => void;
+  /** Editing command for the app's right-click menu, run on the focused field / page selection */
+  editCommand?: (command: import('../lib/contextMenu').EditCommand) => Promise<boolean>;
+  /** Writes an entry to the system log (yanote.log, shared with the main process) */
+  log?: (entry: { level: 'error' | 'warn' | 'info'; scope: string; message: string; stack?: string; context?: Record<string, unknown> }) => Promise<boolean>;
+  /** Shows yanote.log in Explorer */
+  revealLog?: () => Promise<void>;
+  /** Disk path of a dropped File, or null when it has none */
+  getPathForFile?: (file: File) => string | null;
+  // "Abrir con yanote" (Explorer context menu / command line)
+  takeOpenTarget?: () => Promise<OpenTarget | null>;
+  onOpenTarget?: (callback: (target: OpenTarget) => void) => () => void;
 
   // Claude chat sessions (Agent SDK)
-  claudeStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: ClaudePermissionMode; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
+  claudeStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: ClaudePermissionMode; model?: string; accountId?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
   claudeSend?: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => ClaudeResult;
   claudeRespondPermission?: (id: string, requestId: string, decision: ClaudePermissionDecision) => Promise<boolean>;
   claudeInterrupt?: (id: string) => ClaudeResult;
@@ -198,8 +253,27 @@ export interface ElectronAPI {
   /** null returns to the model's default effort */
   claudeSetEffort?: (id: string, level: ClaudeEffortLevel | null) => ClaudeResult;
   claudeStop?: (id: string) => Promise<boolean>;
-  /** Messages of a past Claude Code session (user/assistant, chronological) */
-  claudeHistory?: (sessionId: string) => Promise<{ success: boolean; messages?: Record<string, unknown>[]; error?: string }>;
+  /** Plan usage (5-hour / weekly windows, like /usage) through a live chat session */
+  claudeUsage?: (id?: string) => Promise<ClaudeUsage>;
+  /** Earlier messages of a saved conversation (to show them again after a restart) */
+  claudeHistory?: (sessionId: string, accountId?: string) => Promise<Record<string, unknown>[]>;
+  /** Model and effort from Claude Code's settings for that account/folder */
+  claudeDefaults?: (accountId?: string, cwd?: string) => Promise<import('../lib/claudeChat').ClaudeDefaults>;
+  /** Several Claude accounts (each one its own Claude Code sign-in) */
+  claudeAccounts?: {
+    list: () => Promise<{ accounts: ClaudeAccount[]; activeId: string }>;
+    status: (id: string) => Promise<ClaudeAccountStatus>;
+    /** Claude Code's own `auth logout` for that account (the main one: on the whole PC) */
+    logout: (id: string) => Promise<{ success: boolean; error?: string }>;
+    add: (name?: string) => Promise<ClaudeAccount>;
+    rename: (id: string, name: string) => Promise<boolean>;
+    remove: (id: string) => Promise<boolean>;
+    setActive: (id: string) => Promise<boolean>;
+    /** PowerShell line running Claude Code's own `auth login` for that account */
+    loginCommand: (id: string) => Promise<string | null>;
+    /** Copies a conversation so another account can resume it */
+    copySession: (sessionId: string, fromId: string, toId: string) => Promise<{ success: boolean; copied?: boolean; error?: string }>;
+  };
   onClaudeEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
 
   // Antigravity CLI (Gemini) chat over ACP — same events as Claude
@@ -216,7 +290,46 @@ export interface ElectronAPI {
   saveClipboardImage?: () => Promise<string | null>;
 }
 
+/** One plan window from /usage: percent used (0-100) and when it resets (ISO) */
+export interface ClaudeUsageWindow {
+  percent: number;
+  resetsAt: string | null;
+}
+
+export interface ClaudeUsage {
+  success: boolean;
+  error?: string;
+  /** false for API keys / providers without plan limits */
+  available?: boolean;
+  plan?: string | null;
+  fiveHour?: ClaudeUsageWindow | null;
+  weekly?: ClaudeUsageWindow | null;
+}
+
+export interface ClaudeAccount {
+  id: string;
+  name: string;
+  /** null = Claude Code's normal folder */
+  configDir: string | null;
+  isDefault: boolean;
+}
+
+export interface ClaudeAccountStatus {
+  success: boolean;
+  error?: string;
+  loggedIn?: boolean;
+  email?: string | null;
+  plan?: string | null;
+  method?: string | null;
+}
+
 export type UpdateMode = 'auto' | 'portable' | 'disabled';
+
+/** What "Abrir con yanote" asked to open */
+export interface OpenTarget {
+  type: 'folder' | 'file';
+  path: string;
+}
 
 export type UpdateEvent =
   | { type: 'available'; mode: UpdateMode; version: string; currentVersion: string; notes: string; url: string }

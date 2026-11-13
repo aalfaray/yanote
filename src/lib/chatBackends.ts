@@ -14,7 +14,7 @@ export interface ChatBackend {
   source: string;
   /** Command that signs in, typed into a terminal tab */
   loginCommand: string;
-  start: (options: { id: string; cwd?: string; resume?: string; permissionMode?: string; model?: string }) => Promise<{ success: boolean; error?: string; executable?: string }>;
+  start: (options: { id: string; cwd?: string; resume?: string; permissionMode?: string; model?: string; accountId?: string }) => Promise<{ success: boolean; error?: string; executable?: string }>;
   send: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => Result;
   respondPermission: (id: string, requestId: string, decision: ClaudePermissionDecision) => Promise<boolean> | undefined;
   interrupt: (id: string) => Result | undefined;
@@ -23,9 +23,9 @@ export interface ChatBackend {
   setEffort: (id: string, level: ClaudeEffortLevel | null) => Result | undefined;
   stop: (id: string) => Promise<boolean> | undefined;
   onEvent: (callback: (event: ClaudeEvent) => void) => (() => void) | undefined;
-  /** Past transcript to show when reopening (Antigravity replays it itself on load) */
-  history?: (sessionId: string) => Promise<{ success: boolean; messages?: Record<string, unknown>[]; error?: string }>;
 }
+
+const unsupported = () => Promise.resolve({ success: false, error: 'Esta versión de yanote no permite enviar mensajes a este chat' });
 
 export const PROVIDER_LABELS: Record<ChatProvider, string> = { claude: 'Claude', antigravity: 'Antigravity' };
 
@@ -33,14 +33,14 @@ export const PROVIDER_LABELS: Record<ChatProvider, string> = { claude: 'Claude',
 export function getChatBackend(api: ElectronAPI | undefined, provider: ChatProvider = 'claude'): ChatBackend | null {
   if (!api) return null;
   if (provider === 'antigravity') {
-    if (!api.agyStart || !api.agySend) return null;
+    if (!api.agyStart) return null;
     return {
       provider,
       label: 'Antigravity',
       source: 'Antigravity CLI',
       loginCommand: 'agy',
       start: (o) => api.agyStart!(o),
-      send: (id, p) => api.agySend!(id, p),
+      send: (id, p) => (api.agySend ? api.agySend(id, p) : unsupported()),
       respondPermission: (id, r, d) => api.agyRespondPermission?.(id, r, d),
       interrupt: (id) => api.agyInterrupt?.(id),
       setPermissionMode: (id, m) => api.agySetPermissionMode?.(id, m),
@@ -50,14 +50,14 @@ export function getChatBackend(api: ElectronAPI | undefined, provider: ChatProvi
       onEvent: (cb) => api.onAgyEvent?.(cb),
     };
   }
-  if (!api.claudeStart || !api.claudeSend) return null;
+  if (!api.claudeStart) return null;
   return {
     provider: 'claude',
     label: 'Claude',
     source: 'Claude Code',
     loginCommand: 'claude auth login',
     start: (o) => api.claudeStart!(o as Parameters<NonNullable<ElectronAPI['claudeStart']>>[0]),
-    send: (id, p) => api.claudeSend!(id, p),
+    send: (id, p) => (api.claudeSend ? api.claudeSend(id, p) : unsupported()),
     respondPermission: (id, r, d) => api.claudeRespondPermission?.(id, r, d),
     interrupt: (id) => api.claudeInterrupt?.(id),
     setPermissionMode: (id, m) => api.claudeSetPermissionMode?.(id, m as never),
@@ -65,6 +65,5 @@ export function getChatBackend(api: ElectronAPI | undefined, provider: ChatProvi
     setEffort: (id, l) => api.claudeSetEffort?.(id, l),
     stop: (id) => api.claudeStop?.(id),
     onEvent: (cb) => api.onClaudeEvent?.(cb),
-    history: api.claudeHistory ? (s) => api.claudeHistory!(s) : undefined,
   };
 }

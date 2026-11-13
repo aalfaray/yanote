@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { getLogger } = require('./logService.cjs');
+
+const log = getLogger('configService');
 
 const MIN_OPACITY = 0.3;
 const MAX_OPACITY = 1;
@@ -34,6 +37,71 @@ function sanitizeRecentFiles(value) {
     .slice(0, MAX_RECENT_FILES);
 }
 
+const MAX_OPEN_TABS = 50;
+
+/** Notes left open last time (files only), so they reopen on the next start. */
+const MAX_SCRATCH_CHARS = 500000;
+const str = (v, max = 4096) => (typeof v === 'string' && v ? v.slice(0, max) : undefined);
+const SHELLS = new Set(['powershell', 'cmd']);
+
+/** Tabs left open last time: notes, unsaved notes, terminals and Claude chats. */
+function sanitizeOpenTabs(list) {
+  if (!Array.isArray(list)) return [];
+  const seenPaths = new Set();
+  const out = [];
+  for (const t of list) {
+    if (!t || typeof t !== 'object') continue;
+    const title = str(t.title, 200);
+    const kind = t.kind || 'note';
+    if (kind === 'note') {
+      if (typeof t.path !== 'string' || !t.path.trim() || seenPaths.has(t.path)) continue;
+      seenPaths.add(t.path);
+      out.push({ kind: 'note', path: t.path, title: title || path.basename(t.path), isPinned: Boolean(t.isPinned) });
+    } else if (kind === 'scratch') {
+      if (typeof t.content !== 'string') continue;
+      out.push({ kind: 'scratch', title: title || 'scratch.md', content: t.content.slice(0, MAX_SCRATCH_CHARS), isPinned: Boolean(t.isPinned) });
+    } else if (kind === 'terminal') {
+      out.push({ kind: 'terminal', title: title || 'Terminal', shell: SHELLS.has(t.shell) ? t.shell : 'powershell', ...(str(t.cwd) ? { cwd: str(t.cwd) } : {}) });
+    } else if (kind === 'claude') {
+      const pins = Array.isArray(t.pins)
+        ? t.pins.filter((p) => p && typeof p.id === 'string' && typeof p.text === 'string').slice(0, 50).map((p) => ({ id: p.id.slice(0, 80), text: p.text.slice(0, 20000) }))
+        : [];
+      out.push({
+        kind: 'claude',
+        title: title || 'Claude',
+        ...(str(t.cwd) ? { cwd: str(t.cwd) } : {}),
+        ...(typeof t.sessionId === 'string' && /^[\w-]{1,100}$/.test(t.sessionId) ? { sessionId: t.sessionId } : {}),
+        ...(typeof t.accountId === 'string' && /^[\w-]{1,64}$/.test(t.accountId) ? { accountId: t.accountId } : {}),
+        ...(pins.length ? { pins } : {}),
+      });
+    } else {
+      continue;
+    }
+    if (out.length >= MAX_OPEN_TABS) break;
+  }
+  return out;
+}
+
+const MAX_IDEAS = 200;
+
+/** Ideas saved from the right-click menu: text + where it came from. */
+function sanitizeIdeas(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const i of list) {
+    if (!i || typeof i.id !== 'string' || typeof i.text !== 'string' || !i.text.trim()) continue;
+    out.push({
+      id: i.id.slice(0, 80),
+      text: i.text.slice(0, 20000),
+      createdAt: Number.isFinite(i.createdAt) ? i.createdAt : 0,
+      ...(typeof i.source === 'string' && i.source ? { source: i.source.slice(0, 200) } : {}),
+      ...(typeof i.cwd === 'string' && i.cwd ? { cwd: i.cwd } : {}),
+    });
+    if (out.length >= MAX_IDEAS) break;
+  }
+  return out;
+}
+
 function loadConfig(configFilePath, defaultNotesPath) {
   try {
     if (fs.existsSync(configFilePath)) {
@@ -48,25 +116,37 @@ function loadConfig(configFilePath, defaultNotesPath) {
       return {
         notesPath: parsed.notesPath || defaultNotesPath,
         alwaysOnTop: Boolean(parsed.alwaysOnTop),
+        notifyClaude: parsed.notifyClaude !== false,
+        ideas: sanitizeIdeas(parsed.ideas),
+        claudeAccounts: Array.isArray(parsed.claudeAccounts) ? parsed.claudeAccounts : [],
+        activeClaudeAccount: typeof parsed.activeClaudeAccount === 'string' ? parsed.activeClaudeAccount : 'default',
         darkMode: Boolean(parsed.darkMode),
         opacity: parsed.opacity === undefined ? MAX_OPACITY : clampOpacity(parsed.opacity),
-        openTabs: Array.isArray(parsed.openTabs) ? parsed.openTabs : [],
-        activeTabId: parsed.activeTabId || null,
+        openTabs: sanitizeOpenTabs(parsed.openTabs),
+        activeTabPath: typeof parsed.activeTabPath === 'string' ? parsed.activeTabPath : null,
+        activeTabIndex: Number.isInteger(parsed.activeTabIndex) && parsed.activeTabIndex >= 0 ? parsed.activeTabIndex : null,
+        welcomeSeen: Boolean(parsed.welcomeSeen),
         recentFiles: sanitizeRecentFiles(parsed.recentFiles),
       };
     }
   } catch (err) {
     // If config file is corrupted, recovery gracefully with defaults
-    console.warn('Warning loading config, using defaults:', err.message);
+    log.warn('config unreadable, using defaults', err, { configFilePath });
   }
 
   return {
     notesPath: defaultNotesPath,
     alwaysOnTop: false,
+    notifyClaude: true,
+    ideas: [],
+    claudeAccounts: [],
+    activeClaudeAccount: 'default',
     darkMode: false,
     opacity: MAX_OPACITY,
     openTabs: [],
-    activeTabId: null,
+    activeTabPath: null,
+    activeTabIndex: null,
+    welcomeSeen: false,
     recentFiles: [],
   };
 }
@@ -79,6 +159,9 @@ function saveConfig(configFilePath, currentConfig, newConfig) {
     const merged = { ...currentConfig, ...newConfig };
     if (merged.opacity !== undefined) merged.opacity = clampOpacity(merged.opacity);
     if (merged.recentFiles !== undefined) merged.recentFiles = sanitizeRecentFiles(merged.recentFiles);
+    if (merged.openTabs !== undefined) merged.openTabs = sanitizeOpenTabs(merged.openTabs);
+    if (merged.ideas !== undefined) merged.ideas = sanitizeIdeas(merged.ideas);
+    delete merged.activeTabId; // replaced by activeTabPath
     // Git/GitHub support was removed: never persist its legacy keys (incl. tokens)
     for (const key of LEGACY_KEYS) delete merged[key];
     const dir = path.dirname(configFilePath);
@@ -88,7 +171,7 @@ function saveConfig(configFilePath, currentConfig, newConfig) {
     fs.writeFileSync(configFilePath, JSON.stringify(merged, null, 2), 'utf8');
     return merged;
   } catch (err) {
-    console.error('Error saving config:', err.message);
+    log.error('saving config failed', err, { configFilePath });
     return currentConfig;
   }
 }
@@ -113,7 +196,7 @@ function migrateLegacyConfig(dataDir, legacyDirs) {
       }
     }
   } catch (err) {
-    console.error('Error migrating legacy config:', err.message);
+    log.error('migrating legacy config failed', err, { dataDir });
   }
   return null;
 }

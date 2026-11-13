@@ -79,4 +79,12 @@ describe('Frontend: UpdateNotice', () => {
     act(() => emit({ type: 'none', currentVersion: '1.0.0' }));
     expect(screen.getByRole('status')).toHaveTextContent('Ya tienes la última versión (v1.0.0)');
   });
+
+  it('closes a notice with its x before it fades', () => {
+    render(<UpdateNotice unsavedCount={0} />);
+    act(() => emit({ type: 'error', error: 'sin conexión' } as UpdateEvent));
+    expect(screen.getByRole('status')).toHaveTextContent('sin conexión');
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar aviso' }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
 });

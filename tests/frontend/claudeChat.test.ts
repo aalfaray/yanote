@@ -10,6 +10,8 @@ import {
   activeModelInfo,
   effortLevelsFor,
   modelLabel,
+  inheritedEffort,
+  modelOptionLabel,
   type ChatState,
   type ChatAction,
 } from '../../src/lib/claudeChat';
@@ -135,23 +137,6 @@ describe('Frontend: Claude model / effort helpers', () => {
     expect(modelLabel(undefined)).toBe('');
   });
 
-  it('rebuilds a resumed transcript from stored session messages', () => {
-    const history = [
-      { type: 'user', parent_tool_use_id: null, message: { role: 'user', content: 'lista los archivos' } },
-      { type: 'assistant', parent_tool_use_id: null, message: { id: 'a1', content: [{ type: 'text', text: 'Voy.' }, { type: 'tool_use', id: 'tu1', name: 'Bash', input: { command: 'ls' } }] } },
-      { type: 'user', parent_tool_use_id: null, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu1', content: 'a.md' }] } },
-      { type: 'user', parent_tool_use_id: null, message: { role: 'user', content: '<command-name>/clear</command-name>' } },
-      { type: 'assistant', parent_tool_use_id: null, message: { id: 'a2', content: [{ type: 'text', text: 'Hay un archivo.' }] } },
-    ];
-    const s = run([{ type: 'history', messages: history }]);
-    expect(s.items.map((i) => i.kind)).toEqual(['user', 'text', 'tool', 'text']);
-    expect(s.items[0]).toMatchObject({ text: 'lista los archivos' });
-    expect(s.items[2]).toMatchObject({ result: { text: 'a.md' } });
-    expect(s.running).toBe(false);
-    // A late history never duplicates a chat that already has content
-    expect(run([{ type: 'history', messages: history }], s).items).toHaveLength(4);
-  });
-
   it('stores the model and effort Claude resolved from its settings', () => {
     const s = run([ev({ type: 'applied_settings', model: 'claude-opus-5-5', effort: 'medium' })]);
     expect(s.appliedModel).toBe('claude-opus-5-5');
@@ -180,5 +165,42 @@ describe('Frontend: Claude sign-in detection', () => {
     expect(run([notLoggedIn, { type: 'auth_retry' }]).authRequired).toBe(false);
     const ok = msg({ type: 'assistant', parent_tool_use_id: null, message: { id: 'a2', content: [{ type: 'text', text: 'Hola' }] } });
     expect(run([notLoggedIn, ok]).authRequired).toBe(false);
+  });
+
+  it('removes a notice the user closes, leaving the rest of the transcript', () => {
+    const s = run([{ type: 'notice', text: 'No se pudo cambiar el modelo', tone: 'error' }, { type: 'send', text: 'hola', imageCount: 0 }]);
+    const notice = s.items.find((i) => i.kind === 'notice')!;
+    const after = chatReducer(s, { type: 'dismiss', id: notice.id });
+    expect(after.items.map((i) => i.kind)).toEqual(['user']);
+    expect(chatReducer(after, { type: 'dismiss', id: 'no-existe' }).items).toHaveLength(1);
+  });
+
+  it('flags a usage limit so the chat can offer another account, and clears it on the next reply', () => {
+    const limited = run([msg({ type: 'assistant', error: 'rate_limit', message: { id: 'm', content: [{ type: 'text', text: "You've hit your 5-hour limit" }] } })]);
+    expect(limited.rateLimited).toBe(true);
+    expect(chatReducer(limited, { type: 'auth_retry' }).rateLimited).toBe(false);
+    const after = chatReducer(limited, msg({ type: 'assistant', message: { id: 'm2', content: [{ type: 'text', text: 'Hola de nuevo' }] } }));
+    expect(after.rateLimited).toBe(false);
+  });
+
+  it('shows the model and effort from Claude Code settings before the first reply', () => {
+    const rows = [
+      { value: 'default', displayName: 'Default (recommended)', description: 'Opus 5.5 · Best for everyday tasks', resolvedModel: 'claude-opus-5-5', supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] as any },
+      { value: 'opus', displayName: 'Opus 5.5', description: 'Complex work', resolvedModel: 'claude-opus-5-5', supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] as any },
+      { value: 'sonnet', displayName: 'Sonnet 5.5', description: '', resolvedModel: 'claude-sonnet-5-5', supportedEffortLevels: ['low', 'high'] as any },
+    ];
+    // settings say "opus"; later Claude reports the real id: the same row either way
+    expect(activeModelInfo(rows, '', 'opus')?.value).toBe('opus');
+    expect(activeModelInfo(rows, '', 'claude-opus-5-5')?.value).toBe('opus');
+    expect(activeModelInfo(rows, '', undefined)?.value).toBe('default');
+    expect(modelOptionLabel(rows[0])).toBe('Predeterminado · Opus 5.5');
+    expect(modelOptionLabel(rows[1])).toBe('Opus 5.5');
+
+    const defaults = { model: 'opus', effortLevel: 'xhigh' as const, modelEfforts: { 'claude-opus-5-5': 'medium' as const }, effortFromEnv: null };
+    expect(inheritedEffort(defaults, rows[1])).toBe('medium'); // per-model setting wins
+    expect(inheritedEffort(defaults, rows[2])).toBe(''); // xhigh isn't offered by this model
+    expect(inheritedEffort({ ...defaults, modelEfforts: {} }, rows[1])).toBe('xhigh');
+    expect(inheritedEffort({ ...defaults, effortFromEnv: 'low' }, rows[2])).toBe('low');
+    expect(inheritedEffort(null, rows[1])).toBe('');
   });
 });

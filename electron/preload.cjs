@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Window controls
@@ -26,6 +26,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppConfig: () => ipcRenderer.invoke('fs:getAppConfig'),
   saveAppConfig: (config) => ipcRenderer.invoke('fs:saveAppConfig', config),
   revealInExplorer: (filePath) => ipcRenderer.invoke('app:revealInExplorer', filePath),
+
+  // Real disk path of a file dropped on the window (File.path no longer exists in Electron 32+)
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || null;
+    } catch (err) {
+      // preload can't load the log service: send it to the system log through IPC
+      ipcRenderer
+        .invoke('log:write', { level: 'warn', scope: 'preload.getPathForFile', message: `no disk path for dropped file: ${err && err.message}`, stack: err && err.stack })
+        .catch((logErr) => console.error('[preload] could not log', logErr));
+      return null;
+    }
+  },
+
+  // Windows notification; clicking it focuses the window and asks to show `tabId`
+  notify: (payload) => ipcRenderer.invoke('app:notify', payload),
+  onFocusTab: (callback) => {
+    const listener = (_event, tabId) => callback(tabId);
+    ipcRenderer.on('app:focusTab', listener);
+    return () => ipcRenderer.removeListener('app:focusTab', listener);
+  },
+
+  // Undo/redo/cut/copy/paste/select all for the app's right-click menu
+  editCommand: (command) => ipcRenderer.invoke('app:editCommand', command),
+
+  // System log: renderer failures land in the same file as the main process ones
+  log: (entry) => ipcRenderer.invoke('log:write', entry),
+  revealLog: () => ipcRenderer.invoke('log:reveal'),
+
+  // "Abrir con yanote" from Explorer: the launch target, then any later ones
+  takeOpenTarget: () => ipcRenderer.invoke('app:takeOpenTarget'),
+  onOpenTarget: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('app:openTarget', listener);
+    return () => ipcRenderer.removeListener('app:openTarget', listener);
+  },
 
 
   // Text to speech (native fallback)
@@ -70,7 +106,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   claudeSetModel: (id, model) => ipcRenderer.invoke('claude:setModel', id, model),
   claudeSetEffort: (id, level) => ipcRenderer.invoke('claude:setEffort', id, level),
   claudeStop: (id) => ipcRenderer.invoke('claude:stop', id),
-  claudeHistory: (sessionId) => ipcRenderer.invoke('claude:history', sessionId),
+  claudeUsage: (id) => ipcRenderer.invoke('claude:usage', id),
+  claudeHistory: (sessionId, accountId) => ipcRenderer.invoke('claude:history', sessionId, accountId),
+  claudeDefaults: (accountId, cwd) => ipcRenderer.invoke('claude:defaults', accountId, cwd),
+  claudeAccounts: {
+    list: () => ipcRenderer.invoke('claudeAccounts:list'),
+    status: (id) => ipcRenderer.invoke('claudeAccounts:status', id),
+    logout: (id) => ipcRenderer.invoke('claudeAccounts:logout', id),
+    add: (name) => ipcRenderer.invoke('claudeAccounts:add', name),
+    rename: (id, name) => ipcRenderer.invoke('claudeAccounts:rename', id, name),
+    remove: (id) => ipcRenderer.invoke('claudeAccounts:remove', id),
+    setActive: (id) => ipcRenderer.invoke('claudeAccounts:setActive', id),
+    loginCommand: (id) => ipcRenderer.invoke('claudeAccounts:loginCommand', id),
+    copySession: (sessionId, fromId, toId) => ipcRenderer.invoke('claudeAccounts:copySession', sessionId, fromId, toId),
+  },
   onClaudeEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('claude:event', listener);

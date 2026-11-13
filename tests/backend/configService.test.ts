@@ -107,6 +107,38 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     expect(config.openTabs).toEqual([]);
   });
 
+  it('keeps only valid, unique saved tabs and the welcome flag', () => {
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        welcomeSeen: true,
+        activeTabPath: 'C:\\n\\a.md',
+        openTabs: [{ path: 'C:\\n\\a.md', title: 'a.md', content: 'no se guarda' }, { path: 'C:\\n\\a.md' }, null, { title: 'sin ruta' }, { path: 42 }],
+      }),
+      'utf8'
+    );
+    const config = loadConfig(configPath, notesPath);
+    expect(config.welcomeSeen).toBe(true);
+    expect(config.activeTabPath).toBe('C:\\n\\a.md');
+    expect(config.openTabs).toEqual([{ kind: 'note', path: 'C:\\n\\a.md', title: 'a.md', isPinned: false }]);
+    expect(loadConfig(path.join(path.dirname(configPath), 'nuevo.json'), notesPath).welcomeSeen).toBe(false);
+  });
+
+  it('keeps saved ideas valid and bounded', () => {
+    const big = 'x'.repeat(30000);
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ ideas: [{ id: 'a', text: 'Idea', source: 'Claude', createdAt: 5 }, { id: 'b', text: '   ' }, null, { text: 'sin id' }, { id: 'c', text: big, createdAt: 'mal' }] }),
+      'utf8'
+    );
+    const config = loadConfig(configPath, notesPath);
+    expect(config.ideas).toHaveLength(2);
+    expect(config.ideas[0]).toEqual({ id: 'a', text: 'Idea', source: 'Claude', createdAt: 5 });
+    expect(config.ideas[1].text).toHaveLength(20000);
+    expect(config.ideas[1].createdAt).toBe(0);
+    expect(saveConfig(configPath, config, { ideas: 'no' }).ideas).toEqual([]);
+  });
+
   it('[CHAOS 5/8] resists prototype pollution attempts when saving', () => {
     const current = loadConfig(configPath, notesPath);
     const maliciousPayload = JSON.parse('{"__proto__": {"polluted": true}, "alwaysOnTop": true}');
@@ -218,5 +250,35 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     expect(migrateLegacyConfig(tempDir, [legacy])).toBeNull();
     expect(JSON.parse(fs.readFileSync(configPath, 'utf8')).notesPath).toBe('nuevo');
     expect(migrateLegacyConfig(path.join(tempDir, 'otro'), [path.join(tempDir, 'no-existe')])).toBeNull();
+  });
+
+  it('keeps every kind of saved tab, dropping malformed ones', () => {
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        activeTabIndex: 2,
+        openTabs: [
+          { path: 'C:\\n\\viejo.md', title: 'viejo.md' },
+          { kind: 'scratch', title: 'scratch-1.md', content: 'borrador' },
+          { kind: 'terminal', title: 'CMD', shell: 'cmd', cwd: 'C:\\p' },
+          { kind: 'terminal', title: 'Rara', shell: 'bash' },
+          { kind: 'claude', title: 'Claude', cwd: 'C:\\p', sessionId: 'abc-123', accountId: 'acc-1', pins: [{ id: 'p', text: 'fijado' }, { nada: 1 }] },
+          { kind: 'claude', sessionId: '../../etc', accountId: 'a b' },
+          { kind: 'scratch' },
+          { kind: 'desconocido', title: 'x' },
+        ],
+      }),
+      'utf8'
+    );
+    const config = loadConfig(configPath, notesPath);
+    expect(config.activeTabIndex).toBe(2);
+    expect(config.openTabs).toEqual([
+      { kind: 'note', path: 'C:\\n\\viejo.md', title: 'viejo.md', isPinned: false },
+      { kind: 'scratch', title: 'scratch-1.md', content: 'borrador', isPinned: false },
+      { kind: 'terminal', title: 'CMD', shell: 'cmd', cwd: 'C:\\p' },
+      { kind: 'terminal', title: 'Rara', shell: 'powershell' },
+      { kind: 'claude', title: 'Claude', cwd: 'C:\\p', sessionId: 'abc-123', accountId: 'acc-1', pins: [{ id: 'p', text: 'fijado' }] },
+      { kind: 'claude', title: 'Claude' },
+    ]);
   });
 });

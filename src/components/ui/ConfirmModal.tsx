@@ -78,7 +78,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 variant="secondary"
                 size="sm"
                 onClick={onCancel}
-                className="flex-1 py-1.5 font-bold dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600"
+                className="flex-1 py-1.5 font-bold"
               >
                 {cancelText}
               </Button>

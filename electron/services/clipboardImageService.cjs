@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { getLogger, isNotFound } = require('./logService.cjs');
+
+const log = getLogger('clipboardImageService');
 
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -14,15 +17,17 @@ function cleanupOld(dir, now = Date.now()) {
   let entries = [];
   try {
     entries = fs.readdirSync(dir);
-  } catch {
+  } catch (err) {
+    if (!isNotFound(err)) log.warn('cleanup: cannot list pasted images folder', err, { dir });
     return;
   }
   for (const name of entries) {
     const file = path.join(dir, name);
     try {
       if (now - fs.statSync(file).mtimeMs > MAX_AGE_MS) fs.unlinkSync(file);
-    } catch {
+    } catch (err) {
       // in use or already gone
+      if (!isNotFound(err)) log.warn('cleanup: cannot delete old pasted image', err, { file });
     }
   }
 }

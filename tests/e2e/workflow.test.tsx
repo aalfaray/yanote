@@ -18,6 +18,9 @@ vi.mock('../../src/components/Editor', () => ({
           }
         }}
       />
+      {/* What MDXEditor does right after loading a note: reformat it (onChange with the normalization flag) */}
+      <button data-testid="mock-normalize" onClick={() => onChange(`${markdown}
+`, true)} />
     </div>
   ),
 }));
@@ -328,9 +331,16 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
   });
 
   it('[CHAOS E2E 7/8] Double-click rename persists file change on disk', async () => {
+    // The note on disk comes back from the previous session
+    window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
+      notesPath: '/notes',
+      alwaysOnTop: false,
+      openTabs: [{ path: '/notes/Bienvenido.md', title: 'Bienvenido.md' }],
+    });
     render(<App />);
 
     await waitFor(() => {
+      expect(window.electronAPI?.readFile).toHaveBeenCalledWith('/notes/Bienvenido.md');
       expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
     });
 
@@ -538,5 +548,163 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     await waitFor(() => {
       expect(screen.getByText(/Modo Vista Previa Enriquecida/i)).toBeInTheDocument();
     });
+  });
+
+  describe('startup session', () => {
+    const config = (extra: object) =>
+      (window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({ notesPath: '/notes', alwaysOnTop: false, ...extra }));
+
+    it('shows the welcome note only on the first start and remembers it was seen', async () => {
+      config({});
+      render(<App />);
+      await waitFor(() => expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith({ welcomeSeen: true }));
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      // never opens notes from the folder on its own
+      expect(window.electronAPI?.readFile).not.toHaveBeenCalled();
+    });
+
+    it('after the first start, opens an empty note instead of the welcome', async () => {
+      config({ welcomeSeen: true });
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      expect(screen.queryByText('Bienvenido.md')).not.toBeInTheDocument();
+    });
+
+    it('reopens the notes left open last time, skipping missing ones, and keeps the active one', async () => {
+      writtenFiles['/notes/a.md'] = '# A';
+      writtenFiles['/notes/b.md'] = '# B';
+      window.electronAPI!.readFile = vi.fn().mockImplementation((p: string) =>
+        Promise.resolve(p in writtenFiles ? { success: true, content: writtenFiles[p] } : { success: false, error: 'no existe' })
+      );
+      config({
+        welcomeSeen: true,
+        openTabs: [
+          { path: '/notes/a.md', title: 'a.md' },
+          { path: '/notes/borrado.md', title: 'borrado.md' },
+          { path: '/notes/b.md', title: 'b.md', isPinned: true },
+        ],
+        activeTabPath: '/notes/a.md',
+      });
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('b.md').length).toBeGreaterThanOrEqual(1));
+      expect(screen.getAllByText('a.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('borrado.md')).not.toBeInTheDocument();
+      expect(screen.queryByText('Bienvenido.md')).not.toBeInTheDocument();
+      expect((screen.getByTestId('mock-markdown-textarea') as HTMLTextAreaElement).value).toBe('# A');
+    });
+
+    it('saves the open notes so they come back next time', async () => {
+      config({ welcomeSeen: true });
+      window.electronAPI!.openMarkdownFile = vi.fn().mockResolvedValue({
+        files: [{ path: '/proyectos/plan.md', name: 'plan.md', content: '# Plan' }],
+        errors: [],
+      });
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      fireEvent.keyDown(window, { key: 'o', ctrlKey: true });
+      await waitFor(
+        () =>
+          expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith({
+            openTabs: [
+              { kind: 'scratch', title: 'scratch-1.md', content: '', isPinned: false },
+              { kind: 'note', path: '/proyectos/plan.md', title: 'plan.md', isPinned: false },
+            ],
+            activeTabIndex: 1,
+          }),
+        { timeout: 3000 }
+      );
+    });
+  });
+
+  describe('drag & drop of .md files', () => {
+    const dropOn = (target: Element | Window, files: File[]) => {
+      const dataTransfer = { files, types: ['Files'], dropEffect: 'none' };
+      fireEvent.dragEnter(target, { dataTransfer });
+      fireEvent.dragOver(target, { dataTransfer });
+      return fireEvent.drop(target, { dataTransfer });
+    };
+
+    beforeEach(() => {
+      window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({ notesPath: '/notes', alwaysOnTop: false, welcomeSeen: true });
+      window.electronAPI!.getPathForFile = vi.fn((f: File) => `/docs/${f.name}`);
+      writtenFiles['/docs/plan.md'] = '# Plan soltado';
+      writtenFiles['/docs/ideas.markdown'] = '# Ideas';
+    });
+
+    it('opens every dropped markdown file in its own tab, even when dropped on the editor', async () => {
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      const editor = screen.getByTestId('mock-markdown-textarea');
+      const notDefault = dropOn(editor, [new File(['x'], 'plan.md'), new File(['x'], 'ideas.markdown'), new File(['x'], 'foto.png')]);
+      // the app handled it (no navigation to the file)
+      expect(notDefault).toBe(false);
+      await waitFor(() => expect(screen.getAllByText('ideas.markdown').length).toBeGreaterThanOrEqual(1));
+      expect(screen.getAllByText('plan.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('foto.png')).not.toBeInTheDocument();
+      // the empty start-up note was replaced, not kept next to them
+      expect(screen.queryByText('scratch-1.md')).not.toBeInTheDocument();
+      expect(window.electronAPI?.readFile).toHaveBeenCalledWith('/docs/plan.md');
+      await waitFor(() =>
+        expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith(
+          expect.objectContaining({ recentFiles: expect.arrayContaining([expect.objectContaining({ path: '/docs/plan.md' })]) })
+        )
+      );
+    });
+
+    it('focuses an already open note instead of duplicating it', async () => {
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      dropOn(window, [new File(['x'], 'plan.md')]);
+      await waitFor(() => expect(screen.getAllByText('plan.md').length).toBeGreaterThanOrEqual(1));
+      const count = screen.getAllByText('plan.md').length;
+      dropOn(window, [new File(['x'], 'plan.md')]);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(screen.getAllByText('plan.md').length).toBe(count);
+    });
+
+    it('shows the drop hint while dragging files and hides it after the drop', async () => {
+      render(<App />);
+      const dataTransfer = { files: [], types: ['Files'] };
+      fireEvent.dragEnter(window, { dataTransfer });
+      expect(await screen.findByTestId('drop-overlay')).toBeInTheDocument();
+      fireEvent.drop(window, { dataTransfer });
+      await waitFor(() => expect(screen.queryByTestId('drop-overlay')).not.toBeInTheDocument());
+    });
+
+    it('ignores non-markdown files and reports files without a disk path', async () => {
+      window.electronAPI!.getPathForFile = vi.fn(() => null);
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      dropOn(window, [new File(['x'], 'foto.png')]);
+      expect(window.electronAPI?.readFile).not.toHaveBeenCalled();
+      dropOn(window, [new File(['x'], 'nota.md')]);
+      expect(await screen.findByText(/No se pudo abrir: nota\.md/)).toBeInTheDocument();
+    });
+  });
+
+  it('opening a note never marks it unsaved, even when the editor reformats it; typing does', async () => {
+    window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
+      notesPath: '/notes',
+      alwaysOnTop: false,
+      welcomeSeen: true,
+      openTabs: [{ path: '/notes/AGENTS.md', title: 'AGENTS.md' }],
+    });
+    render(<App />);
+    await waitFor(() => expect(screen.getAllByText('AGENTS.md').length).toBeGreaterThanOrEqual(1));
+    fireEvent.click(screen.getByTestId('mock-normalize'));
+    expect(screen.queryByTitle('Cambios sin guardar')).not.toBeInTheDocument();
+    expect(screen.queryByText(/sin guardar/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('mock-markdown-textarea'), { target: { value: '# Editado' } });
+    expect(screen.getAllByTitle('Cambios sin guardar').length).toBeGreaterThan(0);
+  });
+
+  it('the floating notice has an x that closes it right away', async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1));
+    fireEvent.keyDown(screen.getByTestId('mock-markdown-textarea'), { key: 's', ctrlKey: true });
+    const notice = await screen.findByText(/Guardado/);
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar aviso' }));
+    expect(notice).not.toBeInTheDocument();
   });
 });

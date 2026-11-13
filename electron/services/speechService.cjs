@@ -1,6 +1,9 @@
 // Native text-to-speech fallback using Windows System.Speech (SAPI) through PowerShell.
 // Used by the renderer when the Web Speech API exposes no voices.
 const { spawn } = require('child_process');
+const { getLogger } = require('./logService.cjs');
+
+const log = getLogger('speechService');
 
 // Script adapted from the standalone System.Speech script: picks the first enabled
 // Spanish voice (falls back to the default voice), speaks each segment to the default
@@ -53,8 +56,9 @@ function createSpeechService({ spawnFn = spawn, platform = process.platform } = 
     current = null;
     try {
       proc.kill();
-    } catch {
+    } catch (err) {
       // process already gone
+      log.warn('stopping speech process failed', err);
     }
     return true;
   }

@@ -9,6 +9,7 @@ Un editor de notas Markdown de escritorio **portable**, con **superposición (Al
 **[Página de yanote](https://aalfaray.github.io/yanote/)** · **[Última versión (.exe)](https://github.com/aalfaray/yanote/releases/latest)**
 
 - **Instalador** (`yanote-Setup-x.y.z.exe`): recomendado. Se actualiza solo: cuando hay una versión nueva, la app te pregunta y, si aceptas, la descarga, la instala y se reinicia.
+- **Abrir con yanote**: el instalador añade esta opción al clic derecho del Explorador en carpetas, en el fondo de una carpeta y en archivos `.md`. Una carpeta pasa a ser la carpeta de trabajo y abre un chat de Claude en ella; un `.md` se abre en una pestaña. Si yanote ya está abierto, se usa esa misma ventana.
 - **Portable** (`yanote-Portable-x.y.z.exe`): sin instalar. Te avisa de las versiones nuevas y abre la página de descarga.
 
 > Windows puede mostrar "Windows protegió su PC" porque la app no está firmada digitalmente: pulsa *Más información → Ejecutar de todas formas*.
@@ -117,3 +118,9 @@ El workflow comprueba que la etiqueta coincide con `package.json`, ejecuta los t
 
 ### Landing page
 La web está en [site/](site/) y se publica en GitHub Pages con [.github/workflows/pages.yml](.github/workflows/pages.yml) cada vez que cambia. Los botones de descarga apuntan siempre al `.exe` de la última release.
+
+## 📄 Licencia
+
+El código de yanote se publica bajo la licencia [MIT](LICENSE): puedes usarlo, modificarlo y redistribuirlo, también con fines comerciales, manteniendo el aviso de copyright.
+
+Los instaladores incluyen Claude Code, que es software de Anthropic y sigue bajo [sus propios términos](https://www.anthropic.com/legal/commercial-terms); la licencia MIT no se aplica a ese binario. Las demás dependencias mantienen sus licencias.

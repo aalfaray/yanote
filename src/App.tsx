@@ -9,10 +9,20 @@ import { SettingsModal } from './components/SettingsModal';
 import { RecentFilesDrawer } from './components/RecentFilesDrawer';
 import { addRecentFile, removeRecentFile } from './lib/recentFiles';
 import { ConfirmModal } from './components/ui/ConfirmModal';
-import type { TabItem, TerminalShell, RecentFile, ChatProvider } from './types/electron';
-import { Save, Check, AlertCircle, FileDown } from 'lucide-react';
-import { parentDir } from './lib/paths';
-import { serializeTabs, restoreTabs } from './lib/session';
+import type { TabItem, TerminalShell, RecentFile, OpenTarget, SavedIdea, ChatProvider } from './types/electron';
+import { Save, Check, AlertCircle, FileText, FileDown } from 'lucide-react';
+import { parentDir, isMarkdownFile, baseName, notePathOf } from './lib/paths';
+import { copyText } from './lib/clipboard';
+import { ClaudeUsageMeter, useClaudeUsage } from './components/ClaudeUsageMeter';
+import { chatNotificationFor } from './lib/claudeNotify';
+import { DismissButton } from './components/ui/DismissButton';
+import { IdeasDrawer } from './components/IdeasDrawer';
+import { addIdea, removeIdea } from './lib/ideas';
+import { toSavedTabs, restoreTab } from './lib/session';
+import { useAppContextMenu } from './hooks/useAppContextMenu';
+import { readAloudTarget, requestReadAloud } from './lib/readAloud';
+import { logError } from './lib/logger';
+import { AppContextMenu } from './components/ui/AppContextMenu';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
@@ -29,18 +39,26 @@ Este es un editor **portable y flotante** diseñado con la estética **Boldkit**
 > *Tip: Presiona Ctrl + S para guardar tu nota.*
 `;
 
+const WELCOME_TAB_ID = 'tab-welcome';
+
 export const App: React.FC = () => {
   // Tabs State
   const [tabs, setTabs] = useState<TabItem[]>([
     {
-      id: 'tab-welcome',
+      id: WELCOME_TAB_ID,
       title: 'Bienvenido.md',
       path: null,
       content: DEFAULT_WELCOME_MARKDOWN,
       isDirty: false,
     },
   ]);
-  const [activeTabId, setActiveTabId] = useState<string>('tab-welcome');
+  const [activeTabId, setActiveTabId] = useState<string>(WELCOME_TAB_ID);
+  // Set once the previous session is restored: saving before that would wipe it
+  const sessionReadyRef = useRef(false);
+  // Settings > "Avisarme cuando Claude termine" (on by default)
+  const notifyClaudeRef = useRef(true);
+  // Claude account new chats start with (Settings > accounts / the chat's account menu)
+  const activeAccountRef = useRef('default');
 
   // App & Window State
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
@@ -51,6 +69,9 @@ export const App: React.FC = () => {
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFilesDrawerOpen, setIsFilesDrawerOpen] = useState(false);
+  const [isIdeasOpen, setIsIdeasOpen] = useState(false);
+  const [ideas, setIdeas] = useState<SavedIdea[]>([]);
+  const ideasRef = useRef<SavedIdea[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const recentFilesRef = useRef<RecentFile[]>([]);
   const [closingTab, setClosingTab] = useState<TabItem | null>(null);
@@ -82,8 +103,10 @@ export const App: React.FC = () => {
     try {
       const dir = await window.electronAPI.getNotesPath();
       setNotesDir(dir);
+      const config = await window.electronAPI.getAppConfig();
+      notifyClaudeRef.current = config?.notifyClaude !== false;
     } catch (err) {
-      console.error('Error refreshing notes:', err);
+      logError('App.refreshNotes', err);
     }
   }, []);
 
@@ -92,11 +115,17 @@ export const App: React.FC = () => {
       if (window.electronAPI) {
         try {
           const config = await window.electronAPI.getAppConfig();
+          if (Array.isArray(config.ideas)) {
+            ideasRef.current = config.ideas;
+            setIdeas(config.ideas);
+          }
           if (Array.isArray(config.recentFiles)) {
             recentFilesRef.current = config.recentFiles;
             setRecentFiles(config.recentFiles);
           }
           setIsAlwaysOnTop(config.alwaysOnTop || false);
+          notifyClaudeRef.current = config.notifyClaude !== false;
+          if (typeof config.activeClaudeAccount === 'string') activeAccountRef.current = config.activeClaudeAccount;
           if (typeof config.opacity === 'number') setWindowOpacity(config.opacity);
           const dark = Boolean(config.darkMode);
           setIsDarkMode(dark);
@@ -106,70 +135,81 @@ export const App: React.FC = () => {
             document.documentElement.classList.remove('dark');
           }
 
-          // Reopen what was open last time (notes, terminals, Claude chats)
-          const restored = await restoreTabs(config.openTabs, config.activeTabId, (p) => window.electronAPI.readFile(p));
-          if (restored) {
-            // Never wipe tabs the user already opened or edited while this was loading
-            const cur = tabsRef.current;
-            if (!(cur.length > 1 || (cur.length === 1 && cur[0].isDirty))) {
-              setTabs(restored.tabs);
-              setActiveTabId(restored.activeTabId);
+          // Reopen the tabs left open last time: notes (that still exist), unsaved notes,
+          // terminals and Claude chats (resumed), in the same order
+          const saved = Array.isArray(config.openTabs) ? config.openTabs : [];
+          const restored: TabItem[] = [];
+          let activeRestored: TabItem | undefined;
+          const stamp = Date.now();
+          for (const [i, t] of saved.entries()) {
+            const id = `${t.kind === 'claude' ? 'claude' : t.kind === 'terminal' ? 'term' : 'tab'}-restored-${i}-${stamp}`;
+            let tab: TabItem | null = null;
+            if (!t.kind || t.kind === 'note') {
+              const contentRes = await window.electronAPI.readFile(t.path);
+              if (contentRes.success && contentRes.content !== undefined) {
+                tab = { id, title: t.title, path: t.path, content: contentRes.content, isDirty: false, isPinned: t.isPinned };
+              }
+              if (tab && !Number.isInteger(config.activeTabIndex) && t.path === config.activeTabPath) activeRestored = tab;
+            } else {
+              tab = restoreTab(t, id);
             }
-            return;
+            if (!tab) continue;
+            restored.push(tab);
+            if (i === config.activeTabIndex) activeRestored = tab;
           }
 
-          const res = await window.electronAPI.listNotes();
-          if (res.success && res.notes.length > 0) {
-            const firstNote = res.notes[0];
-            const contentRes = await window.electronAPI.readFile(firstNote.path);
-            if (contentRes.success && contentRes.content !== undefined) {
-              setTabs((prev) => {
-                // If user has already opened or edited other tabs, don't wipe them out
-                if (prev.length > 1 || (prev.length === 1 && prev[0].isDirty)) {
-                  return prev;
-                }
-                return [
-                  {
-                    id: `note-${firstNote.name}`,
-                    title: firstNote.name,
-                    path: firstNote.path,
-                    content: contentRes.content || '',
-                    isDirty: false,
-                  },
-                ];
-              });
-              setActiveTabId(`note-${firstNote.name}`);
-            }
+          // Only replace the startup placeholder, never tabs the user already opened
+          const untouched = (prev: TabItem[]) => prev.length === 1 && prev[0].id === WELCOME_TAB_ID;
+          if (restored.length) {
+            const active = activeRestored || restored[restored.length - 1];
+            setTabs((prev) => (untouched(prev) ? restored : prev));
+            setActiveTabId((prevId) => (prevId === WELCOME_TAB_ID ? active.id : prevId));
+          } else if (config.welcomeSeen) {
+            // Welcome was already shown once: start with an empty note instead
+            const blank: TabItem = { id: `tab-${Date.now()}-blank`, title: 'scratch-1.md', path: null, content: '', isDirty: false };
+            setTabs((prev) => (untouched(prev) ? [blank] : prev));
+            setActiveTabId((prevId) => (prevId === WELCOME_TAB_ID ? blank.id : prevId));
+          } else {
+            void window.electronAPI.saveAppConfig({ welcomeSeen: true });
           }
         } catch (err) {
-          console.error('Init error:', err);
-        } finally {
-          // From here on the open tabs are the session to remember
-          setSessionReady(true);
+          logError('App.init', err);
+        }
+        sessionReadyRef.current = true;
+        // Launched with a folder/file ("Abrir con yanote"): open it once the notes are in place
+        try {
+          const target = await window.electronAPI.takeOpenTarget?.();
+          if (target) await openTargetRef.current(target);
+        } catch (err) {
+          logError('App.openTarget', err);
         }
       }
     };
     initApp();
   }, []);
 
-  // Remember the open tabs (debounced) so the next launch reopens them
-  const [sessionReady, setSessionReady] = useState(false);
-  const saveSession = useCallback(() => {
-    if (!window.electronAPI) return Promise.resolve();
-    return window.electronAPI
-      .saveAppConfig({ openTabs: serializeTabs(tabsRef.current), activeTabId: activeTabIdRef.current })
-      .then(() => undefined)
-      .catch((err) => console.error('Error saving session:', err));
-  }, []);
+  // Remember the open tabs (and the active one) for the next start. The welcome note isn't kept.
+  // Saved notes are kept by path, so typing in them doesn't rewrite the config; unsaved ones keep their text.
+  const savedTabs = toSavedTabs(tabs, [WELCOME_TAB_ID]);
+  const keptTabs = tabs.filter((t) => t.id !== WELCOME_TAB_ID);
+  const sessionKey = JSON.stringify([savedTabs, Math.max(0, keptTabs.findIndex((t) => t.id === activeTabId))]);
   useEffect(() => {
-    if (!sessionReady) return;
-    const timer = setTimeout(() => void saveSession(), 400);
+    if (!sessionReadyRef.current || !window.electronAPI) return;
+    const timer = setTimeout(() => {
+      const [openTabs, activeTabIndex] = JSON.parse(sessionKey);
+      void window.electronAPI?.saveAppConfig({ openTabs, activeTabIndex });
+    }, 800);
     return () => clearTimeout(timer);
-  }, [tabs, activeTabId, sessionReady, saveSession]);
-
-  const handleClaudeSessionId = useCallback((tabId: string, sessionId: string) => {
-    setTabs((prev) => prev.map((t) => (t.id === tabId && t.sessionId !== sessionId ? { ...t, sessionId } : t)));
-  }, []);
+  }, [sessionKey]);
+  /** Writes the session right away (on quit the debounced save may not have run yet). */
+  const saveSession = () => {
+    if (!sessionReadyRef.current || !window.electronAPI) return Promise.resolve();
+    const [openTabs, activeTabIndex] = JSON.parse(sessionKey);
+    return window.electronAPI
+      .saveAppConfig({ openTabs, activeTabIndex })
+      .then(() => undefined)
+      .catch((err) => logError('App.saveSession', err));
+  };
 
   // Dark Mode Toggle
   const handleToggleDarkMode = useCallback(async () => {
@@ -182,7 +222,7 @@ export const App: React.FC = () => {
       }
       if (window.electronAPI) {
         window.electronAPI.saveAppConfig({ darkMode: next }).catch((err) => {
-          console.error('Error saving darkMode setting:', err);
+          logError('App.saveDarkMode', err);
         });
       }
       setNotification({
@@ -198,7 +238,7 @@ export const App: React.FC = () => {
     const next = Math.min(1, Math.max(0.3, value));
     setWindowOpacity(next);
     window.electronAPI?.setOpacity?.(next).catch((err) => {
-      console.error('Error setting window opacity:', err);
+      logError('App.setOpacity', err);
     });
   }, []);
 
@@ -262,26 +302,48 @@ export const App: React.FC = () => {
     setActiveTabId(newId);
   };
 
-  const handleNewClaude = (provider: ChatProvider = 'claude') => {
+  const handleNewClaude = (folder?: string, initialDraft?: string, provider: ChatProvider = 'claude') => {
     const newId = `${provider === 'antigravity' ? 'agy' : 'claude'}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     // Same folder rule as terminals: where the active note lives, else the notes folder
     const current = tabs.find((t) => t.id === activeTabId);
-    const cwd = current?.kind === 'terminal' || current?.kind === 'claude' ? current.cwd : parentDir(current?.path ?? null) ?? undefined;
+    const cwd =
+      folder ??
+      (current?.kind === 'terminal' || current?.kind === 'claude' ? current.cwd : parentDir(current?.path ?? null) ?? undefined);
     setTabs((prev) => {
       const baseName = provider === 'antigravity' ? 'Antigravity' : 'Claude';
       const count = prev.filter((t) => t.kind === 'claude' && (t.provider ?? 'claude') === provider).length + 1;
       return [
         ...prev,
-        { id: newId, title: count > 1 ? `${baseName} ${count}` : baseName, path: null, content: '', isDirty: false, kind: 'claude', provider, cwd },
+        {
+          id: newId,
+          title: count > 1 ? `${baseName} ${count}` : baseName,
+          path: null,
+          content: '',
+          isDirty: false,
+          kind: 'claude',
+          cwd,
+          ...(provider !== 'claude'
+            ? { provider }
+            : // From a chat: same account; otherwise the account picked last
+              { accountId: current?.kind === 'claude' && current.accountId ? current.accountId : activeAccountRef.current }),
+          ...(initialDraft ? { initialDraft } : {}),
+        },
       ];
     });
     setActiveTabId(newId);
   };
 
   /** Sign-in runs Claude Code's own `auth login` in a terminal tab: yanote never sees the credentials */
-  const handleClaudeLogin = (executable?: string) => {
-    const exe = executable && executable !== 'sdk-bundled' ? `& '${executable.replace(/'/g, "''")}'` : 'claude';
-    handleNewTerminal('powershell', { title: 'Iniciar sesión en Claude', initialCommand: `${exe} auth login` });
+  const handleClaudeLogin = async (account: { id: string; name: string }) => {
+    const command = (await window.electronAPI?.claudeAccounts?.loginCommand(account.id)) || 'claude auth login';
+    const title = account.id === 'default' ? 'Iniciar sesión en Claude' : `Iniciar sesión: ${account.name}`;
+    handleNewTerminal('powershell', { title, initialCommand: command });
+  };
+
+  // A chat moved to another account: remember it on the tab and for the next chats
+  const handleChatAccountChange = (tabId: string, accountId: string) => {
+    activeAccountRef.current = accountId;
+    setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, accountId } : t)));
   };
 
   const handleSelectTab = (id: string) => {
@@ -387,41 +449,20 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  const handleCopyId = useCallback((tab: TabItem) => {
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(tab.id).catch(() => {});
-    }
-    setNotification({
-      type: 'success',
-      text: `✓ ID copiado: ${tab.id}`,
-    });
+  // Tab menu > copy id / path / relative path (TabBar only forwards the click)
+  const copyAndNotify = useCallback(async (text: string, done: string, scope: string) => {
+    const ok = await copyText(text, scope);
+    setNotification(ok ? { type: 'success', text: `✓ ${done}: ${text}` } : { type: 'error', text: 'No se pudo copiar al portapapeles' });
   }, []);
-
-  const handleCopyPath = useCallback((tab: TabItem) => {
-    let pathToCopy = tab.path;
-    if (!pathToCopy) {
-      const baseDir = notesDir || '';
-      const sep = baseDir.includes('\\') ? '\\' : '/';
-      pathToCopy = baseDir ? `${baseDir}${sep}${tab.title}` : tab.title;
-    }
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(pathToCopy).catch(() => {});
-    }
-    setNotification({
-      type: 'success',
-      text: `✓ Ruta copiada: ${pathToCopy}`,
-    });
-  }, [notesDir]);
-
-  const handleCopyRelativePath = useCallback((tab: TabItem) => {
-    if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(tab.title).catch(() => {});
-    }
-    setNotification({
-      type: 'success',
-      text: `✓ Ruta relativa copiada: ${tab.title}`,
-    });
-  }, []);
+  const handleCopyId = useCallback((tab: TabItem) => void copyAndNotify(tab.id, 'ID copiado', 'App.copyId'), [copyAndNotify]);
+  const handleCopyPath = useCallback(
+    (tab: TabItem) => void copyAndNotify(notePathOf(tab, notesDir), 'Ruta copiada', 'App.copyPath'),
+    [copyAndNotify, notesDir]
+  );
+  const handleCopyRelativePath = useCallback(
+    (tab: TabItem) => void copyAndNotify(tab.title, 'Ruta relativa copiada', 'App.copyRelativePath'),
+    [copyAndNotify]
+  );
 
   const handleRevealInExplorer = useCallback(async (tab: TabItem) => {
     if (window.electronAPI?.revealInExplorer) {
@@ -491,9 +532,10 @@ export const App: React.FC = () => {
     );
   };
 
-  const handleContentChange = (content: string) => {
+  const handleContentChange = (content: string, isNormalization = false) => {
+    // Opening a note makes the rich editor reformat it: keep that text, but it isn't an unsaved edit
     setTabs((prev) =>
-      prev.map((t) => (t.id === activeTabId ? { ...t, content, isDirty: true } : t))
+      prev.map((t) => (t.id === activeTabId ? { ...t, content, isDirty: isNormalization ? t.isDirty : true } : t))
     );
   };
 
@@ -582,7 +624,10 @@ export const App: React.FC = () => {
       content,
       isDirty: false,
     };
-    setTabs((prev) => [...prev, newTab]);
+    // The empty start-up note is just a placeholder: the file takes its place
+    const isBlankPlaceholder = (prev: TabItem[]) =>
+      prev.length === 1 && !prev[0].path && !prev[0].kind && !prev[0].content && !prev[0].isDirty && prev[0].id !== WELCOME_TAB_ID;
+    setTabs((prev) => (isBlankPlaceholder(prev) ? [newTab] : [...prev, newTab]));
     setActiveTabId(newTab.id);
   };
 
@@ -655,7 +700,179 @@ export const App: React.FC = () => {
     openFileRef.current = handleOpenFile;
   });
 
+  // "Abrir con yanote" from Explorer: a folder becomes the working folder and gets a Claude chat
+  // there; a markdown file opens in a tab. The main process already saved the folder in the config.
+  const handleOpenTarget = async (target: OpenTarget) => {
+    const name = target.path.split(/[\\/]/).filter(Boolean).pop() || target.path;
+    if (target.type === 'folder') {
+      setNotesDir(target.path);
+      handleNewClaude(target.path);
+      setNotification({ type: 'success', text: `📂 Carpeta abierta: ${name}` });
+      return;
+    }
+    const res = await window.electronAPI?.readFile(target.path);
+    if (res?.success && res.content !== undefined) {
+      openFileInTab(target.path, name, res.content);
+      recordRecentFiles([{ path: target.path, name }]);
+    } else {
+      setNotification({ type: 'error', text: `No se pudo abrir ${name}: ${res?.error || 'error desconocido'}` });
+    }
+  };
+  const openTargetRef = useRef(handleOpenTarget);
+  useEffect(() => {
+    openTargetRef.current = handleOpenTarget;
+  });
+  useEffect(() => window.electronAPI?.onOpenTarget?.((target) => void openTargetRef.current(target)), []);
+
+  // --- Windows notification when a Claude chat finishes or waits for you, unless you're looking at it ---
+  useEffect(
+    () =>
+      window.electronAPI?.onClaudeEvent?.((evt) => {
+        if (!notifyClaudeRef.current) return;
+        const tab = tabsRef.current.find((t) => t.id === evt.id);
+        const note = chatNotificationFor(evt, tab?.title ?? 'Claude');
+        // Skipped by the main process when this chat is the active tab of the focused window
+        if (note) void window.electronAPI?.notify?.({ ...note, tabId: evt.id, skipIfFocused: activeTabIdRef.current === evt.id });
+      }),
+    []
+  );
+  // --- Ideas & pins from the right-click menu ---
+  const updateIdeas = (next: SavedIdea[]) => {
+    ideasRef.current = next;
+    setIdeas(next);
+    window.electronAPI?.saveAppConfig({ ideas: next })?.catch((err) => logError('App.updateIdeas', err, { count: next.length }));
+  };
+  const saveIdeaRef = useRef<(p: { text: string; chatTabId: string | null }) => void>(() => {});
+  saveIdeaRef.current = ({ text, chatTabId }) => {
+    try {
+      // Where it came from: the chat it was selected in, else the tab on screen
+      const from = tabs.find((t) => t.id === chatTabId) || tabs.find((t) => t.id === activeTabId);
+      const cwd = from?.kind === 'claude' || from?.kind === 'terminal' ? from.cwd || notesDir : parentDir(from?.path ?? null) ?? undefined;
+      updateIdeas(addIdea(ideasRef.current, { text, source: from?.title, cwd: cwd || undefined }));
+      setNotification({ type: 'success', text: '💡 Idea guardada' });
+    } catch (err) {
+      logError('App.saveIdea', err, { chatTabId });
+      setNotification({ type: 'error', text: 'No se pudo guardar la idea' });
+    }
+  };
+  const pinInChat = (text: string, tabId: string) => {
+    try {
+      const clean = text.trim();
+      if (!clean) return;
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId && !(t.chatPins || []).some((p) => p.text === clean)
+            ? { ...t, chatPins: [...(t.chatPins || []), { id: `pin-${Date.now().toString(36)}`, text: clean }] }
+            : t
+        )
+      );
+    } catch (err) {
+      logError('App.pinInChat', err, { tabId });
+    }
+  };
+  // A chat's Claude Code session, kept so the chat comes back after a restart
+  const handleChatSessionId = useCallback((tabId: string, sessionId: string) => {
+    setTabs((prev) => prev.map((t) => (t.id === tabId && t.sessionId !== sessionId ? { ...t, sessionId } : t)));
+  }, []);
+  const handleUnpin = (tabId: string, pinId: string) =>
+    setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, chatPins: (t.chatPins || []).filter((p) => p.id !== pinId) } : t)));
+  // --- Right-click menu in yanote's own style (replaces the native one everywhere) ---
+  const contextMenu = useAppContextMenu({
+    sendToChat: (text) => handleNewClaude(undefined, text),
+    saveIdea: (text, chatTabId) => saveIdeaRef.current({ text, chatTabId }),
+    pin: pinInChat,
+    readAloud: (text, from) => {
+      const target = readAloudTarget(from.chatTabId, from.termTabId, activeTabIdRef.current);
+      if (target) requestReadAloud(target, text);
+    },
+  });
+
+  // Clicking the notification brings that chat to the front
+  useEffect(
+    () =>
+      window.electronAPI?.onFocusTab?.((id) => {
+        if (tabsRef.current.some((t) => t.id === id)) setActiveTabId(id);
+      }),
+    []
+  );
+
+  // --- Drag & drop .md files from Explorer onto the window: each opens in a tab ---
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const openDroppedFiles = async (files: File[]) => {
+    const opened: { path: string; name: string }[] = [];
+    const errors: string[] = [];
+    for (const file of files) {
+      const filePath = window.electronAPI?.getPathForFile?.(file);
+      if (!filePath) {
+        errors.push(file.name);
+        continue;
+      }
+      const res = await window.electronAPI!.readFile(filePath);
+      if (res.success && res.content !== undefined) {
+        openFileInTab(filePath, baseName(filePath), res.content);
+        opened.push({ path: filePath, name: baseName(filePath) });
+      } else {
+        errors.push(`${file.name}: ${res.error || 'no se pudo leer'}`);
+      }
+    }
+    recordRecentFiles(opened);
+    if (errors.length) setNotification({ type: 'error', text: `No se pudo abrir: ${errors.join(' · ')}` });
+    else if (opened.length > 1) setNotification({ type: 'success', text: `✓ ${opened.length} notas abiertas` });
+  };
+  const openDroppedRef = useRef(openDroppedFiles);
+  useEffect(() => {
+    openDroppedRef.current = openDroppedFiles;
+  });
+  useEffect(() => {
+    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files');
+    let depth = 0; // dragenter/leave fire for every child element
+    const onEnter = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth++;
+      setIsDraggingFiles(true);
+    };
+    const onLeave = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setIsDraggingFiles(false);
+    };
+    const onOver = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); // allows dropping anywhere
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    };
+    // Capture phase: markdown files are ours even when dropped on the editor or a terminal
+    const onDropCapture = (e: DragEvent) => {
+      depth = 0;
+      setIsDraggingFiles(false);
+      const files = Array.from(e.dataTransfer?.files || []);
+      const markdown = files.filter((f) => isMarkdownFile(f.name));
+      if (!markdown.length) return; // e.g. images for the Claude chat keep their own handler
+      e.preventDefault();
+      e.stopPropagation();
+      void openDroppedRef.current(markdown);
+    };
+    // Bubble phase: any other file nobody handled must not navigate away from the app
+    const onDropBubble = (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault();
+    };
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('drop', onDropCapture, true);
+    window.addEventListener('drop', onDropBubble);
+    return () => {
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('drop', onDropCapture, true);
+      window.removeEventListener('drop', onDropBubble);
+    };
+  }, []);
+
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+  const claudeTabIds = tabs.filter((t) => t.kind === 'claude').map((t) => t.id);
+  const claudeUsage = useClaudeUsage(claudeTabIds, activeTab?.kind === 'claude' ? activeTab.id : undefined);
   const isClaudeActive = activeTab?.kind === 'claude';
   const isTerminalActive = activeTab?.kind === 'terminal' || isClaudeActive;
 
@@ -669,6 +886,8 @@ export const App: React.FC = () => {
         onToggleDarkMode={handleToggleDarkMode}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenFiles={() => setIsFilesDrawerOpen(true)}
+        onOpenIdeas={() => setIsIdeasOpen(true)}
+        ideasCount={ideas.length}
         onRequestClose={() => setIsQuitConfirmOpen(true)}
         opacity={windowOpacity}
         onChangeOpacity={handleChangeOpacity}
@@ -682,7 +901,7 @@ export const App: React.FC = () => {
         onCloseTab={handleCloseTab}
         onNewTab={handleNewTab}
         onNewTerminal={handleNewTerminal}
-        onNewClaude={handleNewClaude}
+        onNewClaude={(provider) => handleNewClaude(undefined, undefined, provider)}
         onOpenFile={handleOpenFile}
         onRenameTab={handleRenameTab}
         onTogglePinTab={handleTogglePinTab}
@@ -723,9 +942,14 @@ export const App: React.FC = () => {
               cwd={t.cwd}
               isActive={t.id === activeTab?.id}
               provider={t.provider ?? 'claude'}
+              onLogin={(a) => void handleClaudeLogin(a)}
+              accountId={t.accountId}
+              initialDraft={t.initialDraft}
+              pins={t.chatPins}
               resumeSessionId={t.sessionId}
-              onSessionId={(sessionId) => handleClaudeSessionId(t.id, sessionId)}
-              onLogin={handleClaudeLogin}
+              onSessionId={(sessionId) => handleChatSessionId(t.id, sessionId)}
+              onUnpin={(pinId) => handleUnpin(t.id, pinId)}
+              onAccountChange={(accountId) => handleChatAccountChange(t.id, accountId)}
             />
           ))}
 
@@ -746,9 +970,23 @@ export const App: React.FC = () => {
           </div>
         )}
 
+        {/* Drop hint while dragging files over the window (doesn't block the drop target below) */}
+        {isDraggingFiles && (
+          <div
+            data-testid="drop-overlay"
+            className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded border-[3px] border-dashed border-black dark:border-[#FFE500] bg-[#FFE500]/25 dark:bg-[#FFE500]/10"
+          >
+            <div className="flex items-center gap-2 px-3 py-2 bg-[#FFE500] text-black border-2 border-black rounded shadow-[3px_3px_0px_#000] font-black text-xs text-center">
+              <FileText size={16} strokeWidth={3} className="shrink-0" />
+              <span>Suelta tus .md para abrirlos</span>
+            </div>
+          </div>
+        )}
+
         {/* Floating Notification Pill */}
         {notification && (
           <div
+            role={notification.type === 'error' ? 'alert' : 'status'}
             className={`absolute bottom-14 right-2 min-[640px]:bottom-8 min-[640px]:right-3 max-w-[calc(100%-16px)] z-30 px-3 py-1.5 rounded border-2 border-black font-black text-xs shadow-[3px_3px_0px_#000] flex items-center gap-1.5 animate-in slide-in-from-bottom-2 duration-150 ${
               notification.type === 'success'
                 ? 'bg-[#78E08F] text-black'
@@ -762,7 +1000,8 @@ export const App: React.FC = () => {
             ) : (
               <AlertCircle size={14} strokeWidth={3} />
             )}
-            <span>{notification.text}</span>
+            <span className="min-w-0">{notification.text}</span>
+            <DismissButton onClick={() => setNotification(null)} />
           </div>
         )}
       </div>
@@ -812,6 +1051,9 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 ml-1">
+          {/* Claude plan usage (5-hour / weekly), while a Claude chat is open */}
+          <ClaudeUsageMeter usage={claudeUsage} />
+
           {/* Superposición Status Badge */}
           <span
             className={`h-5 px-1.5 items-center leading-none rounded border-2 border-black dark:border-zinc-600 shadow-[1.5px_1.5px_0px_#000] font-black text-[10px] shrink-0 hidden min-[440px]:inline-flex ${
@@ -829,6 +1071,35 @@ export const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         onConfigChanged={refreshNotes}
         onSaved={() => setNotification({ type: 'success', text: '¡Ajustes guardados correctamente!' })}
+      />
+
+      {contextMenu.menu && (
+        <AppContextMenu
+          x={contextMenu.menu.x}
+          y={contextMenu.menu.y}
+          entries={contextMenu.menu.entries}
+          onAction={contextMenu.runAction}
+          onClose={contextMenu.close}
+        />
+      )}
+
+      <IdeasDrawer
+        isOpen={isIdeasOpen}
+        onClose={() => setIsIdeasOpen(false)}
+        ideas={ideas}
+        onRemove={(id) => updateIdeas(removeIdea(ideasRef.current, id))}
+        onSendToNewChat={(idea) => {
+          setIsIdeasOpen(false);
+          handleNewClaude(idea.cwd, idea.text);
+        }}
+        onInsertInChat={
+          activeTab?.kind === 'claude'
+            ? (idea) => {
+                setIsIdeasOpen(false);
+                window.dispatchEvent(new CustomEvent('yanote:append-draft', { detail: { tabId: activeTab.id, text: idea.text } }));
+              }
+            : undefined
+        }
       />
 
       <RecentFilesDrawer

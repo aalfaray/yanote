@@ -24,6 +24,7 @@ import {
   DiffSourceToggleWrapper,
 } from '@mdxeditor/editor';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
+import { useReadAloudRequests } from '../hooks/useReadAloudRequests';
 import { useSpeech } from '../hooks/useSpeech';
 import { translateEditor } from '../lib/editorTranslation';
 import {
@@ -57,7 +58,11 @@ const CODE_BLOCK_LANGUAGES: Record<string, string> = {
 interface EditorProps {
   tabId: string;
   markdown: string;
-  onChange: (content: string) => void;
+  /**
+   * `isNormalization` is true when the rich editor rewrote the markdown it was given on load
+   * (spacing, bullet symbols…): not a user edit, so the note must not be marked unsaved.
+   */
+  onChange: (content: string, isNormalization?: boolean) => void;
   onSave?: () => void;
   isDarkMode?: boolean;
   viewMode?: 'rich-text' | 'source';
@@ -117,6 +122,8 @@ export const Editor: React.FC<EditorProps> = ({
   const speech = useSpeech();
   const { play, stop: stopSpeech, pause: pauseSpeech, resume: resumeSpeech } = speech;
   const speechStatus = speech.state.status;
+  // Right-click > "Leer en voz alta" on a selection of this note
+  useReadAloudRequests(tabId, play);
 
   // Move the caret into a freshly created tab so the user can type immediately
   useEffect(() => {

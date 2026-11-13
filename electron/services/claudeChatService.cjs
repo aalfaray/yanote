@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const { withFreshPath, resolveCwd } = require('./terminalService.cjs');
+const { getLogger } = require('./logService.cjs');
+
+const log = getLogger('claudeChatService');
 
 /**
  * Structured Claude Code sessions (same approach as Orca's "native chat"):
@@ -36,8 +39,9 @@ function findBundledExecutable(platform = process.platform, arch = process.arch,
     const exe = path.join(path.dirname(pkg), platform === 'win32' ? 'claude.exe' : 'claude');
     const unpacked = exe.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
     for (const candidate of [unpacked, exe]) if (exists(candidate)) return candidate;
-  } catch {
+  } catch (err) {
     // optional dependency not installed for this platform
+    log.info('bundled Claude Code not available', { platform, arch, reason: err && err.message });
   }
   return undefined;
 }
@@ -92,9 +96,28 @@ function buildUserContent(text, images = []) {
 function toPlain(value) {
   try {
     return JSON.parse(JSON.stringify(value));
-  } catch {
+  } catch (err) {
+    log.warn('message could not be serialized for IPC', err, { type: value && value.type });
     return { type: 'unserializable' };
   }
+}
+
+function usageWindow(win) {
+  if (!win || typeof win !== 'object') return null;
+  const pct = typeof win.utilization === 'number' && Number.isFinite(win.utilization) ? Math.max(0, Math.min(100, win.utilization)) : null;
+  if (pct === null) return null;
+  return { percent: pct, resetsAt: typeof win.resets_at === 'string' ? win.resets_at : null };
+}
+
+/** Keeps only what the status bar shows from the SDK's /usage answer. */
+function summarizeUsage(res) {
+  const limits = res && res.rate_limits_available && res.rate_limits ? res.rate_limits : null;
+  return {
+    available: Boolean(limits),
+    plan: (res && typeof res.subscription_type === 'string' && res.subscription_type) || null,
+    fiveHour: limits ? usageWindow(limits.five_hour) : null,
+    weekly: limits ? usageWindow(limits.seven_day) : null,
+  };
 }
 
 /**
@@ -113,7 +136,7 @@ function createClaudeChatService({
   const sessions = new Map();
   let nextRequest = 1;
 
-  async function start({ id, cwd, fallbackCwd, resume, permissionMode, model, effort } = {}, emit) {
+  async function start({ id, cwd, fallbackCwd, resume, permissionMode, model, effort, configDir } = {}, emit) {
     if (!id) return { success: false, error: 'Falta el identificador del chat' };
     if (sessions.has(id)) return { success: true, reused: true };
 
@@ -132,6 +155,8 @@ function createClaudeChatService({
       const childEnv = withFreshPath({ ...env }, platform, readPath);
       // The renderer is the UI, not a terminal: keep the CLI from thinking it runs nested in Claude Code
       delete childEnv.CLAUDECODE;
+      // Another Claude account = another Claude Code config folder (its own sign-in)
+      if (typeof configDir === 'string' && configDir) childEnv.CLAUDE_CONFIG_DIR = configDir;
       // The user's own install wins (it keeps itself updated); the bundled copy is the fallback
       const userExecutable = findExecutable(childEnv, platform);
       const executable = userExecutable || findBundled(platform);
@@ -290,6 +315,22 @@ function createClaudeChatService({
       ? Promise.resolve({ success: false, error: 'Nivel de esfuerzo inválido' })
       : control(id, (q) => q.applyFlagSettings({ effortLevel: level || null }), { refreshApplied: true });
 
+  /**
+   * Plan usage behind `/usage` (5-hour and weekly windows) through any live chat session.
+   * Uses the SDK's experimental usage call: if it's missing or changes shape we just report nothing.
+   */
+  async function usage(preferredId) {
+    const live = [preferredId, ...sessions.keys()].map((key) => key && sessions.get(key)).find((s) => s && s.query);
+    const fn = live && live.query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    if (typeof fn !== 'function') return { success: false, error: 'Sin sesión de Claude activa' };
+    try {
+      const res = await fn.call(live.query, { skipBehaviors: true });
+      return { success: true, ...summarizeUsage(res) };
+    } catch (err) {
+      return { success: false, error: err && err.message ? err.message : String(err) };
+    }
+  }
+
   function stop(id) {
     const session = sessions.get(id);
     if (!session) return false;
@@ -299,22 +340,11 @@ function createClaudeChatService({
     session.inbox.close();
     try {
       session.query?.close?.();
-    } catch {
+    } catch (err) {
       // already gone
+      log.warn('closing Claude query failed', err, { id });
     }
     return true;
-  }
-
-  /** Transcript of a past session (from Claude Code's own JSONL), to show it again after a restart. */
-  async function history(sessionId) {
-    if (!sessionId || typeof sessionId !== 'string') return { success: false, error: 'Falta la sesión' };
-    try {
-      const sdk = await loadSdk();
-      const messages = await sdk.getSessionMessages(sessionId);
-      return { success: true, messages: toPlain(messages || []) };
-    } catch (err) {
-      return { success: false, error: err && err.message ? err.message : String(err) };
-    }
   }
 
   function stopAll() {
@@ -329,11 +359,11 @@ function createClaudeChatService({
     setPermissionMode,
     setModel,
     setEffort,
-    history,
+    usage,
     stop,
     stopAll,
     has: (id) => sessions.has(id),
   };
 }
 
-module.exports = { createClaudeChatService, findClaudeExecutable, findBundledExecutable, buildUserContent, createInbox };
+module.exports = { createClaudeChatService, summarizeUsage, findClaudeExecutable, findBundledExecutable, buildUserContent, createInbox };

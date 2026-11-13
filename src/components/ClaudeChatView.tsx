@@ -19,9 +19,14 @@ import {
   Sparkles,
   ClipboardCopy,
   Download,
+  UserRound,
+  ChevronDown,
 } from 'lucide-react';
-import type { ChatProvider, ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionRequest } from '../types/electron';
+import type { ChatPin, ChatProvider, ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionMode, ClaudePermissionRequest } from '../types/electron';
 import { getChatBackend, PROVIDER_LABELS } from '../lib/chatBackends';
+import { loadChatPrefs, saveChatPrefs, loadEffortByModel, saveEffortByModel } from '../lib/claudeChatPrefs';
+import { copyText } from '../lib/clipboard';
+import { logError } from '../lib/logger';
 import {
   chatReducer,
   initialChatState,
@@ -33,14 +38,21 @@ import {
   formatTokens,
   chatToMarkdown,
   activeModelInfo,
+  inheritedEffort,
+  modelOptionLabel,
+  type ClaudeDefaults,
   effortLevelsFor,
   EFFORT_LABELS,
   modelLabel,
   type ChatItem,
 } from '../lib/claudeChat';
 import { markdownToSegments } from '../lib/speechText';
+import { useReadAloudRequests } from '../hooks/useReadAloudRequests';
 import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
+import { DismissButton } from './ui/DismissButton';
+import { ClaudeAccountMenu } from './ClaudeAccountMenu';
+import { PinnedStrip } from './ChatPinnedStrip';
 
 interface ClaudeChatViewProps {
   tabId: string;
@@ -49,8 +61,17 @@ interface ClaudeChatViewProps {
   /** Called once Claude reports its session id (used to resume after a restart) */
   onSessionId?: (sessionId: string) => void;
   resumeSessionId?: string;
-  /** Opens Claude Code's own sign-in (`claude auth login`) with the executable this chat runs */
-  onLogin?: (executable?: string) => void;
+  /** Opens Claude Code's own sign-in (`claude auth login`) for that account */
+  onLogin?: (account: { id: string; name: string }) => void;
+  /** Claude account this chat uses (see ClaudeAccountMenu); the main one when missing */
+  accountId?: string;
+  /** The user moved this chat to another account */
+  onAccountChange?: (accountId: string) => void;
+  /** Text already typed in the message box when the chat opens (e.g. sent from another chat); not sent automatically */
+  initialDraft?: string;
+  /** Paragraphs pinned on top of this chat (right-click > "Fijar en este chat") */
+  pins?: ChatPin[];
+  onUnpin?: (pinId: string) => void;
   /** Agent behind this chat: Claude Code (default) or Antigravity CLI (Gemini) */
   provider?: ChatProvider;
 }
@@ -99,7 +120,7 @@ const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         type="button"
         title="Copiar código"
         onClick={() => {
-          navigator.clipboard?.writeText(ref.current?.innerText ?? '').catch(() => {});
+          void copyText(ref.current?.innerText ?? '', 'ClaudeChatView.copyCode');
           setCopied(true);
           setTimeout(() => setCopied(false), 1200);
         }}
@@ -413,27 +434,6 @@ const PermissionCard: React.FC<{
 
 /* ---------------------------------- Main view ---------------------------------- */
 
-/** Effort chosen per model, remembered across chats ('' = the model's default). */
-const EFFORT_STORAGE_KEY = 'yanote.claude.effortByModel';
-
-function loadEffortByModel(): Record<string, ClaudeEffortLevel> {
-  try {
-    const raw = localStorage.getItem(EFFORT_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveEffortByModel(map: Record<string, ClaudeEffortLevel>) {
-  try {
-    localStorage.setItem(EFFORT_STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    // storage unavailable: the choice just won't be remembered
-  }
-}
-
 function readImage(file: File): Promise<ClaudeImageInput & { url: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -447,15 +447,36 @@ function readImage(file: File): Promise<ClaudeImageInput & { url: string }> {
   });
 }
 
-export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isActive, onSessionId, resumeSessionId, onLogin, provider = 'claude' }) => {
+export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
+  tabId,
+  cwd,
+  isActive,
+  onSessionId,
+  resumeSessionId,
+  onLogin,
+  accountId: initialAccountId,
+  onAccountChange,
+  initialDraft,
+  pins = [],
+  onUnpin,
+  provider = 'claude',
+}) => {
   const [state, dispatch] = useReducer(chatReducer, undefined, initialChatState);
-  const [draft, setDraft] = useState('');
+  // A sent-over text gets an empty line below it, ready for the user to add their own words
+  const [draft, setDraft] = useState(initialDraft ? `${initialDraft}
+
+` : '');
   const [images, setImages] = useState<(ClaudeImageInput & { url: string })[]>([]);
-  const [mode, setMode] = useState<string>('default');
+  // Claude's last mode/model carry over to new chats; other agents have their own sets
+  const isClaude = provider === 'claude';
+  const [mode, setMode] = useState<string>(() => (isClaude ? loadChatPrefs().mode : undefined) ?? 'default');
   const [cmdIndex, setCmdIndex] = useState(0);
   const [starting, setStarting] = useState(true);
   const [restartKey, setRestartKey] = useState(0);
-  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedModel, setSelectedModel] = useState(() => (isClaude ? loadChatPrefs().model : undefined) ?? '');
+  // Read by the start effect: a restarted process (Reanudar, other account) keeps the picked model
+  const selectedModelRef = useRef(selectedModel);
+  selectedModelRef.current = selectedModel;
   const [effortByModel, setEffortByModel] = useState<Record<string, ClaudeEffortLevel>>(loadEffortByModel);
   const appliedEffortRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -463,7 +484,15 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const stickRef = useRef(true);
   const sessionIdRef = useRef<string | undefined>(resumeSessionId);
   const executableRef = useRef<string | undefined>(undefined);
+  const [accountId, setAccountId] = useState(initialAccountId || 'default');
+  const accountRef = useRef(accountId);
+  accountRef.current = accountId;
+  const [accountName, setAccountName] = useState('Principal');
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [claudeDefaults, setClaudeDefaults] = useState<ClaudeDefaults | null>(null);
   const speech = useSpeech();
+  // Right-click > "Leer en voz alta" on a selection of this tab
+  useReadAloudRequests(tabId, speech.play);
   const api = window.electronAPI;
   const backend = useMemo(() => getChatBackend(api, provider), [api, provider]);
   const agentName = PROVIDER_LABELS[provider];
@@ -486,14 +515,15 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
     });
     let cancelled = false;
     setStarting(true);
-    // Reopened after an app restart: show the conversation that is being resumed
-    if (restartKey === 0 && sessionIdRef.current && backend.history) {
-      void backend.history(sessionIdRef.current).then((res) => {
-        if (!cancelled && res.success && res.messages?.length) dispatch({ type: 'history', messages: res.messages });
-      });
-    }
     backend
-      .start({ id: tabId, cwd, permissionMode: mode, resume: sessionIdRef.current })
+      .start({
+        id: tabId,
+        cwd,
+        permissionMode: mode,
+        resume: sessionIdRef.current,
+        ...(isClaude ? { accountId: accountRef.current } : {}),
+        ...(selectedModelRef.current ? { model: selectedModelRef.current } : {}),
+      })
       .then((res) => {
         if (cancelled) return;
         setStarting(false);
@@ -531,7 +561,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
 
   useEffect(() => {
     if (!isActive) return;
-    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    const id = requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      // Caret after any text already there (e.g. a selection sent from another chat)
+      el.setSelectionRange(el.value.length, el.value.length);
+      el.scrollTop = el.scrollHeight;
+    });
     return () => cancelAnimationFrame(id);
   }, [isActive]);
 
@@ -546,8 +583,93 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const suggestions = useMemo(() => matchCommands(state.commands, draft), [state.commands, draft]);
   useEffect(() => setCmdIndex(0), [suggestions.length]);
 
+  // What Claude Code will start with (its settings), shown before the first reply
+  useEffect(() => {
+    if (!isClaude) return;
+    let cancelled = false;
+    void api?.claudeDefaults?.(accountId, cwd).then((d) => {
+      if (!cancelled) setClaudeDefaults(d);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, isClaude, accountId, cwd]);
+
+  // A chat restored after a restart: show the conversation so far (Claude resumes it on the next message)
+  useEffect(() => {
+    if (!isClaude || !resumeSessionId || !api?.claudeHistory) return;
+    let cancelled = false;
+    void api.claudeHistory(resumeSessionId, accountRef.current).then((messages) => {
+      if (!cancelled && Array.isArray(messages) && messages.length) dispatch({ type: 'history', messages });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Only once, for the session the tab was restored with
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // An idea added from the Ideas list goes below what's already typed
+  useEffect(() => {
+    const onAppend = (e: Event) => {
+      const { tabId: target, text } = (e as CustomEvent<{ tabId: string; text: string }>).detail || ({} as { tabId: string; text: string });
+      if (target !== tabId || !text) return;
+      setDraft((d) => (d.trim() ? `${d.replace(/\s+$/, '')}\n\n${text}` : text));
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
+    };
+    window.addEventListener('yanote:append-draft', onAppend);
+    return () => window.removeEventListener('yanote:append-draft', onAppend);
+  }, [tabId]);
+
+  // Name of the account in use, for the header chip
+  useEffect(() => {
+    if (!isClaude) return;
+    let cancelled = false;
+    void api?.claudeAccounts?.list().then(({ accounts }) => {
+      if (!cancelled) setAccountName(accounts.find((a) => a.id === accountId)?.name || 'Principal');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, isClaude, accountId, accountMenuOpen]);
+
+  /** Continue this conversation with another account: copy it there, then resume it with that sign-in. */
+  const switchAccount = async (account: { id: string; name: string }) => {
+    setAccountMenuOpen(false);
+    if (account.id === accountRef.current) return;
+    if (state.running) await backend?.interrupt(tabId);
+    const sid = sessionIdRef.current;
+    if (sid) {
+      const res = await api?.claudeAccounts?.copySession(sid, accountRef.current, account.id);
+      if (res && !res.success) {
+        // Nothing to carry over: the other account starts a fresh conversation
+        sessionIdRef.current = undefined;
+        dispatch({ type: 'notice', text: `No se pudo pasar la conversación a ${account.name}: empieza una nueva.`, tone: 'error' });
+      }
+    }
+    accountRef.current = account.id;
+    setAccountId(account.id);
+    setAccountName(account.name);
+    void api?.claudeAccounts?.setActive(account.id);
+    onAccountChange?.(account.id);
+    dispatch({ type: 'auth_retry' });
+    dispatch({ type: 'notice', text: `Ahora usas la cuenta ${account.name}`, tone: 'info' });
+    setRestartKey((k) => k + 1);
+  };
+
   const send = useCallback(async () => {
     const text = draft.trim();
+    // The CLI's /login and /logout don't work inside an app: open the account switcher instead
+    if (isClaude && /^\/(login|logout|cuenta|account)\s*$/i.test(text)) {
+      setDraft('');
+      setAccountMenuOpen(true);
+      return;
+    }
     if ((!text && images.length === 0) || !backend || state.ended) return;
     const payload = { text, images: images.map(({ data, mediaType }) => ({ data, mediaType })) };
     dispatch({ type: 'send', text, imageCount: images.length });
@@ -572,16 +694,19 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
 
   const changeMode = async (next: string) => {
     setMode(next);
+    if (isClaude) saveChatPrefs({ mode: next as ClaudePermissionMode });
     dispatch({ type: 'local_permission_mode', mode: next });
     const res = await backend?.setPermissionMode(tabId, next);
     if (res && !res.success) dispatch({ type: 'notice', text: `No se pudo cambiar el modo: ${res.error}`, tone: 'error' });
   };
 
-  const modelInfo = activeModelInfo(state.models, selectedModel, state.model);
+  const modelInfo = activeModelInfo(state.models, selectedModel, state.model || claudeDefaults?.model || undefined);
   // Keyed by the real model so aliases (default / opus → same id) share one choice
   const modelKey = modelInfo?.resolvedModel ?? modelInfo?.value ?? 'default';
   const effortLevels = effortLevelsFor(modelInfo);
   const effort: ClaudeEffortLevel | '' = effortLevels.includes(effortByModel[modelKey]) ? effortByModel[modelKey] : '';
+  // Without a yanote choice, Claude Code uses the effort from its settings: show that one
+  const shownEffort: ClaudeEffortLevel | '' = effort || inheritedEffort(claudeDefaults, modelInfo);
 
   /** Sends the effort remembered for `key` (or the default) to the running session. */
   const applyEffort = useCallback(
@@ -612,6 +737,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
       dispatch({ type: 'notice', text: `No se pudo cambiar el modelo: ${res.error}`, tone: 'error' });
       return;
     }
+    if (isClaude) saveChatPrefs({ model });
     const next = activeModelInfo(state.models, model, undefined);
     const key = next?.resolvedModel ?? next?.value ?? 'default';
     const remembered = effortByModel[key];
@@ -624,6 +750,15 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
       tone: 'info',
     });
   };
+
+  // A remembered model that this account/version no longer offers: back to the default
+  useEffect(() => {
+    if (!selectedModel || state.models.length === 0 || state.models.some((m) => m.value === selectedModel)) return;
+    setSelectedModel('');
+    if (isClaude) saveChatPrefs({ model: '' });
+    void backend?.setModel(tabId, null);
+    dispatch({ type: 'notice', text: `El modelo ${selectedModel} ya no está disponible: uso el predeterminado.`, tone: 'info' });
+  }, [state.models, selectedModel, backend, isClaude, tabId]);
 
   const changeEffort = async (level: ClaudeEffortLevel | '') => {
     setEffortByModel((prev) => {
@@ -639,8 +774,12 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const addFiles = async (files: File[]) => {
     const imgs = files.filter((f) => f.type.startsWith('image/'));
     if (!imgs.length) return false;
-    const read = await Promise.all(imgs.map(readImage));
-    setImages((prev) => [...prev, ...read]);
+    try {
+      const read = await Promise.all(imgs.map(readImage));
+      setImages((prev) => [...prev, ...read]);
+    } catch (err) {
+      logError('ClaudeChatView.addFiles', err, { tabId, files: imgs.map((f) => ({ name: f.name, type: f.type, size: f.size })) });
+    }
     return true;
   };
 
@@ -676,7 +815,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const shownModel = shownModelId?.startsWith('claude-')
     ? modelLabel(shownModelId)
     : state.models.find((m) => m.value === shownModelId)?.displayName || modelLabel(shownModelId);
-  const shownEffort = state.appliedEffort ? EFFORT_LABELS[state.appliedEffort] : '';
+  const headerEffort = state.appliedEffort ? EFFORT_LABELS[state.appliedEffort] : '';
 
   // Export the conversation as Markdown, to keep it or paste it into another AI session
   const hasConversation = state.items.some((i) => i.kind === 'user' || i.kind === 'text');
@@ -703,6 +842,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
       className={`absolute inset-0 flex flex-col bg-[#FAF8F5] dark:bg-[#121212] text-black dark:text-zinc-100 ${isActive ? '' : 'invisible pointer-events-none'}`}
       aria-hidden={!isActive}
       data-testid={`claude-chat-${tabId}`}
+      data-chat-tab={tabId}
     >
       {/* Session strip */}
       <div className="h-8 shrink-0 flex items-center gap-1.5 px-2 border-b-2 border-black dark:border-zinc-700 text-[10.5px] font-black overflow-hidden whitespace-nowrap">
@@ -713,14 +853,28 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
         {shownModel && (
           <span
             className="hidden min-[360px]:inline opacity-60 truncate"
-            title={`Modelo: ${state.appliedModel || state.model}${shownEffort ? ` · esfuerzo ${shownEffort.toLowerCase()}` : ''}`}
+            title={`Modelo: ${state.appliedModel || state.model}${headerEffort ? ` · esfuerzo ${headerEffort.toLowerCase()}` : ''}`}
             data-testid="claude-model-effort"
           >
             · {shownModel}
-            {shownEffort && ` · ${shownEffort}`}
+            {headerEffort && ` · ${headerEffort}`}
           </span>
         )}
         <span className="flex-1" />
+        {isClaude && (
+          <button
+            type="button"
+            onClick={() => setAccountMenuOpen((o) => !o)}
+            title={`Cuenta de Claude: ${accountName} (clic para cambiar)`}
+            aria-label={`Cuenta de Claude: ${accountName}`}
+            aria-expanded={accountMenuOpen}
+            className={`${btn} h-6 px-1.5 max-w-[9rem] shrink-0 bg-white dark:bg-[#27272A] ${accountMenuOpen ? 'bg-[#FFE500] text-black' : ''}`}
+          >
+            <UserRound size={11} strokeWidth={3} className="shrink-0" />
+            <span className="truncate hidden min-[400px]:inline">{accountName}</span>
+            <ChevronDown size={10} strokeWidth={3} className="shrink-0" />
+          </button>
+        )}
         {state.contextTokens > 0 && (
           <span className="hidden min-[480px]:inline opacity-60" title="Tokens de contexto de la última llamada">
             {formatTokens(state.contextTokens)} ctx
@@ -762,6 +916,20 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
           </button>
         )}
       </div>
+
+      {isClaude && accountMenuOpen && (
+        <ClaudeAccountMenu
+          currentId={accountId}
+          onClose={() => setAccountMenuOpen(false)}
+          onSwitch={(a) => void switchAccount(a)}
+          onLogin={(a) => {
+            setAccountMenuOpen(false);
+            onLogin?.(a);
+          }}
+        />
+      )}
+
+      {pins.length > 0 && <PinnedStrip pins={pins} onUnpin={onUnpin} />}
 
       {/* Transcript */}
       <div
@@ -843,13 +1011,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                 return (
                   <div
                     key={item.id}
-                    className={`text-[11px] font-bold px-2 py-1 rounded border-2 ${
+                    className={`flex items-start gap-1.5 text-[11px] font-bold px-2 py-1 rounded border-2 ${
                       item.tone === 'error'
                         ? 'border-[#C0392B] bg-[#FFE4E4] text-[#9B1C1C] dark:bg-[#3A1515] dark:text-[#FCA5A5]'
                         : 'border-black/20 dark:border-zinc-700 opacity-70'
                     }`}
                   >
-                    {item.text}
+                    <span className="min-w-0 flex-1 break-words">{item.text}</span>
+                    <DismissButton onClick={() => dispatch({ type: 'dismiss', id: item.id })} />
                   </div>
                 );
               default:
@@ -867,9 +1036,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                 inicio de sesión oficial de Claude Code, que continúa en tu navegador. yanote no ve tus credenciales.
               </p>
               <div className="flex flex-wrap gap-1.5">
-                <button type="button" onClick={() => onLogin?.(executableRef.current)} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
-                  Iniciar sesión
+                <button type="button" onClick={() => onLogin?.({ id: accountId, name: accountName })} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
+                  Iniciar sesión{accountId !== 'default' ? ` (${accountName})` : ''}
                 </button>
+                {isClaude && (
+                  <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}>
+                    <UserRound size={11} strokeWidth={3} /> Usar otra cuenta
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -883,6 +1057,18 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                   <RotateCcw size={11} strokeWidth={3} /> Ya inicié sesión, reintentar
                 </button>
               </div>
+            </div>
+          )}
+
+          {isClaude && state.rateLimited && !state.running && (
+            <div className={`${card} p-3 space-y-2 bg-[#FFFBDA] dark:bg-[#26240F]`} role="alert" data-testid="rate-limit-card">
+              <div className="flex items-center gap-1.5 text-[13px] font-black">
+                <UserRound size={15} strokeWidth={2.5} /> {accountName} llegó a su límite de uso
+              </div>
+              <p className="text-[12px] opacity-80">Puedes esperar a que se reinicie o seguir esta misma conversación con otra de tus cuentas.</p>
+              <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
+                <UserRound size={11} strokeWidth={3} /> Cambiar de cuenta
+              </button>
             </div>
           )}
 
@@ -997,31 +1183,31 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
               </select>
               {state.models.length > 0 && (
                 <select
-                  value={selectedModel}
+                  value={selectedModel || modelInfo?.value || ''}
                   onChange={(e) => void changeModel(e.target.value)}
                   aria-label="Modelo"
                   title={modelInfo?.description || 'Modelo'}
                   className="h-6 max-w-[9.5rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none bg-white dark:bg-[#27272A]"
                 >
-                  <option value="">{selectedModel ? 'Predeterminado' : shownModel || 'Modelo'}</option>
+                  {!modelInfo && <option value="">Modelo</option>}
                   {state.models.map((m) => (
                     <option key={m.value} value={m.value}>
-                      {m.displayName}
+                      {modelOptionLabel(m)}
                     </option>
                   ))}
                 </select>
               )}
               {effortLevels.length > 0 && (
                 <select
-                  value={effort}
+                  value={shownEffort}
                   onChange={(e) => void changeEffort(e.target.value as ClaudeEffortLevel | '')}
                   aria-label="Esfuerzo"
                   title={`Esfuerzo de razonamiento para ${modelInfo?.displayName ?? 'este modelo'} (se recuerda por modelo)`}
                   className={`h-6 max-w-[7rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none ${
-                    effort === 'max' || effort === 'xhigh' ? 'bg-[#C9A7F5] text-black' : 'bg-white dark:bg-[#27272A]'
+                    shownEffort === 'max' || shownEffort === 'xhigh' ? 'bg-[#C9A7F5] text-black' : 'bg-white dark:bg-[#27272A]'
                   }`}
                 >
-                  <option value="">{!effort && shownEffort ? shownEffort : 'Predeterminado'}</option>
+                  <option value="">{shownEffort ? 'Predeterminado' : 'Esfuerzo'}</option>
                   {effortLevels.map((l) => (
                     <option key={l} value={l}>
                       {EFFORT_LABELS[l]}

@@ -57,6 +57,8 @@ export interface ChatState {
   currentMsg?: string;
   /** Claude Code answered "Not logged in": the user has to sign in (Anthropic's own flow) */
   authRequired: boolean;
+  /** The account hit its usage limit: offer another account */
+  rateLimited: boolean;
 }
 
 export const initialChatState = (): ChatState => ({
@@ -69,6 +71,7 @@ export const initialChatState = (): ChatState => ({
   contextTokens: 0,
   stream: {},
   authRequired: false,
+  rateLimited: false,
 });
 
 type Json = Record<string, unknown>;
@@ -95,6 +98,8 @@ function parsePartial(json: string): Record<string, unknown> | null {
     const v = JSON.parse(json);
     return isObj(v) ? v : null;
   } catch {
+    // Not logged on purpose: called on every streaming delta, and an incomplete JSON
+    // is the normal state until the tool input finishes arriving.
     return null;
   }
 }
@@ -222,10 +227,11 @@ function onAssistant(state: ChatState, msg: Json): ChatState {
   const err = msg.error;
   if (!parent) {
     if (err === 'authentication_failed') return { ...next, authRequired: true };
+    if (err === 'rate_limit') next = { ...next, rateLimited: true };
     if (err) {
       next = push(next, { kind: 'notice', id: localId('err'), text: `Error de la API: ${typeof err === 'string' ? err : JSON.stringify(err)}`, tone: 'error' });
-    } else if (next.authRequired && content.length > 0) {
-      next = { ...next, authRequired: false };
+    } else if ((next.authRequired || next.rateLimited) && content.length > 0) {
+      next = { ...next, authRequired: false, rateLimited: false };
     }
   }
   return next;
@@ -340,54 +346,15 @@ export type ChatAction =
   | { type: 'notice'; text: string; tone: 'info' | 'error' }
   | { type: 'local_permission_mode'; mode: string }
   | { type: 'auth_retry' }
-  | { type: 'history'; messages: Json[] }
+  | { type: 'dismiss'; id: string }
+  /** Earlier messages of a resumed conversation (read from its transcript), shown above the new ones */
+  | { type: 'history'; messages: Record<string, unknown>[] }
   | { type: 'reset' };
-
-/** The user's own words in a stored user message (not tool results or CLI-injected tags). */
-function userPrompt(msg: Json): { text: string; imageCount: number } | null {
-  const m = isObj(msg.message) ? msg.message : {};
-  const content = m.content;
-  let text = '';
-  let imageCount = 0;
-  if (typeof content === 'string') text = content;
-  else if (Array.isArray(content)) {
-    for (const block of content) {
-      if (!isObj(block)) continue;
-      if (block.type === 'tool_result') return null;
-      if (block.type === 'text') text += (text ? '\n' : '') + str(block.text);
-      if (block.type === 'image') imageCount++;
-    }
-  }
-  text = text.trim();
-  // Slash-command echoes, reminders and other CLI plumbing are wrapped in tags
-  if (/^<[a-z-]+>/i.test(text)) return null;
-  return text || imageCount ? { text, imageCount } : null;
-}
-
-/** Rebuilds the transcript of a resumed session from its stored messages. */
-function onHistory(state: ChatState, messages: Json[]): ChatState {
-  let next = state;
-  for (const msg of messages) {
-    if (!isObj(msg)) continue;
-    if (msg.type === 'user' && !msg.parent_tool_use_id) {
-      const prompt = userPrompt(msg);
-      if (prompt) {
-        next = push(next, { kind: 'user', id: localId('user'), text: prompt.text, imageCount: prompt.imageCount });
-        continue;
-      }
-    }
-    if (msg.type === 'user' || msg.type === 'assistant') next = onMessage(next, msg);
-  }
-  return { ...next, running: false, stream: {}, currentMsg: undefined };
-}
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'reset':
       return initialChatState();
-    case 'history':
-      // Only into an empty chat, so a late answer never duplicates what is already shown
-      return state.items.length === 0 && action.messages.length ? onHistory(state, action.messages) : state;
     case 'send':
       return {
         ...push(state, { kind: 'user', id: localId('user'), text: action.text, imageCount: action.imageCount }),
@@ -396,10 +363,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     case 'notice':
       return push(state, { kind: 'notice', id: localId('notice'), text: action.text, tone: action.tone });
+    case 'history':
+      return { ...state, items: [...historyItems(action.messages), ...state.items] };
+    case 'dismiss':
+      return { ...state, items: state.items.filter((i) => i.id !== action.id) };
     case 'local_permission_mode':
       return { ...state, permissionMode: action.mode };
     case 'auth_retry':
-      return { ...state, authRequired: false, running: false, ended: false };
+      return { ...state, authRequired: false, rateLimited: false, running: false, ended: false };
     case 'permission_resolved':
       return updateItem(state, action.requestId, (i) => (i.kind === 'permission' ? { ...i, status: action.allowed ? 'allowed' : 'denied' } : i));
     case 'event': {
@@ -438,6 +409,39 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 }
 
 /** Items shown at the top level; subagent (Task/Agent) items are folded into their parent tool card. */
+/** Text the user typed in a stored user turn; null for tool results and app-injected turns. */
+function typedUserText(content: unknown): { text: string; imageCount: number } | null {
+  const blocks = typeof content === 'string' ? [{ type: 'text', text: content }] : Array.isArray(content) ? content : [];
+  if (blocks.some((b) => isObj(b) && b.type === 'tool_result')) return null;
+  const text = blocks
+    .filter((b) => isObj(b) && b.type === 'text')
+    .map((b) => str((b as Json).text))
+    .join('\n')
+    .trim();
+  // <task-notification>, <command-name>, <system-reminder>…: written by the app, not by the user
+  if (!text || /^<[a-z][\w-]*[\s>]/i.test(text)) return null;
+  return { text, imageCount: blocks.filter((b) => isObj(b) && b.type === 'image').length };
+}
+
+/** Transcript items for stored messages, built with the same rules as live ones. */
+export function historyItems(messages: Record<string, unknown>[]): ChatItem[] {
+  let h = initialChatState();
+  for (const msg of messages) {
+    if (!isObj(msg)) continue;
+    if (msg.type === 'user') {
+      const typed = typedUserText(isObj(msg.message) ? msg.message.content : undefined);
+      if (typed) {
+        h = push(h, { kind: 'user', id: localId('user'), text: typed.text, imageCount: typed.imageCount });
+        continue;
+      }
+    }
+    if (msg.type === 'user' || msg.type === 'assistant') {
+      h = chatReducer(h, { type: 'event', event: { id: '', type: 'message', message: msg } });
+    }
+  }
+  return h.items;
+}
+
 export function topLevelItems(items: ChatItem[]): ChatItem[] {
   return items.filter((i) => !('parentToolUseId' in i) || !i.parentToolUseId);
 }
@@ -519,7 +523,11 @@ export function activeModelInfo(models: ClaudeModelInfo[], selected: string, rep
     if (picked) return picked;
   }
   if (reported) {
-    const match = models.find((m) => m.resolvedModel === reported || m.value === reported);
+    // An alias ("opus") or the real id ("claude-opus-5-5"); prefer the named row over "default"
+    const match =
+      models.find((m) => m.value === reported) ||
+      models.find((m) => m.value !== 'default' && m.resolvedModel === reported) ||
+      models.find((m) => m.resolvedModel === reported);
     if (match) return match;
   }
   return models.find((m) => m.value === 'default');
@@ -532,6 +540,32 @@ export function modelLabel(id: string | undefined): string {
   if (!m) return id;
   const family = m[1].charAt(0).toUpperCase() + m[1].slice(1);
   return `${family} ${m[2]}${m[3] ? `.${m[3]}` : ''}${m[4] ? ' 1M' : ''}`;
+}
+
+/** Model and effort from Claude Code's own settings (read before the chat's first reply). */
+export interface ClaudeDefaults {
+  model: string | null;
+  effortLevel: ClaudeEffortLevel | null;
+  /** Per-model effort, keyed by real model id (settings.json "modelSettings") */
+  modelEfforts: Record<string, ClaudeEffortLevel>;
+  /** CLAUDE_CODE_EFFORT_LEVEL, which wins over everything */
+  effortFromEnv: ClaudeEffortLevel | null;
+}
+
+/** The effort Claude Code uses for `model` when yanote doesn't set one ('' = the model's own default). */
+export function inheritedEffort(defaults: ClaudeDefaults | null | undefined, model: ClaudeModelInfo | undefined): ClaudeEffortLevel | '' {
+  if (!defaults || !model) return '';
+  const levels = effortLevelsFor(model);
+  const key = model.resolvedModel ?? model.value;
+  const level = defaults.effortFromEnv || defaults.modelEfforts?.[key] || defaults.effortLevel;
+  return level && levels.includes(level) ? level : '';
+}
+
+/** Option text for a model row: the "default" row says which model it is. */
+export function modelOptionLabel(model: ClaudeModelInfo): string {
+  if (model.value !== 'default') return model.displayName;
+  const which = (model.description || '').split('·')[0].trim();
+  return which ? `Predeterminado · ${which}` : 'Predeterminado';
 }
 
 /** Effort levels the model accepts ([] when it has no effort control). */

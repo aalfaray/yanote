@@ -5,10 +5,15 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import type { TerminalShell } from '../types/electron';
 import { pasteFromClipboard } from '../lib/terminalPaste';
+import { registerTerminal } from '../lib/terminalRegistry';
+import { logError, logWarn } from '../lib/logger';
+import { copyText } from '../lib/clipboard';
 import { extractLastResponse } from '../lib/terminalSpeech';
 import { plainTextToSegments } from '../lib/speechText';
+import { useReadAloudRequests } from '../hooks/useReadAloudRequests';
 import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
+import { DismissButton } from './ui/DismissButton';
 
 /** Buffer as text lines, re-joining lines the terminal soft-wrapped. */
 function bufferLines(term: Terminal): string[] {
@@ -64,6 +69,8 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const speech = useSpeech();
+  // Right-click > "Leer en voz alta" on a selection of this tab
+  useReadAloudRequests(tabId, speech.play);
   const [notice, setNotice] = useState<string | null>(null);
 
   // Selected text if any, otherwise the latest answer (Claude Code reply or last command output)
@@ -119,8 +126,9 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     fitRef.current = fit;
     try {
       fit.fit();
-    } catch {
+    } catch (err) {
       // container may be hidden
+      logWarn('TerminalView.initialFit', `fit failed: ${(err as Error)?.message}`, { tabId });
     }
 
     if (!api?.termCreate) {
@@ -159,7 +167,7 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       }
       const key = e.key.toLowerCase();
       if (key === 'c' && term.hasSelection()) {
-        navigator.clipboard?.writeText(term.getSelection()).catch(() => {});
+        void copyText(term.getSelection(), 'TerminalView.copyShortcut');
         term.clearSelection();
         return false;
       }
@@ -171,18 +179,39 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       return true;
     });
 
+    // The app's right-click menu copies/pastes here too
+    const unregister = registerTerminal(tabId, {
+      getSelection: () => term.getSelection(),
+      paste: () => {
+        try {
+          term.focus();
+          pasteFromClipboard(term, api);
+        } catch (err) {
+          logError('TerminalView.menuPaste', err, { tabId });
+        }
+      },
+      selectAll: () => {
+        try {
+          term.selectAll();
+        } catch (err) {
+          logError('TerminalView.menuSelectAll', err, { tabId });
+        }
+      },
+    });
+
     const observer = new ResizeObserver(() => {
       if (container.offsetWidth > 0 && container.offsetHeight > 0) {
         try {
           fit.fit();
-        } catch {
-          // ignore
+        } catch (err) {
+          logWarn('TerminalView.resizeFit', `fit failed: ${(err as Error)?.message}`, { tabId });
         }
       }
     });
     observer.observe(container);
 
     return () => {
+      unregister();
       observer.disconnect();
       offEvent?.();
       inputSub.dispose();
@@ -207,19 +236,20 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     const id = requestAnimationFrame(() => {
       try {
         fitRef.current?.fit();
-      } catch {
-        // ignore
+      } catch (err) {
+        logWarn('TerminalView.activateFit', `fit failed: ${(err as Error)?.message}`, { tabId });
       }
       termRef.current?.focus();
     });
     return () => cancelAnimationFrame(id);
-  }, [isActive]);
+  }, [isActive, tabId]);
 
   return (
     <div
       className={`absolute inset-0 p-2 bg-[#FAF8F5] dark:bg-[#121212] ${isActive ? '' : 'invisible pointer-events-none'}`}
       aria-hidden={!isActive}
       data-testid={`terminal-${tabId}`}
+      data-term-tab={tabId}
     >
       <div ref={containerRef} className="w-full h-full" />
 
@@ -243,9 +273,10 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       {notice && (
         <div
           role="status"
-          className="absolute top-11 right-3 z-30 px-2 py-1 rounded border-2 border-black text-[11px] font-black bg-[#FFE500] text-black shadow-[2px_2px_0px_#000]"
+          className="absolute top-11 right-3 z-30 max-w-[calc(100%-24px)] px-2 py-1 rounded border-2 border-black text-[11px] font-black bg-[#FFE500] text-black shadow-[2px_2px_0px_#000] flex items-center gap-1.5"
         >
-          {notice}
+          <span className="min-w-0">{notice}</span>
+          <DismissButton onClick={() => setNotice(null)} />
         </div>
       )}
     </div>

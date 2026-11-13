@@ -1,6 +1,6 @@
 import React from 'react';
 import { TransparencyControl } from './TransparencyControl';
-import { Pin, Minus, Square, X, Settings, History, Moon, Sun } from 'lucide-react';
+import { Pin, Minus, Square, X, Settings, History, Moon, Sun, Lightbulb } from 'lucide-react';
 
 interface TitleBarProps {
   isAlwaysOnTop: boolean;
@@ -9,6 +9,9 @@ interface TitleBarProps {
   onToggleDarkMode?: () => void;
   onOpenSettings: () => void;
   onOpenFiles: () => void;
+  /** Saved ideas (right-click > "Guardar idea"); the button shows when provided */
+  onOpenIdeas?: () => void;
+  ideasCount?: number;
   /** When provided, the close button asks the app first (confirmation modal) instead of closing directly */
   onRequestClose?: () => void;
   /** Window opacity 0.3–1; the transparency button is shown when onChangeOpacity is provided */
@@ -35,6 +38,8 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onToggleDarkMode,
   onOpenSettings,
   onOpenFiles,
+  onOpenIdeas,
+  ideasCount = 0,
   onRequestClose,
   opacity = 1,
   onChangeOpacity,
@@ -99,6 +104,18 @@ export const TitleBar: React.FC<TitleBarProps> = ({
             idleClassName={NEUTRAL}
             iconProps={ICON_PROPS}
           />
+        )}
+
+        {/* Saved ideas */}
+        {onOpenIdeas && (
+          <button onClick={onOpenIdeas} title={`Ideas guardadas (${ideasCount})`} aria-label="Ideas guardadas" className={`${ICON} ${NEUTRAL} relative`}>
+            <Lightbulb {...ICON_PROPS} />
+            {ideasCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[#FF6B6B] text-white text-[8.5px] leading-[14px] font-black border border-black">
+                {ideasCount > 99 ? '99+' : ideasCount}
+              </span>
+            )}
+          </button>
         )}
 
         {/* History of opened files */}

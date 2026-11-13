@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-const { createClaudeChatService, findClaudeExecutable, findBundledExecutable, buildUserContent } = require('../../electron/services/claudeChatService.cjs');
+const { createClaudeChatService, summarizeUsage, findClaudeExecutable, findBundledExecutable, buildUserContent } = require('../../electron/services/claudeChatService.cjs');
 
 /** Fake Agent SDK: echoes each user turn as an assistant reply + result, and exposes canUseTool. */
 function fakeSdk() {
@@ -13,6 +13,16 @@ function fakeSdk() {
     close: vi.fn(),
     supportedCommands: vi.fn(async () => [{ name: 'compact', description: 'Compacta', argumentHint: '' }]),
     supportedModels: vi.fn(async () => [{ value: 'sonnet', displayName: 'Sonnet' }]),
+    usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: vi.fn(async () => ({
+      subscription_type: 'pro',
+      rate_limits_available: true,
+      rate_limits: {
+        five_hour: { utilization: 16, resets_at: '2026-11-13T10:00:00Z', limit_dollars: null },
+        seven_day: { utilization: 141, resets_at: '2026-11-17T19:00:00Z' },
+        model_scoped: [{ display_name: 'Fable', utilization: 0, resets_at: null }],
+      },
+      behaviors: null,
+    })),
   };
   const query = vi.fn(({ prompt, options }: any) => {
     calls.push(options);
@@ -198,5 +208,52 @@ describe('Backend: ClaudeChatService (Agent SDK sessions)', () => {
     const res = await service.start({ id: 'c1' }, () => {});
     expect(res).toEqual({ success: false, error: 'sin sdk' });
     expect(service.has('c1')).toBe(false);
+  });
+
+  it('reads plan usage (/usage) through a live session, without the transcript scan', async () => {
+    const { service, emit, control } = setup();
+    expect(await service.usage('nadie')).toEqual({ success: false, error: 'Sin sesión de Claude activa' });
+    await service.start({ id: 'c1' }, emit);
+    const res = await service.usage('otro-id'); // falls back to any live chat
+    expect(control.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET).toHaveBeenCalledWith({ skipBehaviors: true });
+    expect(res).toEqual({
+      success: true,
+      available: true,
+      plan: 'pro',
+      fiveHour: { percent: 16, resetsAt: '2026-11-13T10:00:00Z' },
+      weekly: { percent: 100, resetsAt: '2026-11-17T19:00:00Z' }, // clamped
+    });
+
+    control.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET.mockRejectedValueOnce(new Error('timeout'));
+    expect(await service.usage('c1')).toEqual({ success: false, error: 'timeout' });
+    service.stop('c1');
+  });
+
+  it('reports usage as unavailable for API keys and tolerates a changed answer shape', () => {
+    expect(summarizeUsage({ subscription_type: null, rate_limits_available: false, rate_limits: null })).toEqual({
+      available: false, plan: null, fiveHour: null, weekly: null,
+    });
+    expect(summarizeUsage(undefined).available).toBe(false);
+    expect(summarizeUsage({ rate_limits_available: true, rate_limits: { five_hour: { utilization: null }, seven_day: 'raro' } })).toEqual({
+      available: true, plan: null, fiveHour: null, weekly: null,
+    });
+  });
+
+  it('reports usage as unsupported when the SDK lacks the experimental call', async () => {
+    const { service, emit, control } = setup();
+    delete (control as any).usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    await service.start({ id: 'c2' }, emit);
+    expect((await service.usage('c2')).success).toBe(false);
+    service.stop('c2');
+  });
+
+  it('runs the chat as another account through its config folder', async () => {
+    const { service, emit, calls } = setup();
+    await service.start({ id: 'acc', configDir: 'C:\\datos\\claude-accounts\\b' }, emit);
+    expect(calls[0].env.CLAUDE_CONFIG_DIR).toBe('C:\\datos\\claude-accounts\\b');
+    service.stop('acc');
+    await service.start({ id: 'main' }, emit);
+    expect(calls[1].env.CLAUDE_CONFIG_DIR).toBeUndefined();
+    service.stop('main');
   });
 });
