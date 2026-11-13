@@ -61,4 +61,20 @@ describe('ClaudeChatView remembers the selectors for new chats', () => {
     expect(loadChatPrefs().model).toBe('');
     expect(await screen.findByText(/ya no está disponible/)).toBeInTheDocument();
   });
+
+  it('a chat opened with sent-over text has it in the box, waiting for the user to send it', async () => {
+    api.claudeSend = vi.fn(async () => ({ success: true }));
+    render(<ClaudeChatView tabId="c4" isActive initialDraft="Revisa este párrafo" />);
+    await waitFor(() => expect(api.claudeStart).toHaveBeenCalled());
+    const box = screen.getByLabelText('Mensaje para Claude') as HTMLTextAreaElement;
+    expect(box.value).toBe('Revisa este párrafo\n\n');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(api.claudeSend).not.toHaveBeenCalled();
+
+    fireEvent.change(box, { target: { value: `${box.value}y dime si hay errores` } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() =>
+      expect(api.claudeSend).toHaveBeenCalledWith('c4', { text: 'Revisa este párrafo\n\ny dime si hay errores', images: [] })
+    );
+  });
 });

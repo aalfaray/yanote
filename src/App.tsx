@@ -275,7 +275,7 @@ export const App: React.FC = () => {
     setActiveTabId(newId);
   };
 
-  const handleNewClaude = (folder?: string) => {
+  const handleNewClaude = (folder?: string, initialDraft?: string) => {
     const newId = `claude-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     // Same folder rule as terminals: where the active note lives, else the notes folder
     const current = tabs.find((t) => t.id === activeTabId);
@@ -294,8 +294,9 @@ export const App: React.FC = () => {
           isDirty: false,
           kind: 'claude',
           cwd,
-          // New chats use the account picked last
-          accountId: activeAccountRef.current,
+          // From a chat: same account; otherwise the account picked last
+          accountId: current?.kind === 'claude' && current.accountId ? current.accountId : activeAccountRef.current,
+          ...(initialDraft ? { initialDraft } : {}),
         },
       ];
     });
@@ -703,6 +704,17 @@ export const App: React.FC = () => {
       }),
     []
   );
+  // Right-click a selection > "Enviar a un chat nuevo de Claude": new chat in the same folder, text ready to send
+  const newClaudeRef = useRef(handleNewClaude);
+  newClaudeRef.current = handleNewClaude;
+  useEffect(
+    () =>
+      window.electronAPI?.onSendToNewChat?.((text) => {
+        if (typeof text === 'string' && text.trim()) newClaudeRef.current(undefined, text.trim());
+      }),
+    []
+  );
+
   // Clicking the notification brings that chat to the front
   useEffect(
     () =>
@@ -856,6 +868,7 @@ export const App: React.FC = () => {
               isActive={t.id === activeTab?.id}
               onLogin={(a) => void handleClaudeLogin(a)}
               accountId={t.accountId}
+              initialDraft={t.initialDraft}
               onAccountChange={(accountId) => handleChatAccountChange(t.id, accountId)}
             />
           ))}

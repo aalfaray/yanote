@@ -55,6 +55,8 @@ export interface TabItem {
   initialCommand?: string;
   /** Claude account a chat tab uses (kind === 'claude') */
   accountId?: string;
+  /** Text a new chat starts with in its message box (not sent until the user sends it) */
+  initialDraft?: string;
 }
 
 export type TabKind = 'markdown' | 'terminal' | 'claude';
@@ -175,6 +177,8 @@ export interface ElectronAPI {
   /** `skipIfFocused`: don't show it if the yanote window has focus (you're already looking at that chat) */
   notify?: (payload: { title: string; body?: string; tabId?: string; skipIfFocused?: boolean }) => Promise<boolean>;
   onFocusTab?: (callback: (tabId: string) => void) => () => void;
+  /** Right-click > "Enviar a un chat nuevo de Claude" on a selection */
+  onSendToNewChat?: (callback: (text: string) => void) => () => void;
   /** Disk path of a dropped File, or null when it has none */
   getPathForFile?: (file: File) => string | null;
   // "Abrir con yanote" (Explorer context menu / command line)

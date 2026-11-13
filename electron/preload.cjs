@@ -41,6 +41,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('app:focusTab', listener);
   },
 
+  // Context menu "Enviar a un chat nuevo de Claude" with the selected text
+  onSendToNewChat: (callback) => {
+    const listener = (_event, text) => callback(text);
+    ipcRenderer.on('app:sendToNewChat', listener);
+    return () => ipcRenderer.removeListener('app:sendToNewChat', listener);
+  },
+
   // "Abrir con yanote" from Explorer: the launch target, then any later ones
   takeOpenTarget: () => ipcRenderer.invoke('app:takeOpenTarget'),
   onOpenTarget: (callback) => {

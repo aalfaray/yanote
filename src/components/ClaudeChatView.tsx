@@ -57,6 +57,8 @@ interface ClaudeChatViewProps {
   accountId?: string;
   /** The user moved this chat to another account */
   onAccountChange?: (accountId: string) => void;
+  /** Text already typed in the message box when the chat opens (e.g. sent from another chat); not sent automatically */
+  initialDraft?: string;
 }
 
 const MODES: { value: ClaudePermissionMode; label: string; hint: string }[] = [
@@ -488,9 +490,13 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   onLogin,
   accountId: initialAccountId,
   onAccountChange,
+  initialDraft,
 }) => {
   const [state, dispatch] = useReducer(chatReducer, undefined, initialChatState);
-  const [draft, setDraft] = useState('');
+  // A sent-over text gets an empty line below it, ready for the user to add their own words
+  const [draft, setDraft] = useState(initialDraft ? `${initialDraft}
+
+` : '');
   const [images, setImages] = useState<(ClaudeImageInput & { url: string })[]>([]);
   const [mode, setMode] = useState<ClaudePermissionMode>(() => loadChatPrefs().mode ?? 'default');
   const [cmdIndex, setCmdIndex] = useState(0);
@@ -574,7 +580,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   useEffect(() => {
     if (!isActive) return;
-    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    const id = requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      // Caret after any text already there (e.g. a selection sent from another chat)
+      el.setSelectionRange(el.value.length, el.value.length);
+      el.scrollTop = el.scrollHeight;
+    });
     return () => cancelAnimationFrame(id);
   }, [isActive]);
 

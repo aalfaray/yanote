@@ -106,6 +106,16 @@ function createWindow() {
     const hasSelection = Boolean(params.selectionText && params.selectionText.trim());
     if (!hasSelection && !params.isEditable) return;
     const flags = params.editFlags || {};
+    // Selected text can start a new Claude chat (typed in its box, not sent)
+    const toChat = hasSelection
+      ? [
+          { type: 'separator' },
+          {
+            label: 'Enviar a un chat nuevo de Claude',
+            click: () => mainWindow && mainWindow.webContents.send('app:sendToNewChat', params.selectionText),
+          },
+        ]
+      : [];
     const template = params.isEditable
       ? [
           { label: 'Deshacer', role: 'undo', enabled: flags.canUndo },
@@ -116,11 +126,13 @@ function createWindow() {
           { label: 'Pegar', role: 'paste', enabled: flags.canPaste },
           { type: 'separator' },
           { label: 'Seleccionar todo', role: 'selectAll' },
+          ...toChat,
         ]
       : [
           { label: 'Copiar', role: 'copy' },
           { type: 'separator' },
           { label: 'Seleccionar todo', role: 'selectAll' },
+          ...toChat,
         ];
     Menu.buildFromTemplate(template).popup({ window: mainWindow });
   });
