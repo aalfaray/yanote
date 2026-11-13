@@ -129,4 +129,25 @@ describe('Backend: ClaudeAccountService (several Claude accounts)', () => {
       sanitizeAccounts([{ id: 'default', configDir: 'x' }, { id: 'ok', name: ' A ', configDir: 'C:\\a' }, { id: 'ok', configDir: 'C:\\b' }, { id: '../x', configDir: 'y' }, null, { id: 'sin-dir' }])
     ).toEqual([{ id: 'ok', name: 'A', configDir: 'C:\\a' }]);
   });
+
+  it('reads a saved conversation back (main thread only) for a restored chat', () => {
+    const svc = setup();
+    const project = path.join(home, '.claude', 'projects', 'C--nube');
+    fs.mkdirSync(project, { recursive: true });
+    const lines = [
+      { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'continúa' }] } },
+      { type: 'attachment', attachment: {} },
+      { type: 'assistant', message: { id: 'm1', content: [{ type: 'text', text: 'Retomo' }] } },
+      { type: 'assistant', isSidechain: true, message: { id: 's', content: [{ type: 'text', text: 'subagente' }] } },
+      { type: 'user', isMeta: true, message: { content: 'inyectado' } },
+    ];
+    fs.writeFileSync(path.join(project, 'sess-9.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n') + '\n{roto\n');
+    expect(svc.readHistory('sess-9', 'default')).toEqual([
+      { type: 'user', message: lines[0].message, parent_tool_use_id: null },
+      { type: 'assistant', message: lines[2].message, parent_tool_use_id: null },
+    ]);
+    expect(svc.readHistory('sess-9', 'default', 1)).toHaveLength(1);
+    expect(svc.readHistory('no-existe', 'default')).toEqual([]);
+    expect(svc.readHistory('../x', 'default')).toEqual([]);
+  });
 });

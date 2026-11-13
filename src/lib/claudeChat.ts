@@ -339,6 +339,8 @@ export type ChatAction =
   | { type: 'local_permission_mode'; mode: string }
   | { type: 'auth_retry' }
   | { type: 'dismiss'; id: string }
+  /** Earlier messages of a resumed conversation (read from its transcript), shown above the new ones */
+  | { type: 'history'; messages: Record<string, unknown>[] }
   | { type: 'reset' };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -353,6 +355,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     case 'notice':
       return push(state, { kind: 'notice', id: localId('notice'), text: action.text, tone: action.tone });
+    case 'history':
+      return { ...state, items: [...historyItems(action.messages), ...state.items] };
     case 'dismiss':
       return { ...state, items: state.items.filter((i) => i.id !== action.id) };
     case 'local_permission_mode':
@@ -392,6 +396,39 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 }
 
 /** Items shown at the top level; subagent (Task/Agent) items are folded into their parent tool card. */
+/** Text the user typed in a stored user turn; null for tool results and app-injected turns. */
+function typedUserText(content: unknown): { text: string; imageCount: number } | null {
+  const blocks = typeof content === 'string' ? [{ type: 'text', text: content }] : Array.isArray(content) ? content : [];
+  if (blocks.some((b) => isObj(b) && b.type === 'tool_result')) return null;
+  const text = blocks
+    .filter((b) => isObj(b) && b.type === 'text')
+    .map((b) => str((b as Json).text))
+    .join('\n')
+    .trim();
+  // <task-notification>, <command-name>, <system-reminder>…: written by the app, not by the user
+  if (!text || /^<[a-z][\w-]*[\s>]/i.test(text)) return null;
+  return { text, imageCount: blocks.filter((b) => isObj(b) && b.type === 'image').length };
+}
+
+/** Transcript items for stored messages, built with the same rules as live ones. */
+export function historyItems(messages: Record<string, unknown>[]): ChatItem[] {
+  let h = initialChatState();
+  for (const msg of messages) {
+    if (!isObj(msg)) continue;
+    if (msg.type === 'user') {
+      const typed = typedUserText(isObj(msg.message) ? msg.message.content : undefined);
+      if (typed) {
+        h = push(h, { kind: 'user', id: localId('user'), text: typed.text, imageCount: typed.imageCount });
+        continue;
+      }
+    }
+    if (msg.type === 'user' || msg.type === 'assistant') {
+      h = chatReducer(h, { type: 'event', event: { id: '', type: 'message', message: msg } });
+    }
+  }
+  return h.items;
+}
+
 export function topLevelItems(items: ChatItem[]): ChatItem[] {
   return items.filter((i) => !('parentToolUseId' in i) || !i.parentToolUseId);
 }

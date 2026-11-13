@@ -14,6 +14,8 @@ export interface AppConfig {
   /** Notes left open last time; they reopen on the next start */
   openTabs?: SavedTab[];
   activeTabPath?: string | null;
+  /** Position of the active tab in openTabs */
+  activeTabIndex?: number;
   /** Extra Claude accounts and the one new chats use */
   claudeAccounts?: { id: string; name: string; configDir: string }[];
   activeClaudeAccount?: string;
@@ -27,11 +29,12 @@ export interface AppConfig {
   recentFiles?: RecentFile[];
 }
 
-export interface SavedTab {
-  path: string;
-  title: string;
-  isPinned?: boolean;
-}
+/** A tab remembered for the next start (entries without `kind` are notes, the old format) */
+export type SavedTab =
+  | { kind?: 'note'; path: string; title: string; isPinned?: boolean }
+  | { kind: 'scratch'; title: string; content: string; isPinned?: boolean }
+  | { kind: 'terminal'; title: string; shell: TerminalShell; cwd?: string }
+  | { kind: 'claude'; title: string; cwd?: string; sessionId?: string; accountId?: string; pins?: ChatPin[] };
 
 /** A text saved with right-click > "Guardar idea" */
 export interface SavedIdea {
@@ -77,6 +80,8 @@ export interface TabItem {
   initialDraft?: string;
   /** Paragraphs pinned on top of a chat */
   chatPins?: ChatPin[];
+  /** Claude Code session of a chat tab, to resume it after a restart */
+  sessionId?: string;
 }
 
 export type TabKind = 'markdown' | 'terminal' | 'claude';
@@ -221,6 +226,8 @@ export interface ElectronAPI {
   claudeStop?: (id: string) => Promise<boolean>;
   /** Plan usage (5-hour / weekly windows, like /usage) through a live chat session */
   claudeUsage?: (id?: string) => Promise<ClaudeUsage>;
+  /** Earlier messages of a saved conversation (to show them again after a restart) */
+  claudeHistory?: (sessionId: string, accountId?: string) => Promise<Record<string, unknown>[]>;
   /** Model and effort from Claude Code's settings for that account/folder */
   claudeDefaults?: (accountId?: string, cwd?: string) => Promise<import('../lib/claudeChat').ClaudeDefaults>;
   /** Several Claude accounts (each one its own Claude Code sign-in) */

@@ -37,14 +37,43 @@ function sanitizeRecentFiles(value) {
 const MAX_OPEN_TABS = 50;
 
 /** Notes left open last time (files only), so they reopen on the next start. */
+const MAX_SCRATCH_CHARS = 500000;
+const str = (v, max = 4096) => (typeof v === 'string' && v ? v.slice(0, max) : undefined);
+const SHELLS = new Set(['powershell', 'cmd']);
+
+/** Tabs left open last time: notes, unsaved notes, terminals and Claude chats. */
 function sanitizeOpenTabs(list) {
   if (!Array.isArray(list)) return [];
-  const seen = new Set();
+  const seenPaths = new Set();
   const out = [];
   for (const t of list) {
-    if (!t || typeof t.path !== 'string' || !t.path.trim() || seen.has(t.path)) continue;
-    seen.add(t.path);
-    out.push({ path: t.path, title: typeof t.title === 'string' && t.title ? t.title : path.basename(t.path), isPinned: Boolean(t.isPinned) });
+    if (!t || typeof t !== 'object') continue;
+    const title = str(t.title, 200);
+    const kind = t.kind || 'note';
+    if (kind === 'note') {
+      if (typeof t.path !== 'string' || !t.path.trim() || seenPaths.has(t.path)) continue;
+      seenPaths.add(t.path);
+      out.push({ kind: 'note', path: t.path, title: title || path.basename(t.path), isPinned: Boolean(t.isPinned) });
+    } else if (kind === 'scratch') {
+      if (typeof t.content !== 'string') continue;
+      out.push({ kind: 'scratch', title: title || 'scratch.md', content: t.content.slice(0, MAX_SCRATCH_CHARS), isPinned: Boolean(t.isPinned) });
+    } else if (kind === 'terminal') {
+      out.push({ kind: 'terminal', title: title || 'Terminal', shell: SHELLS.has(t.shell) ? t.shell : 'powershell', ...(str(t.cwd) ? { cwd: str(t.cwd) } : {}) });
+    } else if (kind === 'claude') {
+      const pins = Array.isArray(t.pins)
+        ? t.pins.filter((p) => p && typeof p.id === 'string' && typeof p.text === 'string').slice(0, 50).map((p) => ({ id: p.id.slice(0, 80), text: p.text.slice(0, 20000) }))
+        : [];
+      out.push({
+        kind: 'claude',
+        title: title || 'Claude',
+        ...(str(t.cwd) ? { cwd: str(t.cwd) } : {}),
+        ...(typeof t.sessionId === 'string' && /^[\w-]{1,100}$/.test(t.sessionId) ? { sessionId: t.sessionId } : {}),
+        ...(typeof t.accountId === 'string' && /^[\w-]{1,64}$/.test(t.accountId) ? { accountId: t.accountId } : {}),
+        ...(pins.length ? { pins } : {}),
+      });
+    } else {
+      continue;
+    }
     if (out.length >= MAX_OPEN_TABS) break;
   }
   return out;
@@ -92,6 +121,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
         opacity: parsed.opacity === undefined ? MAX_OPACITY : clampOpacity(parsed.opacity),
         openTabs: sanitizeOpenTabs(parsed.openTabs),
         activeTabPath: typeof parsed.activeTabPath === 'string' ? parsed.activeTabPath : null,
+        activeTabIndex: Number.isInteger(parsed.activeTabIndex) && parsed.activeTabIndex >= 0 ? parsed.activeTabIndex : null,
         welcomeSeen: Boolean(parsed.welcomeSeen),
         recentFiles: sanitizeRecentFiles(parsed.recentFiles),
       };
@@ -112,6 +142,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
     opacity: MAX_OPACITY,
     openTabs: [],
     activeTabPath: null,
+    activeTabIndex: null,
     welcomeSeen: false,
     recentFiles: [],
   };

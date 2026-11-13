@@ -185,7 +185,55 @@ function createClaudeAccountService({
     return { success: false, error: 'No encontré la conversación' };
   }
 
-  return { list, status, add, rename, remove, setActive, loginCommand, copySession, envFor, configDirFor, DEFAULT_ID };
+  /** The conversation's transcript file in that account's Claude Code folder, or null. */
+  function findTranscript(sessionId, accountId) {
+    if (typeof sessionId !== 'string' || !/^[\w-]+$/.test(sessionId)) return null;
+    const acc = find(accountId);
+    const projects = path.join((acc && acc.configDir) || defaultConfigDir(), 'projects');
+    let folders = [];
+    try {
+      folders = fs.readdirSync(projects, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    } catch {
+      return null;
+    }
+    for (const folder of folders) {
+      const file = path.join(projects, folder, `${sessionId}.jsonl`);
+      if (fs.existsSync(file)) return file;
+    }
+    return null;
+  }
+
+  /**
+   * Earlier messages of a conversation, in the shape the chat receives live (assistant turns and
+   * user turns), so a chat restored after a restart shows what was said. Only the main thread:
+   * subagent and system-injected entries are skipped. The last `limit` messages at most.
+   */
+  function readHistory(sessionId, accountId, limit = 600) {
+    const file = findTranscript(sessionId, accountId);
+    if (!file) return [];
+    let lines = [];
+    try {
+      lines = fs.readFileSync(file, 'utf8').split('\n');
+    } catch {
+      return [];
+    }
+    const out = [];
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let entry;
+      try {
+        entry = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (!entry || (entry.type !== 'user' && entry.type !== 'assistant') || entry.isSidechain || entry.isMeta) continue;
+      if (!entry.message || typeof entry.message !== 'object') continue;
+      out.push({ type: entry.type, message: entry.message, parent_tool_use_id: null });
+    }
+    return out.slice(-limit);
+  }
+
+  return { list, status, add, rename, remove, setActive, loginCommand, copySession, readHistory, envFor, configDirFor, DEFAULT_ID };
 }
 
 module.exports = { createClaudeAccountService, sanitizeAccounts, DEFAULT_ID };

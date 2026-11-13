@@ -17,6 +17,7 @@ import { chatNotificationFor } from './lib/claudeNotify';
 import { DismissButton } from './components/ui/DismissButton';
 import { IdeasDrawer } from './components/IdeasDrawer';
 import { addIdea, removeIdea } from './lib/ideas';
+import { toSavedTabs, restoreTab } from './lib/session';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
@@ -129,27 +130,33 @@ export const App: React.FC = () => {
             document.documentElement.classList.remove('dark');
           }
 
-          // Reopen the notes left open last time (the ones that still exist)
+          // Reopen the tabs left open last time: notes (that still exist), unsaved notes,
+          // terminals and Claude chats (resumed), in the same order
           const saved = Array.isArray(config.openTabs) ? config.openTabs : [];
           const restored: TabItem[] = [];
+          let activeRestored: TabItem | undefined;
+          const stamp = Date.now();
           for (const [i, t] of saved.entries()) {
-            const contentRes = await window.electronAPI.readFile(t.path);
-            if (contentRes.success && contentRes.content !== undefined) {
-              restored.push({
-                id: `tab-restored-${i}-${Date.now()}`,
-                title: t.title,
-                path: t.path,
-                content: contentRes.content,
-                isDirty: false,
-                isPinned: t.isPinned,
-              });
+            const id = `${t.kind === 'claude' ? 'claude' : t.kind === 'terminal' ? 'term' : 'tab'}-restored-${i}-${stamp}`;
+            let tab: TabItem | null = null;
+            if (!t.kind || t.kind === 'note') {
+              const contentRes = await window.electronAPI.readFile(t.path);
+              if (contentRes.success && contentRes.content !== undefined) {
+                tab = { id, title: t.title, path: t.path, content: contentRes.content, isDirty: false, isPinned: t.isPinned };
+              }
+              if (tab && !Number.isInteger(config.activeTabIndex) && t.path === config.activeTabPath) activeRestored = tab;
+            } else {
+              tab = restoreTab(t, id);
             }
+            if (!tab) continue;
+            restored.push(tab);
+            if (i === config.activeTabIndex) activeRestored = tab;
           }
 
           // Only replace the startup placeholder, never tabs the user already opened
           const untouched = (prev: TabItem[]) => prev.length === 1 && prev[0].id === WELCOME_TAB_ID;
           if (restored.length) {
-            const active = restored.find((t) => t.path === config.activeTabPath) || restored[restored.length - 1];
+            const active = activeRestored || restored[restored.length - 1];
             setTabs((prev) => (untouched(prev) ? restored : prev));
             setActiveTabId((prevId) => (prevId === WELCOME_TAB_ID ? active.id : prevId));
           } else if (config.welcomeSeen) {
@@ -176,20 +183,17 @@ export const App: React.FC = () => {
     initApp();
   }, []);
 
-  // Remember which notes are open (and the active one) for the next start
-  // Keyed on paths/pins only, so typing in a note doesn't rewrite the config
-  const sessionKey = JSON.stringify([
-    tabs
-      .filter((t) => t.path && (!t.kind || t.kind === 'markdown'))
-      .map((t) => ({ path: t.path as string, title: t.title, isPinned: Boolean(t.isPinned) })),
-    tabs.find((t) => t.id === activeTabId)?.path ?? null,
-  ]);
+  // Remember the open tabs (and the active one) for the next start. The welcome note isn't kept.
+  // Saved notes are kept by path, so typing in them doesn't rewrite the config; unsaved ones keep their text.
+  const savedTabs = toSavedTabs(tabs, [WELCOME_TAB_ID]);
+  const keptTabs = tabs.filter((t) => t.id !== WELCOME_TAB_ID);
+  const sessionKey = JSON.stringify([savedTabs, Math.max(0, keptTabs.findIndex((t) => t.id === activeTabId))]);
   useEffect(() => {
     if (!sessionReadyRef.current || !window.electronAPI) return;
     const timer = setTimeout(() => {
-      const [openTabs, activeTabPath] = JSON.parse(sessionKey);
-      void window.electronAPI?.saveAppConfig({ openTabs, activeTabPath });
-    }, 500);
+      const [openTabs, activeTabIndex] = JSON.parse(sessionKey);
+      void window.electronAPI?.saveAppConfig({ openTabs, activeTabIndex });
+    }, 800);
     return () => clearTimeout(timer);
   }, [sessionKey]);
 
@@ -754,6 +758,10 @@ export const App: React.FC = () => {
       }),
     []
   );
+  // A chat's Claude Code session, kept so the chat comes back after a restart
+  const handleChatSessionId = useCallback((tabId: string, sessionId: string) => {
+    setTabs((prev) => prev.map((t) => (t.id === tabId && t.sessionId !== sessionId ? { ...t, sessionId } : t)));
+  }, []);
   const handleUnpin = (tabId: string, pinId: string) =>
     setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, chatPins: (t.chatPins || []).filter((p) => p.id !== pinId) } : t)));
   // The menu asks the page which chat was right-clicked (pins only make sense there)
@@ -926,6 +934,8 @@ export const App: React.FC = () => {
               accountId={t.accountId}
               initialDraft={t.initialDraft}
               pins={t.chatPins}
+              resumeSessionId={t.sessionId}
+              onSessionId={(sessionId) => handleChatSessionId(t.id, sessionId)}
               onUnpin={(pinId) => handleUnpin(t.id, pinId)}
               onAccountChange={(accountId) => handleChatAccountChange(t.id, accountId)}
             />

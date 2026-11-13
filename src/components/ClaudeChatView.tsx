@@ -619,6 +619,20 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     };
   }, [api, accountId, cwd]);
 
+  // A chat restored after a restart: show the conversation so far (Claude resumes it on the next message)
+  useEffect(() => {
+    if (!resumeSessionId || !api?.claudeHistory) return;
+    let cancelled = false;
+    void api.claudeHistory(resumeSessionId, accountRef.current).then((messages) => {
+      if (!cancelled && Array.isArray(messages) && messages.length) dispatch({ type: 'history', messages });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Only once, for the session the tab was restored with
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // An idea added from the Ideas list goes below what's already typed
   useEffect(() => {
     const onAppend = (e: Event) => {

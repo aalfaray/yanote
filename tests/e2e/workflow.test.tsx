@@ -605,8 +605,11 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       await waitFor(
         () =>
           expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith({
-            openTabs: [{ path: '/proyectos/plan.md', title: 'plan.md', isPinned: false }],
-            activeTabPath: '/proyectos/plan.md',
+            openTabs: [
+              { kind: 'scratch', title: 'scratch-1.md', content: '', isPinned: false },
+              { kind: 'note', path: '/proyectos/plan.md', title: 'plan.md', isPinned: false },
+            ],
+            activeTabIndex: 1,
           }),
         { timeout: 3000 }
       );
