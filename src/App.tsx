@@ -9,7 +9,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { RecentFilesDrawer } from './components/RecentFilesDrawer';
 import { addRecentFile, removeRecentFile } from './lib/recentFiles';
 import { ConfirmModal } from './components/ui/ConfirmModal';
-import type { TabItem, TerminalShell, RecentFile } from './types/electron';
+import type { TabItem, TerminalShell, RecentFile, OpenTarget } from './types/electron';
 import { Save, Check, AlertCircle } from 'lucide-react';
 import { parentDir } from './lib/paths';
 
@@ -131,6 +131,13 @@ export const App: React.FC = () => {
         } catch (err) {
           console.error('Init error:', err);
         }
+        // Launched with a folder/file ("Abrir con yanote"): open it once the notes are in place
+        try {
+          const target = await window.electronAPI.takeOpenTarget?.();
+          if (target) await openTargetRef.current(target);
+        } catch (err) {
+          console.error('Open target error:', err);
+        }
       }
     };
     initApp();
@@ -227,11 +234,13 @@ export const App: React.FC = () => {
     setActiveTabId(newId);
   };
 
-  const handleNewClaude = () => {
+  const handleNewClaude = (folder?: string) => {
     const newId = `claude-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     // Same folder rule as terminals: where the active note lives, else the notes folder
     const current = tabs.find((t) => t.id === activeTabId);
-    const cwd = current?.kind === 'terminal' || current?.kind === 'claude' ? current.cwd : parentDir(current?.path ?? null) ?? undefined;
+    const cwd =
+      folder ??
+      (current?.kind === 'terminal' || current?.kind === 'claude' ? current.cwd : parentDir(current?.path ?? null) ?? undefined);
     setTabs((prev) => {
       const count = prev.filter((t) => t.kind === 'claude').length + 1;
       return [
@@ -596,6 +605,30 @@ export const App: React.FC = () => {
     openFileRef.current = handleOpenFile;
   });
 
+  // "Abrir con yanote" from Explorer: a folder becomes the working folder and gets a Claude chat
+  // there; a markdown file opens in a tab. The main process already saved the folder in the config.
+  const handleOpenTarget = async (target: OpenTarget) => {
+    const name = target.path.split(/[\\/]/).filter(Boolean).pop() || target.path;
+    if (target.type === 'folder') {
+      setNotesDir(target.path);
+      handleNewClaude(target.path);
+      setNotification({ type: 'success', text: `📂 Carpeta abierta: ${name}` });
+      return;
+    }
+    const res = await window.electronAPI?.readFile(target.path);
+    if (res?.success && res.content !== undefined) {
+      openFileInTab(target.path, name, res.content);
+      recordRecentFiles([{ path: target.path, name }]);
+    } else {
+      setNotification({ type: 'error', text: `No se pudo abrir ${name}: ${res?.error || 'error desconocido'}` });
+    }
+  };
+  const openTargetRef = useRef(handleOpenTarget);
+  useEffect(() => {
+    openTargetRef.current = handleOpenTarget;
+  });
+  useEffect(() => window.electronAPI?.onOpenTarget?.((target) => void openTargetRef.current(target)), []);
+
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
   const isClaudeActive = activeTab?.kind === 'claude';
   const isTerminalActive = activeTab?.kind === 'terminal' || isClaudeActive;
@@ -623,7 +656,7 @@ export const App: React.FC = () => {
         onCloseTab={handleCloseTab}
         onNewTab={handleNewTab}
         onNewTerminal={handleNewTerminal}
-        onNewClaude={handleNewClaude}
+        onNewClaude={() => handleNewClaude()}
         onOpenFile={handleOpenFile}
         onRenameTab={handleRenameTab}
         onTogglePinTab={handleTogglePinTab}

@@ -9,10 +9,19 @@ const { createTerminalService } = require('./services/terminalService.cjs');
 const { savePastedImage } = require('./services/clipboardImageService.cjs');
 const { createClaudeChatService } = require('./services/claudeChatService.cjs');
 const { createUpdateService } = require('./services/updateService.cjs');
+const { parseOpenTarget } = require('./services/openTargetService.cjs');
+
+// Unpackaged runs are `electron . <args>`: the app path is not something to open
+const ARG_SKIP = app.isPackaged ? 1 : 2;
+
+// One yanote at a time (they share app-config.json and the updater needs to close them all):
+// launching it again — e.g. "Abrir con yanote" in Explorer — hands the folder/file to the open window.
+const hasInstanceLock = !app.isPackaged || app.requestSingleInstanceLock();
+if (!hasInstanceLock) app.quit();
 
 const speechService = createSpeechService();
 const terminalService = createTerminalService();
-// The installer doesn't ship the SDK's own Claude Code binary (331 MB): the user's `claude` is required
+// Bundled Claude Code is the fallback when the user has none installed
 const claudeChatService = createClaudeChatService({ requireInstalledCli: app.isPackaged });
 let updateService = null;
 
@@ -138,7 +147,34 @@ function setupUpdates() {
 
 app.on('before-quit', () => clearInterval(updateTimer));
 
+// Folder/file yanote was launched with, waiting for the renderer to ask for it
+let pendingOpenTarget = parseOpenTarget(process.argv, { skip: ARG_SKIP });
+
+/** A folder becomes the working folder (new notes, terminals and chats start there). */
+function applyOpenTarget(target) {
+  if (target && target.type === 'folder') {
+    updateConfig({ notesPath: target.path });
+  }
+  return target;
+}
+
+app.on('second-instance', (_event, argv, workingDirectory) => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+  const target = applyOpenTarget(parseOpenTarget(argv, { skip: ARG_SKIP, cwd: workingDirectory }));
+  if (target) mainWindow.webContents.send('app:openTarget', target);
+});
+
+ipcMain.handle('app:takeOpenTarget', () => {
+  const target = applyOpenTarget(pendingOpenTarget);
+  pendingOpenTarget = null;
+  return target;
+});
+
 app.whenReady().then(async () => {
+  if (!hasInstanceLock) return;
   fileService.ensureNotesDir(appConfig.notesPath);
   createWindow();
 

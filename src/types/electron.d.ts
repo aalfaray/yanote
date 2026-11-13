@@ -156,6 +156,9 @@ export interface ElectronAPI {
   /** Restart into the downloaded version */
   installUpdate?: () => Promise<boolean>;
   onUpdateEvent?: (callback: (event: UpdateEvent) => void) => () => void;
+  // "Abrir con yanote" (Explorer context menu / command line)
+  takeOpenTarget?: () => Promise<OpenTarget | null>;
+  onOpenTarget?: (callback: (target: OpenTarget) => void) => () => void;
 
   // Claude chat sessions (Agent SDK)
   claudeStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: ClaudePermissionMode; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
@@ -173,6 +176,12 @@ export interface ElectronAPI {
 }
 
 export type UpdateMode = 'auto' | 'portable' | 'disabled';
+
+/** What "Abrir con yanote" asked to open */
+export interface OpenTarget {
+  type: 'folder' | 'file';
+  path: string;
+}
 
 export type UpdateEvent =
   | { type: 'available'; mode: UpdateMode; version: string; currentVersion: string; notes: string; url: string }

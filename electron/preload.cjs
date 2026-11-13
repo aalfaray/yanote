@@ -24,6 +24,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveAppConfig: (config) => ipcRenderer.invoke('fs:saveAppConfig', config),
   revealInExplorer: (filePath) => ipcRenderer.invoke('app:revealInExplorer', filePath),
 
+  // "Abrir con yanote" from Explorer: the launch target, then any later ones
+  takeOpenTarget: () => ipcRenderer.invoke('app:takeOpenTarget'),
+  onOpenTarget: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('app:openTarget', listener);
+    return () => ipcRenderer.removeListener('app:openTarget', listener);
+  },
+
 
   // Text to speech (native fallback)
   ttsSpeak: (request) => ipcRenderer.invoke('tts:speak', request),
