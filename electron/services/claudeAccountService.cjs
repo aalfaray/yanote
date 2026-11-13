@@ -97,6 +97,30 @@ function createClaudeAccountService({
     }
   }
 
+  /**
+   * Signs the account out with Claude Code's own `auth logout` (its folder and settings stay, so it
+   * can sign in again later). For the main account this signs Claude Code out on the whole PC.
+   */
+  async function logout(id) {
+    try {
+      const acc = find(id);
+      if (!acc) return { success: false, error: 'Cuenta no encontrada' };
+      const exe = getExecutable();
+      if (!exe) return { success: false, error: 'No encontré Claude Code' };
+      const childEnv = envFor(acc.id);
+      delete childEnv.CLAUDECODE;
+      const { err } = await run(exe, ['auth', 'logout'], { env: childEnv });
+      if (err) {
+        log.error('auth logout failed', err, { accountId: acc.id });
+        return { success: false, error: err.message || 'No se pudo cerrar la sesión' };
+      }
+      return { success: true };
+    } catch (err) {
+      log.error('logout failed', err, { accountId: id });
+      return { success: false, error: err && err.message ? err.message : String(err) };
+    }
+  }
+
   function add(name) {
     const id = `acc-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
     const configDir = path.join(accountsRoot, id);
@@ -243,7 +267,7 @@ function createClaudeAccountService({
     return out.slice(-limit);
   }
 
-  return { list, status, add, rename, remove, setActive, loginCommand, copySession, readHistory, envFor, configDirFor, DEFAULT_ID };
+  return { list, status, logout, add, rename, remove, setActive, loginCommand, copySession, readHistory, envFor, configDirFor, DEFAULT_ID };
 }
 
 module.exports = { createClaudeAccountService, sanitizeAccounts, DEFAULT_ID };

@@ -234,6 +234,8 @@ export interface ElectronAPI {
   claudeAccounts?: {
     list: () => Promise<{ accounts: ClaudeAccount[]; activeId: string }>;
     status: (id: string) => Promise<ClaudeAccountStatus>;
+    /** Claude Code's own `auth logout` for that account (the main one: on the whole PC) */
+    logout: (id: string) => Promise<{ success: boolean; error?: string }>;
     add: (name?: string) => Promise<ClaudeAccount>;
     rename: (id: string, name: string) => Promise<boolean>;
     remove: (id: string) => Promise<boolean>;

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, LogIn, Plus, Trash2, UserRound, X } from 'lucide-react';
+import { Check, LogIn, LogOut, Plus, Trash2, UserRound, X } from 'lucide-react';
+import { logError } from '../lib/logger';
 import type { ClaudeAccount, ClaudeAccountStatus } from '../types/electron';
 
 const PLAN_LABEL: Record<string, string> = { pro: 'Pro', max: 'Max', team: 'Team', enterprise: 'Enterprise', free: 'Free' };
@@ -33,6 +34,9 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [confirmLogout, setConfirmLogout] = useState<string | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -73,6 +77,30 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
     onLogin(account);
   };
 
+  /** Claude Code's own sign-out for that account, then its row shows "Sin iniciar sesión". */
+  const logoutAccount = async (account: ClaudeAccount) => {
+    if (!api) return;
+    setLoggingOut(true);
+    setError(null);
+    try {
+      const res = await api.logout(account.id);
+      if (!res.success) setError(`No se pudo cerrar la sesión de ${account.name}: ${res.error || 'error desconocido'}`);
+      setConfirmLogout(null);
+      setStatuses((prev) => {
+        const next = { ...prev };
+        delete next[account.id];
+        return next;
+      });
+      const status = await api.status(account.id);
+      setStatuses((prev) => ({ ...prev, [account.id]: status }));
+    } catch (err) {
+      logError('ClaudeAccountMenu.logoutAccount', err, { accountId: account.id });
+      setError(`No se pudo cerrar la sesión de ${account.name}`);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   const removeAccount = async (id: string) => {
     if (!api) return;
     await api.remove(id);
@@ -103,6 +131,33 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
           const loggedIn = Boolean(st?.success && st.loggedIn);
           return (
             <li key={a.id} className={row}>
+              {confirmLogout === a.id ? (
+                <div className="flex-1 min-w-0 flex flex-col gap-1.5" role="alertdialog" aria-label={`Cerrar la sesión de ${a.name}`}>
+                  <span className="text-[11.5px] font-bold leading-snug">
+                    {a.isDefault
+                      ? `¿Cerrar la sesión de ${a.name}? Claude Code quedará sin sesión en todo tu PC (terminal y VS Code incluidos).`
+                      : `¿Cerrar la sesión de ${a.name}? La cuenta queda en la lista para volver a entrar.`}
+                  </span>
+                  <span className="flex gap-1.5">
+                    <button
+                      type="button"
+                      disabled={loggingOut}
+                      onClick={() => void logoutAccount(a)}
+                      className="h-6 px-2 inline-flex items-center gap-1 text-[10.5px] font-black bg-[#FF6B6B] text-white border-2 border-black rounded cursor-pointer disabled:opacity-50"
+                    >
+                      <LogOut size={11} strokeWidth={3} /> {loggingOut ? 'Cerrando…' : 'Cerrar sesión'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmLogout(null)}
+                      className="h-6 px-2 text-[10.5px] font-black bg-white dark:bg-zinc-700 border-2 border-black dark:border-zinc-500 rounded cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </span>
+                </div>
+              ) : (
+              <>
               <button
                 type="button"
                 disabled={current || !st}
@@ -132,6 +187,20 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
                   <LogIn size={11} strokeWidth={3} /> Entrar
                 </button>
               )}
+              {loggedIn && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmRemove(null);
+                    setConfirmLogout(a.id);
+                  }}
+                  title={`Cerrar la sesión de ${a.name}`}
+                  aria-label={`Cerrar la sesión de ${a.name}`}
+                  className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded opacity-60 hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                >
+                  <LogOut size={12} strokeWidth={2.5} />
+                </button>
+              )}
               {!a.isDefault &&
                 (confirmRemove === a.id ? (
                   <span className="shrink-0 flex items-center gap-1">
@@ -158,10 +227,18 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
                     <Trash2 size={12} strokeWidth={2.5} />
                   </button>
                 ))}
+              </>
+              )}
             </li>
           );
         })}
       </ul>
+
+      {error && (
+        <p role="alert" className="mx-2.5 mt-2 px-2 py-1 text-[11px] font-bold rounded border-2 border-[#C0392B] bg-[#FFE4E4] text-[#9B1C1C] dark:bg-[#3A1515] dark:text-[#FCA5A5]">
+          {error}
+        </p>
+      )}
 
       {adding ? (
         <form

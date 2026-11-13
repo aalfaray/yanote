@@ -69,4 +69,29 @@ describe('ClaudeAccountMenu', () => {
     expect(describeAccountStatus({ success: true, loggedIn: true, method: 'api_key' })).toBe('API key');
     expect(describeAccountStatus({ success: true, loggedIn: true, email: 'a@b.c', plan: 'max' })).toBe('a@b.c · Max');
   });
+
+  it('signs an account out after confirming, warning that the main one is the whole PC', async () => {
+    api.logout = vi.fn(async () => ({ success: true }));
+    renderMenu('acc-b');
+    await screen.findByText('yo@ejemplo.com · Pro');
+    fireEvent.click(screen.getByLabelText('Cerrar la sesión de Principal'));
+    expect(screen.getByText(/en todo tu PC/)).toBeInTheDocument();
+    expect(api.logout).not.toHaveBeenCalled();
+    api.status.mockImplementation(async () => ({ success: true, loggedIn: false }));
+    fireEvent.click(screen.getByRole('button', { name: /Cerrar sesión/ }));
+    await waitFor(() => expect(api.logout).toHaveBeenCalledWith('default'));
+    await waitFor(() => expect(screen.getAllByText('Sin iniciar sesión')).toHaveLength(2));
+  });
+
+  it('shows why a sign-out failed, and can be cancelled', async () => {
+    api.logout = vi.fn(async () => ({ success: false, error: 'sin conexión' }));
+    renderMenu('acc-b');
+    await screen.findByText('yo@ejemplo.com · Pro');
+    fireEvent.click(screen.getByLabelText('Cerrar la sesión de Principal'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(screen.queryByText(/en todo tu PC/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Cerrar la sesión de Principal'));
+    fireEvent.click(screen.getByRole('button', { name: /Cerrar sesión/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cerrar la sesión de Principal: sin conexión');
+  });
 });

@@ -420,6 +420,7 @@ ipc.handle('claude:defaults', (_, accountId, cwd) =>
 // IPC - Claude accounts
 ipc.handle('claudeAccounts:list', () => claudeAccountService.list());
 ipc.handle('claudeAccounts:status', (_, id) => claudeAccountService.status(id));
+ipc.handle('claudeAccounts:logout', (_, id) => claudeAccountService.logout(id));
 ipc.handle('claudeAccounts:add', (_, name) => claudeAccountService.add(name));
 ipc.handle('claudeAccounts:rename', (_, id, name) => claudeAccountService.rename(id, name));
 ipc.handle('claudeAccounts:remove', (_, id) => claudeAccountService.remove(id));

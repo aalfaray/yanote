@@ -109,6 +109,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   claudeAccounts: {
     list: () => ipcRenderer.invoke('claudeAccounts:list'),
     status: (id) => ipcRenderer.invoke('claudeAccounts:status', id),
+    logout: (id) => ipcRenderer.invoke('claudeAccounts:logout', id),
     add: (name) => ipcRenderer.invoke('claudeAccounts:add', name),
     rename: (id, name) => ipcRenderer.invoke('claudeAccounts:rename', id, name),
     remove: (id) => ipcRenderer.invoke('claudeAccounts:remove', id),

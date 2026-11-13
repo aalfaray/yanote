@@ -150,4 +150,20 @@ describe('Backend: ClaudeAccountService (several Claude accounts)', () => {
     expect(svc.readHistory('no-existe', 'default')).toEqual([]);
     expect(svc.readHistory('../x', 'default')).toEqual([]);
   });
+
+  it('signs an account out with `claude auth logout`, as that account', async () => {
+    const run = vi.fn(async () => ({ err: null, stdout: '' }));
+    const svc = setup(run);
+    const acc = svc.add('B');
+    expect(await svc.logout(acc.id)).toEqual({ success: true });
+    expect(run).toHaveBeenLastCalledWith('C:\\bin\\claude.exe', ['auth', 'logout'], expect.objectContaining({ env: expect.objectContaining({ CLAUDE_CONFIG_DIR: acc.configDir }) }));
+    expect(fs.existsSync(acc.configDir)).toBe(true); // the account stays, ready to sign in again
+
+    await svc.logout('default');
+    expect(run.mock.calls.at(-1)[2].env.CLAUDE_CONFIG_DIR).toBeUndefined();
+
+    run.mockResolvedValueOnce({ err: new Error('falló'), stdout: '' });
+    expect(await svc.logout('default')).toEqual({ success: false, error: 'falló' });
+    expect(await svc.logout('no-existe')).toEqual({ success: false, error: 'Cuenta no encontrada' });
+  });
 });
