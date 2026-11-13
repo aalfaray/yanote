@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { SPEECH_RATES, type SpeechController } from '../hooks/useSpeech';
 import { SpeechContext, type SelectionSnapshot } from './speechContext';
+import { DismissButton } from './ui/DismissButton';
 
 
 const formatRate = (rate: number) => `${rate}x`.replace('.', ',');
@@ -190,10 +191,8 @@ export const SpeechPlayerBar: React.FC<{ speech: SpeechController }> = ({ speech
         role="alert"
         className="absolute bottom-2 inset-x-2 min-[480px]:inset-x-auto min-[480px]:left-3 min-[480px]:bottom-3 z-30 px-3 py-1.5 rounded border-2 border-black font-black text-xs shadow-[3px_3px_0px_#000] bg-[#FF6B6B] text-white flex items-center justify-between gap-2"
       >
-        {state.error}
-        <button type="button" onClick={speech.clearError} aria-label="Cerrar aviso" className="font-black">
-          ✕
-        </button>
+        <span className="min-w-0">{state.error}</span>
+        <DismissButton onClick={speech.clearError} />
       </div>
     );
   }

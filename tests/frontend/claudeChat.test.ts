@@ -146,4 +146,12 @@ describe('Frontend: Claude sign-in detection', () => {
     const ok = msg({ type: 'assistant', parent_tool_use_id: null, message: { id: 'a2', content: [{ type: 'text', text: 'Hola' }] } });
     expect(run([notLoggedIn, ok]).authRequired).toBe(false);
   });
+
+  it('removes a notice the user closes, leaving the rest of the transcript', () => {
+    const s = run([{ type: 'notice', text: 'No se pudo cambiar el modelo', tone: 'error' }, { type: 'send', text: 'hola', imageCount: 0 }]);
+    const notice = s.items.find((i) => i.kind === 'notice')!;
+    const after = chatReducer(s, { type: 'dismiss', id: notice.id });
+    expect(after.items.map((i) => i.kind)).toEqual(['user']);
+    expect(chatReducer(after, { type: 'dismiss', id: 'no-existe' }).items).toHaveLength(1);
+  });
 });

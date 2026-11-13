@@ -695,4 +695,13 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     fireEvent.change(screen.getByTestId('mock-markdown-textarea'), { target: { value: '# Editado' } });
     expect(screen.getAllByTitle('Cambios sin guardar').length).toBeGreaterThan(0);
   });
+
+  it('the floating notice has an x that closes it right away', async () => {
+    render(<App />);
+    await waitFor(() => expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1));
+    fireEvent.keyDown(screen.getByTestId('mock-markdown-textarea'), { key: 's', ctrlKey: true });
+    const notice = await screen.findByText(/Guardado/);
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar aviso' }));
+    expect(notice).not.toBeInTheDocument();
+  });
 });

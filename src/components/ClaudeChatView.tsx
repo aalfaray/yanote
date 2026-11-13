@@ -36,6 +36,7 @@ import {
 import { markdownToSegments } from '../lib/speechText';
 import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
+import { DismissButton } from './ui/DismissButton';
 
 interface ClaudeChatViewProps {
   tabId: string;
@@ -712,7 +713,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                           🖼 {item.imageCount} {item.imageCount === 1 ? 'imagen' : 'imágenes'}
                         </div>
                       )}
-                      {item.text}
+                      <span className="min-w-0 flex-1 break-words">{item.text}</span>
+                    <DismissButton onClick={() => dispatch({ type: 'dismiss', id: item.id })} />
                     </div>
                   </div>
                 );
@@ -761,7 +763,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                 return (
                   <div
                     key={item.id}
-                    className={`text-[11px] font-bold px-2 py-1 rounded border-2 ${
+                    className={`flex items-start gap-1.5 text-[11px] font-bold px-2 py-1 rounded border-2 ${
                       item.tone === 'error'
                         ? 'border-[#C0392B] bg-[#FFE4E4] text-[#9B1C1C] dark:bg-[#3A1515] dark:text-[#FCA5A5]'
                         : 'border-black/20 dark:border-zinc-700 opacity-70'

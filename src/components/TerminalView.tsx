@@ -9,6 +9,7 @@ import { extractLastResponse } from '../lib/terminalSpeech';
 import { plainTextToSegments } from '../lib/speechText';
 import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
+import { DismissButton } from './ui/DismissButton';
 
 /** Buffer as text lines, re-joining lines the terminal soft-wrapped. */
 function bufferLines(term: Terminal): string[] {
@@ -243,9 +244,10 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       {notice && (
         <div
           role="status"
-          className="absolute top-11 right-3 z-30 px-2 py-1 rounded border-2 border-black text-[11px] font-black bg-[#FFE500] text-black shadow-[2px_2px_0px_#000]"
+          className="absolute top-11 right-3 z-30 max-w-[calc(100%-24px)] px-2 py-1 rounded border-2 border-black text-[11px] font-black bg-[#FFE500] text-black shadow-[2px_2px_0px_#000] flex items-center gap-1.5"
         >
-          {notice}
+          <span className="min-w-0">{notice}</span>
+          <DismissButton onClick={() => setNotice(null)} />
         </div>
       )}
     </div>

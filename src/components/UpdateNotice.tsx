@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Download, RefreshCw, X, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 import type { UpdateEvent, UpdateMode } from '../types/electron';
+import { DismissButton } from './ui/DismissButton';
 
 interface UpdateNoticeProps {
   /** Notes with unsaved changes: restarting would lose them, so the user is warned first */
@@ -212,8 +213,9 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ unsavedCount }) => {
             toast.tone === 'ok' ? 'bg-[#78E08F] text-black' : 'bg-[#FF6B6B] text-white'
           }`}
         >
-          {toast.tone === 'ok' ? <CheckCircle2 size={14} strokeWidth={3} /> : <AlertCircle size={14} strokeWidth={3} />}
-          {toast.text}
+          {toast.tone === 'ok' ? <CheckCircle2 size={14} strokeWidth={3} className="shrink-0" /> : <AlertCircle size={14} strokeWidth={3} className="shrink-0" />}
+          <span className="min-w-0">{toast.text}</span>
+          <DismissButton onClick={() => setToast(null)} />
         </div>
       )}
     </>

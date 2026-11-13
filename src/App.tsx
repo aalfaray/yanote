@@ -14,6 +14,7 @@ import { Save, Check, AlertCircle, FileText } from 'lucide-react';
 import { parentDir, isMarkdownFile, baseName } from './lib/paths';
 import { ClaudeUsageMeter, useClaudeUsage } from './components/ClaudeUsageMeter';
 import { chatNotificationFor } from './lib/claudeNotify';
+import { DismissButton } from './components/ui/DismissButton';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
@@ -864,6 +865,7 @@ export const App: React.FC = () => {
         {/* Floating Notification Pill */}
         {notification && (
           <div
+            role={notification.type === 'error' ? 'alert' : 'status'}
             className={`absolute bottom-14 right-2 min-[640px]:bottom-8 min-[640px]:right-3 max-w-[calc(100%-16px)] z-30 px-3 py-1.5 rounded border-2 border-black font-black text-xs shadow-[3px_3px_0px_#000] flex items-center gap-1.5 animate-in slide-in-from-bottom-2 duration-150 ${
               notification.type === 'success'
                 ? 'bg-[#78E08F] text-black'
@@ -877,7 +879,8 @@ export const App: React.FC = () => {
             ) : (
               <AlertCircle size={14} strokeWidth={3} />
             )}
-            <span>{notification.text}</span>
+            <span className="min-w-0">{notification.text}</span>
+            <DismissButton onClick={() => setNotification(null)} />
           </div>
         )}
       </div>

@@ -334,6 +334,7 @@ export type ChatAction =
   | { type: 'notice'; text: string; tone: 'info' | 'error' }
   | { type: 'local_permission_mode'; mode: string }
   | { type: 'auth_retry' }
+  | { type: 'dismiss'; id: string }
   | { type: 'reset' };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -348,6 +349,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     case 'notice':
       return push(state, { kind: 'notice', id: localId('notice'), text: action.text, tone: action.tone });
+    case 'dismiss':
+      return { ...state, items: state.items.filter((i) => i.id !== action.id) };
     case 'local_permission_mode':
       return { ...state, permissionMode: action.mode };
     case 'auth_retry':
