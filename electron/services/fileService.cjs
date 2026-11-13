@@ -44,18 +44,9 @@ function ensureNotesDir(notesDir) {
     throw new Error('Ruta de la carpeta de notas no válida');
   }
 
+  // Only the folder: never drop files into it (it may be a project opened with "Abrir con yanote")
   if (!fs.existsSync(notesDir)) {
     fs.mkdirSync(notesDir, { recursive: true });
-  }
-
-  try {
-    const files = fs.readdirSync(notesDir);
-    if (files.filter(f => f.endsWith('.md')).length === 0) {
-      const welcomePath = path.join(notesDir, 'Bienvenido.md');
-      fs.writeFileSync(welcomePath, WELCOME_CONTENT, 'utf8');
-    }
-  } catch (err) {
-    console.warn('ensureNotesDir notice:', err.message);
   }
 }
 

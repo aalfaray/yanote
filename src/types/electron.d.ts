@@ -11,10 +11,19 @@ export interface AppConfig {
   darkMode?: boolean;
   /** Window opacity 0.3–1 */
   opacity?: number;
-  openTabs?: TabItem[];
-  activeTabId?: string | null;
+  /** Notes left open last time; they reopen on the next start */
+  openTabs?: SavedTab[];
+  activeTabPath?: string | null;
+  /** The welcome note is shown only on the very first start */
+  welcomeSeen?: boolean;
   /** History of opened files, newest first */
   recentFiles?: RecentFile[];
+}
+
+export interface SavedTab {
+  path: string;
+  title: string;
+  isPinned?: boolean;
 }
 
 export interface RecentFile {

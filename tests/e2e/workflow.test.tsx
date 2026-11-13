@@ -328,9 +328,16 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
   });
 
   it('[CHAOS E2E 7/8] Double-click rename persists file change on disk', async () => {
+    // The note on disk comes back from the previous session
+    window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
+      notesPath: '/notes',
+      alwaysOnTop: false,
+      openTabs: [{ path: '/notes/Bienvenido.md', title: 'Bienvenido.md' }],
+    });
     render(<App />);
 
     await waitFor(() => {
+      expect(window.electronAPI?.readFile).toHaveBeenCalledWith('/notes/Bienvenido.md');
       expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
     });
 
@@ -537,6 +544,69 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
 
     await waitFor(() => {
       expect(screen.getByText(/Modo Vista Previa Enriquecida/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('startup session', () => {
+    const config = (extra: object) =>
+      (window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({ notesPath: '/notes', alwaysOnTop: false, ...extra }));
+
+    it('shows the welcome note only on the first start and remembers it was seen', async () => {
+      config({});
+      render(<App />);
+      await waitFor(() => expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith({ welcomeSeen: true }));
+      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      // never opens notes from the folder on its own
+      expect(window.electronAPI?.readFile).not.toHaveBeenCalled();
+    });
+
+    it('after the first start, opens an empty note instead of the welcome', async () => {
+      config({ welcomeSeen: true });
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      expect(screen.queryByText('Bienvenido.md')).not.toBeInTheDocument();
+    });
+
+    it('reopens the notes left open last time, skipping missing ones, and keeps the active one', async () => {
+      writtenFiles['/notes/a.md'] = '# A';
+      writtenFiles['/notes/b.md'] = '# B';
+      window.electronAPI!.readFile = vi.fn().mockImplementation((p: string) =>
+        Promise.resolve(p in writtenFiles ? { success: true, content: writtenFiles[p] } : { success: false, error: 'no existe' })
+      );
+      config({
+        welcomeSeen: true,
+        openTabs: [
+          { path: '/notes/a.md', title: 'a.md' },
+          { path: '/notes/borrado.md', title: 'borrado.md' },
+          { path: '/notes/b.md', title: 'b.md', isPinned: true },
+        ],
+        activeTabPath: '/notes/a.md',
+      });
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('b.md').length).toBeGreaterThanOrEqual(1));
+      expect(screen.getAllByText('a.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('borrado.md')).not.toBeInTheDocument();
+      expect(screen.queryByText('Bienvenido.md')).not.toBeInTheDocument();
+      expect((screen.getByTestId('mock-markdown-textarea') as HTMLTextAreaElement).value).toBe('# A');
+    });
+
+    it('saves the open notes so they come back next time', async () => {
+      config({ welcomeSeen: true });
+      window.electronAPI!.openMarkdownFile = vi.fn().mockResolvedValue({
+        files: [{ path: '/proyectos/plan.md', name: 'plan.md', content: '# Plan' }],
+        errors: [],
+      });
+      render(<App />);
+      await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
+      fireEvent.keyDown(window, { key: 'o', ctrlKey: true });
+      await waitFor(
+        () =>
+          expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith({
+            openTabs: [{ path: '/proyectos/plan.md', title: 'plan.md', isPinned: false }],
+            activeTabPath: '/proyectos/plan.md',
+          }),
+        { timeout: 3000 }
+      );
     });
   });
 });

@@ -19,15 +19,15 @@ describe('Backend: FileService (20% Happy / 80% Destructive)', () => {
   });
 
   // --- 20% HAPPY PATH TESTS ---
-  it('[HAPPY 1/4] ensureNotesDir creates folder and default Bienvenido.md', () => {
+  it('[HAPPY 1/4] ensureNotesDir creates the folder but never writes files into it', () => {
     const notesDir = path.join(tempDir, 'notes');
     fileService.ensureNotesDir(notesDir);
-
     expect(fs.existsSync(notesDir)).toBe(true);
-    const welcomeFile = path.join(notesDir, 'Bienvenido.md');
-    expect(fs.existsSync(welcomeFile)).toBe(true);
-    const content = fs.readFileSync(welcomeFile, 'utf8');
-    expect(content).toContain('Bienvenido a tu Editor Markdown Neubrutalista');
+    expect(fs.readdirSync(notesDir)).toEqual([]);
+
+    // e.g. a project folder opened with "Abrir con yanote"
+    fileService.ensureNotesDir(tempDir);
+    expect(fs.existsSync(path.join(tempDir, 'Bienvenido.md'))).toBe(false);
   });
 
   it('[HAPPY 2/4] writes and reads markdown files successfully', () => {

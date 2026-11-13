@@ -107,6 +107,23 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     expect(config.openTabs).toEqual([]);
   });
 
+  it('keeps only valid, unique saved tabs and the welcome flag', () => {
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({
+        welcomeSeen: true,
+        activeTabPath: 'C:\\n\\a.md',
+        openTabs: [{ path: 'C:\\n\\a.md', title: 'a.md', content: 'no se guarda' }, { path: 'C:\\n\\a.md' }, null, { title: 'sin ruta' }, { path: 42 }],
+      }),
+      'utf8'
+    );
+    const config = loadConfig(configPath, notesPath);
+    expect(config.welcomeSeen).toBe(true);
+    expect(config.activeTabPath).toBe('C:\\n\\a.md');
+    expect(config.openTabs).toEqual([{ path: 'C:\\n\\a.md', title: 'a.md', isPinned: false }]);
+    expect(loadConfig(path.join(path.dirname(configPath), 'nuevo.json'), notesPath).welcomeSeen).toBe(false);
+  });
+
   it('[CHAOS 5/8] resists prototype pollution attempts when saving', () => {
     const current = loadConfig(configPath, notesPath);
     const maliciousPayload = JSON.parse('{"__proto__": {"polluted": true}, "alwaysOnTop": true}');

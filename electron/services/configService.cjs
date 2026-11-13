@@ -34,6 +34,22 @@ function sanitizeRecentFiles(value) {
     .slice(0, MAX_RECENT_FILES);
 }
 
+const MAX_OPEN_TABS = 50;
+
+/** Notes left open last time (files only), so they reopen on the next start. */
+function sanitizeOpenTabs(list) {
+  if (!Array.isArray(list)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const t of list) {
+    if (!t || typeof t.path !== 'string' || !t.path.trim() || seen.has(t.path)) continue;
+    seen.add(t.path);
+    out.push({ path: t.path, title: typeof t.title === 'string' && t.title ? t.title : path.basename(t.path), isPinned: Boolean(t.isPinned) });
+    if (out.length >= MAX_OPEN_TABS) break;
+  }
+  return out;
+}
+
 function loadConfig(configFilePath, defaultNotesPath) {
   try {
     if (fs.existsSync(configFilePath)) {
@@ -50,8 +66,9 @@ function loadConfig(configFilePath, defaultNotesPath) {
         alwaysOnTop: Boolean(parsed.alwaysOnTop),
         darkMode: Boolean(parsed.darkMode),
         opacity: parsed.opacity === undefined ? MAX_OPACITY : clampOpacity(parsed.opacity),
-        openTabs: Array.isArray(parsed.openTabs) ? parsed.openTabs : [],
-        activeTabId: parsed.activeTabId || null,
+        openTabs: sanitizeOpenTabs(parsed.openTabs),
+        activeTabPath: typeof parsed.activeTabPath === 'string' ? parsed.activeTabPath : null,
+        welcomeSeen: Boolean(parsed.welcomeSeen),
         recentFiles: sanitizeRecentFiles(parsed.recentFiles),
       };
     }
@@ -66,7 +83,8 @@ function loadConfig(configFilePath, defaultNotesPath) {
     darkMode: false,
     opacity: MAX_OPACITY,
     openTabs: [],
-    activeTabId: null,
+    activeTabPath: null,
+    welcomeSeen: false,
     recentFiles: [],
   };
 }
@@ -79,6 +97,8 @@ function saveConfig(configFilePath, currentConfig, newConfig) {
     const merged = { ...currentConfig, ...newConfig };
     if (merged.opacity !== undefined) merged.opacity = clampOpacity(merged.opacity);
     if (merged.recentFiles !== undefined) merged.recentFiles = sanitizeRecentFiles(merged.recentFiles);
+    if (merged.openTabs !== undefined) merged.openTabs = sanitizeOpenTabs(merged.openTabs);
+    delete merged.activeTabId; // replaced by activeTabPath
     // Git/GitHub support was removed: never persist its legacy keys (incl. tokens)
     for (const key of LEGACY_KEYS) delete merged[key];
     const dir = path.dirname(configFilePath);

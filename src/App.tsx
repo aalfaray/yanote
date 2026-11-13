@@ -28,18 +28,22 @@ Este es un editor **portable y flotante** diseñado con la estética **Boldkit**
 > *Tip: Presiona Ctrl + S para guardar tu nota.*
 `;
 
+const WELCOME_TAB_ID = 'tab-welcome';
+
 export const App: React.FC = () => {
   // Tabs State
   const [tabs, setTabs] = useState<TabItem[]>([
     {
-      id: 'tab-welcome',
+      id: WELCOME_TAB_ID,
       title: 'Bienvenido.md',
       path: null,
       content: DEFAULT_WELCOME_MARKDOWN,
       isDirty: false,
     },
   ]);
-  const [activeTabId, setActiveTabId] = useState<string>('tab-welcome');
+  const [activeTabId, setActiveTabId] = useState<string>(WELCOME_TAB_ID);
+  // Set once the previous session is restored: saving before that would wipe it
+  const sessionReadyRef = useRef(false);
 
   // App & Window State
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
@@ -105,32 +109,41 @@ export const App: React.FC = () => {
             document.documentElement.classList.remove('dark');
           }
 
-          const res = await window.electronAPI.listNotes();
-          if (res.success && res.notes.length > 0) {
-            const firstNote = res.notes[0];
-            const contentRes = await window.electronAPI.readFile(firstNote.path);
+          // Reopen the notes left open last time (the ones that still exist)
+          const saved = Array.isArray(config.openTabs) ? config.openTabs : [];
+          const restored: TabItem[] = [];
+          for (const [i, t] of saved.entries()) {
+            const contentRes = await window.electronAPI.readFile(t.path);
             if (contentRes.success && contentRes.content !== undefined) {
-              setTabs((prev) => {
-                // If user has already opened or edited other tabs, don't wipe them out
-                if (prev.length > 1 || (prev.length === 1 && prev[0].isDirty)) {
-                  return prev;
-                }
-                return [
-                  {
-                    id: `note-${firstNote.name}`,
-                    title: firstNote.name,
-                    path: firstNote.path,
-                    content: contentRes.content || '',
-                    isDirty: false,
-                  },
-                ];
+              restored.push({
+                id: `tab-restored-${i}-${Date.now()}`,
+                title: t.title,
+                path: t.path,
+                content: contentRes.content,
+                isDirty: false,
+                isPinned: t.isPinned,
               });
-              setActiveTabId(`note-${firstNote.name}`);
             }
+          }
+
+          // Only replace the startup placeholder, never tabs the user already opened
+          const untouched = (prev: TabItem[]) => prev.length === 1 && prev[0].id === WELCOME_TAB_ID;
+          if (restored.length) {
+            const active = restored.find((t) => t.path === config.activeTabPath) || restored[restored.length - 1];
+            setTabs((prev) => (untouched(prev) ? restored : prev));
+            setActiveTabId((prevId) => (prevId === WELCOME_TAB_ID ? active.id : prevId));
+          } else if (config.welcomeSeen) {
+            // Welcome was already shown once: start with an empty note instead
+            const blank: TabItem = { id: `tab-${Date.now()}-blank`, title: 'scratch-1.md', path: null, content: '', isDirty: false };
+            setTabs((prev) => (untouched(prev) ? [blank] : prev));
+            setActiveTabId((prevId) => (prevId === WELCOME_TAB_ID ? blank.id : prevId));
+          } else {
+            void window.electronAPI.saveAppConfig({ welcomeSeen: true });
           }
         } catch (err) {
           console.error('Init error:', err);
         }
+        sessionReadyRef.current = true;
         // Launched with a folder/file ("Abrir con yanote"): open it once the notes are in place
         try {
           const target = await window.electronAPI.takeOpenTarget?.();
@@ -142,6 +155,23 @@ export const App: React.FC = () => {
     };
     initApp();
   }, []);
+
+  // Remember which notes are open (and the active one) for the next start
+  // Keyed on paths/pins only, so typing in a note doesn't rewrite the config
+  const sessionKey = JSON.stringify([
+    tabs
+      .filter((t) => t.path && (!t.kind || t.kind === 'markdown'))
+      .map((t) => ({ path: t.path as string, title: t.title, isPinned: Boolean(t.isPinned) })),
+    tabs.find((t) => t.id === activeTabId)?.path ?? null,
+  ]);
+  useEffect(() => {
+    if (!sessionReadyRef.current || !window.electronAPI) return;
+    const timer = setTimeout(() => {
+      const [openTabs, activeTabPath] = JSON.parse(sessionKey);
+      void window.electronAPI?.saveAppConfig({ openTabs, activeTabPath });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [sessionKey]);
 
   // Dark Mode Toggle
   const handleToggleDarkMode = useCallback(async () => {
@@ -532,7 +562,10 @@ export const App: React.FC = () => {
       content,
       isDirty: false,
     };
-    setTabs((prev) => [...prev, newTab]);
+    // The empty start-up note is just a placeholder: the file takes its place
+    const isBlankPlaceholder = (prev: TabItem[]) =>
+      prev.length === 1 && !prev[0].path && !prev[0].kind && !prev[0].content && !prev[0].isDirty && prev[0].id !== WELCOME_TAB_ID;
+    setTabs((prev) => (isBlankPlaceholder(prev) ? [newTab] : [...prev, newTab]));
     setActiveTabId(newTab.id);
   };
 
