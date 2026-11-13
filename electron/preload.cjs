@@ -48,6 +48,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('app:sendToNewChat', listener);
   },
 
+  // Context menu "Guardar idea" / "Fijar en este chat"
+  onSaveIdea: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('app:saveIdea', listener);
+    return () => ipcRenderer.removeListener('app:saveIdea', listener);
+  },
+  onPinInChat: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('app:pinInChat', listener);
+    return () => ipcRenderer.removeListener('app:pinInChat', listener);
+  },
+
   // "Abrir con yanote" from Explorer: the launch target, then any later ones
   takeOpenTarget: () => ipcRenderer.invoke('app:takeOpenTarget'),
   onOpenTarget: (callback) => {

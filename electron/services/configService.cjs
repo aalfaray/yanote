@@ -50,6 +50,26 @@ function sanitizeOpenTabs(list) {
   return out;
 }
 
+const MAX_IDEAS = 200;
+
+/** Ideas saved from the right-click menu: text + where it came from. */
+function sanitizeIdeas(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const i of list) {
+    if (!i || typeof i.id !== 'string' || typeof i.text !== 'string' || !i.text.trim()) continue;
+    out.push({
+      id: i.id.slice(0, 80),
+      text: i.text.slice(0, 20000),
+      createdAt: Number.isFinite(i.createdAt) ? i.createdAt : 0,
+      ...(typeof i.source === 'string' && i.source ? { source: i.source.slice(0, 200) } : {}),
+      ...(typeof i.cwd === 'string' && i.cwd ? { cwd: i.cwd } : {}),
+    });
+    if (out.length >= MAX_IDEAS) break;
+  }
+  return out;
+}
+
 function loadConfig(configFilePath, defaultNotesPath) {
   try {
     if (fs.existsSync(configFilePath)) {
@@ -65,6 +85,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
         notesPath: parsed.notesPath || defaultNotesPath,
         alwaysOnTop: Boolean(parsed.alwaysOnTop),
         notifyClaude: parsed.notifyClaude !== false,
+        ideas: sanitizeIdeas(parsed.ideas),
         claudeAccounts: Array.isArray(parsed.claudeAccounts) ? parsed.claudeAccounts : [],
         activeClaudeAccount: typeof parsed.activeClaudeAccount === 'string' ? parsed.activeClaudeAccount : 'default',
         darkMode: Boolean(parsed.darkMode),
@@ -84,6 +105,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
     notesPath: defaultNotesPath,
     alwaysOnTop: false,
     notifyClaude: true,
+    ideas: [],
     claudeAccounts: [],
     activeClaudeAccount: 'default',
     darkMode: false,
@@ -104,6 +126,7 @@ function saveConfig(configFilePath, currentConfig, newConfig) {
     if (merged.opacity !== undefined) merged.opacity = clampOpacity(merged.opacity);
     if (merged.recentFiles !== undefined) merged.recentFiles = sanitizeRecentFiles(merged.recentFiles);
     if (merged.openTabs !== undefined) merged.openTabs = sanitizeOpenTabs(merged.openTabs);
+    if (merged.ideas !== undefined) merged.ideas = sanitizeIdeas(merged.ideas);
     delete merged.activeTabId; // replaced by activeTabPath
     // Git/GitHub support was removed: never persist its legacy keys (incl. tokens)
     for (const key of LEGACY_KEYS) delete merged[key];

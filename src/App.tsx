@@ -9,12 +9,14 @@ import { SettingsModal } from './components/SettingsModal';
 import { RecentFilesDrawer } from './components/RecentFilesDrawer';
 import { addRecentFile, removeRecentFile } from './lib/recentFiles';
 import { ConfirmModal } from './components/ui/ConfirmModal';
-import type { TabItem, TerminalShell, RecentFile, OpenTarget } from './types/electron';
+import type { TabItem, TerminalShell, RecentFile, OpenTarget, SavedIdea } from './types/electron';
 import { Save, Check, AlertCircle, FileText } from 'lucide-react';
 import { parentDir, isMarkdownFile, baseName } from './lib/paths';
 import { ClaudeUsageMeter, useClaudeUsage } from './components/ClaudeUsageMeter';
 import { chatNotificationFor } from './lib/claudeNotify';
 import { DismissButton } from './components/ui/DismissButton';
+import { IdeasDrawer } from './components/IdeasDrawer';
+import { addIdea, removeIdea } from './lib/ideas';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
@@ -61,6 +63,9 @@ export const App: React.FC = () => {
   // Modals
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFilesDrawerOpen, setIsFilesDrawerOpen] = useState(false);
+  const [isIdeasOpen, setIsIdeasOpen] = useState(false);
+  const [ideas, setIdeas] = useState<SavedIdea[]>([]);
+  const ideasRef = useRef<SavedIdea[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const recentFilesRef = useRef<RecentFile[]>([]);
   const [closingTab, setClosingTab] = useState<TabItem | null>(null);
@@ -104,6 +109,10 @@ export const App: React.FC = () => {
       if (window.electronAPI) {
         try {
           const config = await window.electronAPI.getAppConfig();
+          if (Array.isArray(config.ideas)) {
+            ideasRef.current = config.ideas;
+            setIdeas(config.ideas);
+          }
           if (Array.isArray(config.recentFiles)) {
             recentFilesRef.current = config.recentFiles;
             setRecentFiles(config.recentFiles);
@@ -715,6 +724,51 @@ export const App: React.FC = () => {
     []
   );
 
+  // --- Ideas & pins from the right-click menu ---
+  const updateIdeas = (next: SavedIdea[]) => {
+    ideasRef.current = next;
+    setIdeas(next);
+    void window.electronAPI?.saveAppConfig({ ideas: next });
+  };
+  const saveIdeaRef = useRef<(p: { text: string; chatTabId: string | null }) => void>(() => {});
+  saveIdeaRef.current = ({ text, chatTabId }) => {
+    // Where it came from: the chat it was selected in, else the tab on screen
+    const from = tabs.find((t) => t.id === chatTabId) || tabs.find((t) => t.id === activeTabId);
+    const cwd = from?.kind === 'claude' || from?.kind === 'terminal' ? from.cwd || notesDir : parentDir(from?.path ?? null) ?? undefined;
+    updateIdeas(addIdea(ideasRef.current, { text, source: from?.title, cwd: cwd || undefined }));
+    setNotification({ type: 'success', text: '💡 Idea guardada' });
+  };
+  useEffect(() => window.electronAPI?.onSaveIdea?.((p) => saveIdeaRef.current(p)), []);
+  useEffect(
+    () =>
+      window.electronAPI?.onPinInChat?.(({ text, tabId }) => {
+        const clean = text.trim();
+        if (!clean) return;
+        setTabs((prev) =>
+          prev.map((t) =>
+            t.id === tabId && !(t.chatPins || []).some((p) => p.text === clean)
+              ? { ...t, chatPins: [...(t.chatPins || []), { id: `pin-${Date.now().toString(36)}`, text: clean }] }
+              : t
+          )
+        );
+      }),
+    []
+  );
+  const handleUnpin = (tabId: string, pinId: string) =>
+    setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, chatPins: (t.chatPins || []).filter((p) => p.id !== pinId) } : t)));
+  // The menu asks the page which chat was right-clicked (pins only make sense there)
+  useEffect(() => {
+    const onContext = (e: MouseEvent) => {
+      const el = e.target instanceof Element ? e.target : null;
+      const chat = el?.closest<HTMLElement>('[data-chat-tab]');
+      (window as unknown as { __yanoteContextTarget?: unknown }).__yanoteContextTarget = {
+        chatTabId: chat && !el?.closest('textarea, input, [contenteditable="true"]') ? chat.dataset.chatTab : null,
+      };
+    };
+    window.addEventListener('contextmenu', onContext, true);
+    return () => window.removeEventListener('contextmenu', onContext, true);
+  }, []);
+
   // Clicking the notification brings that chat to the front
   useEffect(
     () =>
@@ -814,6 +868,8 @@ export const App: React.FC = () => {
         onToggleDarkMode={handleToggleDarkMode}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenFiles={() => setIsFilesDrawerOpen(true)}
+        onOpenIdeas={() => setIsIdeasOpen(true)}
+        ideasCount={ideas.length}
         onRequestClose={() => setIsQuitConfirmOpen(true)}
         opacity={windowOpacity}
         onChangeOpacity={handleChangeOpacity}
@@ -869,6 +925,8 @@ export const App: React.FC = () => {
               onLogin={(a) => void handleClaudeLogin(a)}
               accountId={t.accountId}
               initialDraft={t.initialDraft}
+              pins={t.chatPins}
+              onUnpin={(pinId) => handleUnpin(t.id, pinId)}
               onAccountChange={(accountId) => handleChatAccountChange(t.id, accountId)}
             />
           ))}
@@ -981,6 +1039,25 @@ export const App: React.FC = () => {
         onClose={() => setIsSettingsOpen(false)}
         onConfigChanged={refreshNotes}
         onSaved={() => setNotification({ type: 'success', text: '¡Ajustes guardados correctamente!' })}
+      />
+
+      <IdeasDrawer
+        isOpen={isIdeasOpen}
+        onClose={() => setIsIdeasOpen(false)}
+        ideas={ideas}
+        onRemove={(id) => updateIdeas(removeIdea(ideasRef.current, id))}
+        onSendToNewChat={(idea) => {
+          setIsIdeasOpen(false);
+          handleNewClaude(idea.cwd, idea.text);
+        }}
+        onInsertInChat={
+          activeTab?.kind === 'claude'
+            ? (idea) => {
+                setIsIdeasOpen(false);
+                window.dispatchEvent(new CustomEvent('yanote:append-draft', { detail: { tabId: activeTab.id, text: idea.text } }));
+              }
+            : undefined
+        }
       />
 
       <RecentFilesDrawer

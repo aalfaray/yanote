@@ -102,20 +102,28 @@ function createWindow() {
   });
 
   // Electron has no default right-click menu: offer copy/paste on selections and editable fields
-  mainWindow.webContents.on('context-menu', (_event, params) => {
+  mainWindow.webContents.on('context-menu', async (_event, params) => {
     const hasSelection = Boolean(params.selectionText && params.selectionText.trim());
     if (!hasSelection && !params.isEditable) return;
     const flags = params.editFlags || {};
-    // Selected text can start a new Claude chat (typed in its box, not sent)
-    const toChat = hasSelection
+    const wc = mainWindow.webContents;
+    // The page notes which Claude chat (if any) was right-clicked, before this event arrives
+    const target = hasSelection ? await wc.executeJavaScript('window.__yanoteContextTarget || null', true).catch(() => null) : null;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const text = params.selectionText;
+    const chatTabId = target && typeof target.chatTabId === 'string' ? target.chatTabId : null;
+    // Selected text: new chat with it (typed, not sent), save it as an idea, pin it on top of its chat
+    const selectionItems = hasSelection
       ? [
           { type: 'separator' },
-          {
-            label: 'Enviar a un chat nuevo de Claude',
-            click: () => mainWindow && mainWindow.webContents.send('app:sendToNewChat', params.selectionText),
-          },
+          { label: 'Enviar a un chat nuevo de Claude', click: () => wc.send('app:sendToNewChat', text) },
+          { label: 'Guardar idea', click: () => wc.send('app:saveIdea', { text, chatTabId }) },
+          ...(chatTabId && !params.isEditable
+            ? [{ label: 'Fijar en este chat', click: () => wc.send('app:pinInChat', { text, tabId: chatTabId }) }]
+            : []),
         ]
       : [];
+    const toChat = selectionItems;
     const template = params.isEditable
       ? [
           { label: 'Deshacer', role: 'undo', enabled: flags.canUndo },

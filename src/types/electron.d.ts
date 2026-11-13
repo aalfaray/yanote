@@ -17,6 +17,8 @@ export interface AppConfig {
   /** Extra Claude accounts and the one new chats use */
   claudeAccounts?: { id: string; name: string; configDir: string }[];
   activeClaudeAccount?: string;
+  /** Saved ideas, newest first */
+  ideas?: SavedIdea[];
   /** Windows notification when a Claude chat finishes or waits for you (default on) */
   notifyClaude?: boolean;
   /** The welcome note is shown only on the very first start */
@@ -29,6 +31,22 @@ export interface SavedTab {
   path: string;
   title: string;
   isPinned?: boolean;
+}
+
+/** A text saved with right-click > "Guardar idea" */
+export interface SavedIdea {
+  id: string;
+  text: string;
+  /** Where it came from, e.g. the chat or note title */
+  source?: string;
+  /** Folder of that chat/note: a new chat from the idea starts there */
+  cwd?: string;
+  createdAt: number;
+}
+
+export interface ChatPin {
+  id: string;
+  text: string;
 }
 
 export interface RecentFile {
@@ -57,6 +75,8 @@ export interface TabItem {
   accountId?: string;
   /** Text a new chat starts with in its message box (not sent until the user sends it) */
   initialDraft?: string;
+  /** Paragraphs pinned on top of a chat */
+  chatPins?: ChatPin[];
 }
 
 export type TabKind = 'markdown' | 'terminal' | 'claude';
@@ -179,6 +199,10 @@ export interface ElectronAPI {
   onFocusTab?: (callback: (tabId: string) => void) => () => void;
   /** Right-click > "Enviar a un chat nuevo de Claude" on a selection */
   onSendToNewChat?: (callback: (text: string) => void) => () => void;
+  /** Right-click > "Guardar idea" (chatTabId: the chat it was selected in, if any) */
+  onSaveIdea?: (callback: (payload: { text: string; chatTabId: string | null }) => void) => () => void;
+  /** Right-click > "Fijar en este chat" */
+  onPinInChat?: (callback: (payload: { text: string; tabId: string }) => void) => () => void;
   /** Disk path of a dropped File, or null when it has none */
   getPathForFile?: (file: File) => string | null;
   // "Abrir con yanote" (Explorer context menu / command line)

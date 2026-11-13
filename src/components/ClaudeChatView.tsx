@@ -20,7 +20,7 @@ import {
   UserRound,
   ChevronDown,
 } from 'lucide-react';
-import type { ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionMode, ClaudePermissionRequest } from '../types/electron';
+import type { ChatPin, ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionMode, ClaudePermissionRequest } from '../types/electron';
 import {
   chatReducer,
   initialChatState,
@@ -43,6 +43,7 @@ import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
 import { DismissButton } from './ui/DismissButton';
 import { ClaudeAccountMenu } from './ClaudeAccountMenu';
+import { PinnedStrip } from './ChatPinnedStrip';
 
 interface ClaudeChatViewProps {
   tabId: string;
@@ -59,6 +60,9 @@ interface ClaudeChatViewProps {
   onAccountChange?: (accountId: string) => void;
   /** Text already typed in the message box when the chat opens (e.g. sent from another chat); not sent automatically */
   initialDraft?: string;
+  /** Paragraphs pinned on top of this chat (right-click > "Fijar en este chat") */
+  pins?: ChatPin[];
+  onUnpin?: (pinId: string) => void;
 }
 
 const MODES: { value: ClaudePermissionMode; label: string; hint: string }[] = [
@@ -491,6 +495,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   accountId: initialAccountId,
   onAccountChange,
   initialDraft,
+  pins = [],
+  onUnpin,
 }) => {
   const [state, dispatch] = useReducer(chatReducer, undefined, initialChatState);
   // A sent-over text gets an empty line below it, ready for the user to add their own words
@@ -612,6 +618,23 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       cancelled = true;
     };
   }, [api, accountId, cwd]);
+
+  // An idea added from the Ideas list goes below what's already typed
+  useEffect(() => {
+    const onAppend = (e: Event) => {
+      const { tabId: target, text } = (e as CustomEvent<{ tabId: string; text: string }>).detail || ({} as { tabId: string; text: string });
+      if (target !== tabId || !text) return;
+      setDraft((d) => (d.trim() ? `${d.replace(/\s+$/, '')}\n\n${text}` : text));
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
+    };
+    window.addEventListener('yanote:append-draft', onAppend);
+    return () => window.removeEventListener('yanote:append-draft', onAppend);
+  }, [tabId]);
 
   // Name of the account in use, for the header chip
   useEffect(() => {
@@ -797,6 +820,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       className={`absolute inset-0 flex flex-col bg-[#FAF8F5] dark:bg-[#121212] text-black dark:text-zinc-100 ${isActive ? '' : 'invisible pointer-events-none'}`}
       aria-hidden={!isActive}
       data-testid={`claude-chat-${tabId}`}
+      data-chat-tab={tabId}
     >
       {/* Session strip */}
       <div className="h-8 shrink-0 flex items-center gap-1.5 px-2 border-b-2 border-black dark:border-zinc-700 text-[10.5px] font-black overflow-hidden whitespace-nowrap">
@@ -847,6 +871,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
           }}
         />
       )}
+
+      {pins.length > 0 && <PinnedStrip pins={pins} onUnpin={onUnpin} />}
 
       {/* Transcript */}
       <div

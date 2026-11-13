@@ -124,6 +124,21 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     expect(loadConfig(path.join(path.dirname(configPath), 'nuevo.json'), notesPath).welcomeSeen).toBe(false);
   });
 
+  it('keeps saved ideas valid and bounded', () => {
+    const big = 'x'.repeat(30000);
+    fs.writeFileSync(
+      configPath,
+      JSON.stringify({ ideas: [{ id: 'a', text: 'Idea', source: 'Claude', createdAt: 5 }, { id: 'b', text: '   ' }, null, { text: 'sin id' }, { id: 'c', text: big, createdAt: 'mal' }] }),
+      'utf8'
+    );
+    const config = loadConfig(configPath, notesPath);
+    expect(config.ideas).toHaveLength(2);
+    expect(config.ideas[0]).toEqual({ id: 'a', text: 'Idea', source: 'Claude', createdAt: 5 });
+    expect(config.ideas[1].text).toHaveLength(20000);
+    expect(config.ideas[1].createdAt).toBe(0);
+    expect(saveConfig(configPath, config, { ideas: 'no' }).ideas).toEqual([]);
+  });
+
   it('[CHAOS 5/8] resists prototype pollution attempts when saving', () => {
     const current = loadConfig(configPath, notesPath);
     const maliciousPayload = JSON.parse('{"__proto__": {"polluted": true}, "alwaysOnTop": true}');
