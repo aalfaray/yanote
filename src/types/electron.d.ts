@@ -181,9 +181,27 @@ export interface ElectronAPI {
   /** null returns to the model's default effort */
   claudeSetEffort?: (id: string, level: ClaudeEffortLevel | null) => ClaudeResult;
   claudeStop?: (id: string) => Promise<boolean>;
+  /** Plan usage (5-hour / weekly windows, like /usage) through a live chat session */
+  claudeUsage?: (id?: string) => Promise<ClaudeUsage>;
   onClaudeEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
   /** Saves the clipboard image as a temp PNG and returns its path; null when there is no image */
   saveClipboardImage?: () => Promise<string | null>;
+}
+
+/** One plan window from /usage: percent used (0-100) and when it resets (ISO) */
+export interface ClaudeUsageWindow {
+  percent: number;
+  resetsAt: string | null;
+}
+
+export interface ClaudeUsage {
+  success: boolean;
+  error?: string;
+  /** false for API keys / providers without plan limits */
+  available?: boolean;
+  plan?: string | null;
+  fiveHour?: ClaudeUsageWindow | null;
+  weekly?: ClaudeUsageWindow | null;
 }
 
 export type UpdateMode = 'auto' | 'portable' | 'disabled';

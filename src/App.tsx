@@ -12,6 +12,7 @@ import { ConfirmModal } from './components/ui/ConfirmModal';
 import type { TabItem, TerminalShell, RecentFile, OpenTarget } from './types/electron';
 import { Save, Check, AlertCircle, FileText } from 'lucide-react';
 import { parentDir, isMarkdownFile, baseName } from './lib/paths';
+import { ClaudeUsageMeter, useClaudeUsage } from './components/ClaudeUsageMeter';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
@@ -738,6 +739,8 @@ export const App: React.FC = () => {
   }, []);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
+  const claudeTabIds = tabs.filter((t) => t.kind === 'claude').map((t) => t.id);
+  const claudeUsage = useClaudeUsage(claudeTabIds, activeTab?.kind === 'claude' ? activeTab.id : undefined);
   const isClaudeActive = activeTab?.kind === 'claude';
   const isTerminalActive = activeTab?.kind === 'terminal' || isClaudeActive;
 
@@ -887,6 +890,9 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 ml-1">
+          {/* Claude plan usage (5-hour / weekly), while a Claude chat is open */}
+          <ClaudeUsageMeter usage={claudeUsage} />
+
           {/* Superposición Status Badge */}
           <span
             className={`h-5 px-1.5 items-center leading-none rounded border-2 border-black dark:border-zinc-600 shadow-[1.5px_1.5px_0px_#000] font-black text-[10px] shrink-0 hidden min-[440px]:inline-flex ${

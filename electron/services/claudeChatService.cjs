@@ -97,6 +97,24 @@ function toPlain(value) {
   }
 }
 
+function usageWindow(win) {
+  if (!win || typeof win !== 'object') return null;
+  const pct = typeof win.utilization === 'number' && Number.isFinite(win.utilization) ? Math.max(0, Math.min(100, win.utilization)) : null;
+  if (pct === null) return null;
+  return { percent: pct, resetsAt: typeof win.resets_at === 'string' ? win.resets_at : null };
+}
+
+/** Keeps only what the status bar shows from the SDK's /usage answer. */
+function summarizeUsage(res) {
+  const limits = res && res.rate_limits_available && res.rate_limits ? res.rate_limits : null;
+  return {
+    available: Boolean(limits),
+    plan: (res && typeof res.subscription_type === 'string' && res.subscription_type) || null,
+    fiveHour: limits ? usageWindow(limits.five_hour) : null,
+    weekly: limits ? usageWindow(limits.seven_day) : null,
+  };
+}
+
 /**
  * `loadSdk` / `env` / `findExecutable` are injectable for tests.
  */
@@ -270,6 +288,22 @@ function createClaudeChatService({
       ? Promise.resolve({ success: false, error: 'Nivel de esfuerzo inválido' })
       : control(id, (q) => q.applyFlagSettings({ effortLevel: level || null }));
 
+  /**
+   * Plan usage behind `/usage` (5-hour and weekly windows) through any live chat session.
+   * Uses the SDK's experimental usage call: if it's missing or changes shape we just report nothing.
+   */
+  async function usage(preferredId) {
+    const live = [preferredId, ...sessions.keys()].map((key) => key && sessions.get(key)).find((s) => s && s.query);
+    const fn = live && live.query.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET;
+    if (typeof fn !== 'function') return { success: false, error: 'Sin sesión de Claude activa' };
+    try {
+      const res = await fn.call(live.query, { skipBehaviors: true });
+      return { success: true, ...summarizeUsage(res) };
+    } catch (err) {
+      return { success: false, error: err && err.message ? err.message : String(err) };
+    }
+  }
+
   function stop(id) {
     const session = sessions.get(id);
     if (!session) return false;
@@ -297,10 +331,11 @@ function createClaudeChatService({
     setPermissionMode,
     setModel,
     setEffort,
+    usage,
     stop,
     stopAll,
     has: (id) => sessions.has(id),
   };
 }
 
-module.exports = { createClaudeChatService, findClaudeExecutable, findBundledExecutable, buildUserContent, createInbox };
+module.exports = { createClaudeChatService, summarizeUsage, findClaudeExecutable, findBundledExecutable, buildUserContent, createInbox };

@@ -84,6 +84,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   claudeSetModel: (id, model) => ipcRenderer.invoke('claude:setModel', id, model),
   claudeSetEffort: (id, level) => ipcRenderer.invoke('claude:setEffort', id, level),
   claudeStop: (id) => ipcRenderer.invoke('claude:stop', id),
+  claudeUsage: (id) => ipcRenderer.invoke('claude:usage', id),
   onClaudeEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('claude:event', listener);

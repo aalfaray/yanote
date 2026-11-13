@@ -400,6 +400,7 @@ ipcMain.handle('claude:setPermissionMode', (_, id, mode) => claudeChatService.se
 ipcMain.handle('claude:setModel', (_, id, model) => claudeChatService.setModel(id, model));
 ipcMain.handle('claude:setEffort', (_, id, level) => claudeChatService.setEffort(id, level));
 ipcMain.handle('claude:stop', (_, id) => claudeChatService.stop(id));
+ipcMain.handle('claude:usage', (_, id) => claudeChatService.usage(id));
 
 // IPC - App version & updates
 ipcMain.handle('app:getVersion', () => app.getVersion());
