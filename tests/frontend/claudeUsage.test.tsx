@@ -36,9 +36,9 @@ describe('ClaudeUsageMeter (status bar)', () => {
     expect(screen.getByTestId('claude-usage').getAttribute('title')).toContain('Últimas 5 horas: 16% usado');
   });
 
-  it('renders nothing without plan limits (API key) or before the first answer', () => {
+  it('shows a skeleton before the first reading, then hides when the provider has no plan limits', () => {
     const { container, rerender } = render(<ClaudeUsageMeter usage={null} />);
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByRole('status', { name: 'Cargando uso de Claude' })).toHaveAttribute('aria-busy', 'true');
     rerender(<ClaudeUsageMeter usage={{ success: true, available: false, fiveHour: null, weekly: null }} />);
     expect(container).toBeEmptyDOMElement();
   });

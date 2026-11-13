@@ -6,6 +6,7 @@ export interface NoteFile {
 }
 
 export interface AppConfig {
+  language?: import('../lib/i18n').LanguagePreference;
   notesPath: string;
   alwaysOnTop: boolean;
   darkMode?: boolean;
@@ -23,8 +24,6 @@ export interface AppConfig {
   ideas?: SavedIdea[];
   /** Windows notification when a Claude chat finishes or waits for you (default on) */
   notifyClaude?: boolean;
-  /** The welcome note is shown only on the very first start */
-  welcomeSeen?: boolean;
   /** History of opened files, newest first */
   recentFiles?: RecentFile[];
 }
@@ -39,7 +38,7 @@ export interface ExportResult {
 
 /** A tab remembered for the next start (entries without `kind` are notes, the old format) */
 export type SavedTab =
-  | { kind?: 'note'; path: string; title: string; isPinned?: boolean }
+  | { kind?: 'note'; path: string; title: string; isPinned?: boolean; content?: string; isDirty?: boolean }
   | { kind: 'scratch'; title: string; content: string; isPinned?: boolean }
   | { kind: 'terminal'; title: string; shell: TerminalShell; cwd?: string }
   | { kind: 'claude'; title: string; cwd?: string; sessionId?: string; accountId?: string; pins?: ChatPin[]; provider?: ChatProvider };
@@ -171,6 +170,7 @@ export type TermEvent =
   | { id: string; type: 'exit'; exitCode: number };
 
 export interface ElectronAPI {
+  getLocaleInfo?: () => Promise<import('../lib/i18n').LocaleInfo>;
   // Window controls
   minimize: () => Promise<void>;
   maximize: () => Promise<boolean>;
@@ -233,6 +233,8 @@ export interface ElectronAPI {
   onFocusTab?: (callback: (tabId: string) => void) => () => void;
   /** Editing command for the app's right-click menu, run on the focused field / page selection */
   editCommand?: (command: import('../lib/contextMenu').EditCommand) => Promise<boolean>;
+  replaceMisspelling?: (requestId: number, suggestion: string) => Promise<boolean>;
+  onSpellingContext?: (callback: (context: { requestId: number; x: number; y: number; word: string; suggestions: string[] }) => void) => () => void;
   /** Writes an entry to the system log (yanote.log, shared with the main process) */
   log?: (entry: { level: 'error' | 'warn' | 'info'; scope: string; message: string; stack?: string; context?: Record<string, unknown> }) => Promise<boolean>;
   /** Shows yanote.log in Explorer */
@@ -263,6 +265,7 @@ export interface ElectronAPI {
   claudeAccounts?: {
     list: () => Promise<{ accounts: ClaudeAccount[]; activeId: string }>;
     status: (id: string) => Promise<ClaudeAccountStatus>;
+    usage?: (id: string, force?: boolean) => Promise<ClaudeUsage>;
     /** Claude Code's own `auth logout` for that account (the main one: on the whole PC) */
     logout: (id: string) => Promise<{ success: boolean; error?: string }>;
     add: (name?: string) => Promise<ClaudeAccount>;
@@ -285,6 +288,8 @@ export interface ElectronAPI {
   agySetModel?: (id: string, model: string | null) => ClaudeResult;
   agySetEffort?: (id: string, level: ClaudeEffortLevel | null) => ClaudeResult;
   agyStop?: (id: string) => Promise<boolean>;
+  /** Actual account quotas from Antigravity's built-in /usage command. */
+  agyUsage?: (id: string, force?: boolean) => Promise<AntigravityUsage>;
   onAgyEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
   /** Saves the clipboard image as a temp PNG and returns its path; null when there is no image */
   saveClipboardImage?: () => Promise<string | null>;
@@ -304,6 +309,12 @@ export interface ClaudeUsage {
   plan?: string | null;
   fiveHour?: ClaudeUsageWindow | null;
   weekly?: ClaudeUsageWindow | null;
+}
+
+export interface AntigravityUsage extends ClaudeUsage {
+  model?: string | null;
+  group?: string | null;
+  stale?: boolean;
 }
 
 export interface ClaudeAccount {
@@ -339,6 +350,7 @@ export type UpdateEvent =
   | { type: 'error'; error: string };
 
 export interface TtsSpeakRequest {
+  language?: import('../lib/i18n').Language;
   id: number;
   segments: string[];
   /** Absolute index of the first segment, echoed back in progress events. */

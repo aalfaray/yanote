@@ -387,7 +387,10 @@ function createAntigravityChatService({
 
     session.rpc = createRpc(child, {
       onNotification: (method, params) => {
-        if (method === 'session/update' && params.sessionId === session.sessionId) translator.update(params.update);
+        if (method === 'session/update' && params.sessionId === session.sessionId) {
+          if (params.update?.sessionUpdate === 'config_option_update') session.cfg = readConfig({ configOptions: params.update.configOptions });
+          translator.update(params.update);
+        }
       },
       onRequest: (method, params) => {
         if (method === 'session/request_permission') return askPermission(session, params);
@@ -398,9 +401,9 @@ function createAntigravityChatService({
         for (const p of session.pending.values()) p.resolve({ outcome: { outcome: 'cancelled' } });
         session.pending.clear();
         if (!isCurrent()) return;
-        sessions.delete(id);
         if (err) send({ type: 'error', error: err.message || String(err) });
         else send({ type: 'exit', code });
+        sessions.delete(id);
       },
     });
 
@@ -410,6 +413,7 @@ function createAntigravityChatService({
         clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
         clientInfo: { name: 'yanote', version: '1' },
       });
+      if (!isCurrent()) throw new Error('Inicio del chat cancelado');
       const caps = (init && init.agentCapabilities) || {};
 
       let result = null;
@@ -428,9 +432,11 @@ function createAntigravityChatService({
         }
       }
       if (!session.sessionId) {
+        if (!isCurrent()) throw new Error('Inicio del chat cancelado');
         result = await session.rpc.call('session/new', { cwd: workDir, mcpServers: [] });
         session.sessionId = result && result.sessionId;
       }
+      if (!isCurrent()) throw new Error('Inicio del chat cancelado');
       if (!session.sessionId) throw new Error('Antigravity no devolvió una sesión');
 
       session.cfg = translator.config(result || {}, { session_id: session.sessionId, cwd: workDir });
@@ -440,9 +446,11 @@ function createAntigravityChatService({
       if (permissionMode && permissionMode !== session.cfg.mode && session.cfg.modes.some((m) => m.id === permissionMode)) {
         await setConfig(session, 'mode', permissionMode).catch(() => {});
       }
+      if (!isCurrent()) throw new Error('Inicio del chat cancelado');
       return { success: true, executable, source: 'user' };
     } catch (err) {
-      stop(id);
+      // A stopped startup can finish after a new process has taken over the tab.
+      if (isCurrent()) stop(id);
       const message = err && err.message ? err.message : String(err);
       const auth = /auth|log ?in|sign ?in|credential/i.test(message);
       return { success: false, error: auth ? `${message}. Inicia sesión ejecutando "agy" en una terminal.` : message };
@@ -554,6 +562,7 @@ function createAntigravityChatService({
       throw new Error('Esta versión de Antigravity no permite cambiarlo');
     }
     if (result && Array.isArray(result.configOptions)) session.cfg = session.translator.config(result);
+    else if (session.cfg) session.cfg = { ...session.cfg, [configId === 'thought_level' ? 'effort' : configId]: value };
   }
 
   async function control(id, fn) {
@@ -616,6 +625,7 @@ function createAntigravityChatService({
     setEffort,
     stop,
     stopAll,
+    modelOf: (id) => sessions.get(id)?.cfg?.model || null,
     has: (id) => sessions.has(id),
   };
 }

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteFile: (filePath) => ipcRenderer.invoke('fs:deleteFile', filePath),
   renameFile: (oldPath, newPath) => ipcRenderer.invoke('fs:renameFile', oldPath, newPath),
   getAppConfig: () => ipcRenderer.invoke('fs:getAppConfig'),
+  getLocaleInfo: () => ipcRenderer.invoke('app:getLocaleInfo'),
   saveAppConfig: (config) => ipcRenderer.invoke('fs:saveAppConfig', config),
   revealInExplorer: (filePath) => ipcRenderer.invoke('app:revealInExplorer', filePath),
 
@@ -50,6 +51,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Undo/redo/cut/copy/paste/select all for the app's right-click menu
   editCommand: (command) => ipcRenderer.invoke('app:editCommand', command),
+  replaceMisspelling: (requestId, suggestion) => ipcRenderer.invoke('spelling:replace', requestId, suggestion),
+  onSpellingContext: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('spelling:context', listener);
+    return () => ipcRenderer.removeListener('spelling:context', listener);
+  },
 
   // System log: renderer failures land in the same file as the main process ones
   log: (entry) => ipcRenderer.invoke('log:write', entry),
@@ -112,6 +119,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   claudeAccounts: {
     list: () => ipcRenderer.invoke('claudeAccounts:list'),
     status: (id) => ipcRenderer.invoke('claudeAccounts:status', id),
+    usage: (id, force) => ipcRenderer.invoke('claudeAccounts:usage', id, force),
     logout: (id) => ipcRenderer.invoke('claudeAccounts:logout', id),
     add: (name) => ipcRenderer.invoke('claudeAccounts:add', name),
     rename: (id, name) => ipcRenderer.invoke('claudeAccounts:rename', id, name),
@@ -135,6 +143,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   agySetModel: (id, model) => ipcRenderer.invoke('agy:setModel', id, model),
   agySetEffort: (id, level) => ipcRenderer.invoke('agy:setEffort', id, level),
   agyStop: (id) => ipcRenderer.invoke('agy:stop', id),
+  agyUsage: (id, force) => ipcRenderer.invoke('agy:usage', id, force),
   onAgyEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('agy:event', listener);

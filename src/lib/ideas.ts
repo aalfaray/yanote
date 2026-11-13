@@ -1,9 +1,11 @@
+import { t, getLanguage } from './i18n';
 import type { SavedIdea } from '../types/electron';
 
 export const MAX_IDEAS = 200;
 export const MAX_IDEA_LENGTH = 20000;
 
 /** Adds an idea at the top; saving the same text again just moves it up. */
+
 export function addIdea(
   list: SavedIdea[],
   idea: { text: string; source?: string; cwd?: string },
@@ -27,14 +29,15 @@ export function removeIdea(list: SavedIdea[], id: string): SavedIdea[] {
 }
 
 /** "hace 5 min", "ayer", "12 nov" */
+
 export function formatIdeaDate(at: number, now: number = Date.now()): string {
   const min = Math.floor((now - at) / 60000);
-  if (min < 1) return 'ahora';
-  if (min < 60) return `hace ${min} min`;
+  if (min < 1) return t("ahora");
+  if (min < 60) return t("hace {0} min", [min]);
   const h = Math.round(min / 60);
-  if (h < 24) return `hace ${h} h`;
+  if (h < 24) return t("hace {0} h", [h]);
   const days = Math.round(h / 24);
-  if (days === 1) return 'ayer';
-  if (days < 7) return `hace ${days} días`;
-  return new Date(at).toLocaleDateString('es', { day: 'numeric', month: 'short' });
+  if (days === 1) return t("ayer");
+  if (days < 7) return t("hace {0} días", [days]);
+  return new Date(at).toLocaleDateString(getLanguage(), { day: 'numeric', month: 'short' });
 }

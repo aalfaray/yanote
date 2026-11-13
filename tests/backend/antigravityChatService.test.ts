@@ -86,6 +86,38 @@ function setup(handlers: Record<string, (params: any, agent: any) => any>) {
 }
 
 describe('Backend: Antigravity chat (ACP)', () => {
+  it('does not let a cancelled startup stop its replacement for the same tab', async () => {
+    let finishInit!: (value: any) => void;
+    const first = fakeAgent({ initialize: () => new Promise((resolve) => { finishInit = resolve; }) });
+    const second = fakeAgent({
+      initialize: () => ({ agentCapabilities: {} }),
+      'session/new': () => ({ sessionId: 'replacement', configOptions: CONFIG }),
+    });
+    const spawn = vi.fn().mockReturnValueOnce(first.child).mockReturnValueOnce(second.child);
+    const service = createAntigravityChatService({ spawn, findExecutable: () => 'agy' });
+    const oldStart = service.start({ id: 'same-tab' }, () => {});
+    await vi.waitFor(() => expect(finishInit).toBeTypeOf('function'));
+    service.stop('same-tab');
+    const newStart = service.start({ id: 'same-tab' }, () => {});
+    finishInit({ agentCapabilities: {} });
+    await oldStart;
+    expect(await newStart).toMatchObject({ success: true });
+    expect(service.has('same-tab')).toBe(true);
+    expect(second.child.kill).not.toHaveBeenCalled();
+    expect(service.sendMessage('same-tab', { text: 'hello' }).success).toBe(true);
+    service.stopAll();
+  });
+
+  it.each(['close', 'error'])('notifies the chat when the process emits %s', async (event) => {
+    const { service, emit, events, child } = setup({});
+    await service.start({ id: 't1' }, emit);
+    child.emit(event, event === 'error' ? new Error('process failed') : 1);
+    expect(events).toContainEqual(event === 'error'
+      ? { id: 't1', type: 'error', error: 'process failed' }
+      : { id: 't1', type: 'exit', code: 1 });
+    expect(service.has('t1')).toBe(false);
+  });
+
   it('finds agy on PATH or in its default install folder', () => {
     const exists = (p: string) => p === 'C:\\Users\\u\\AppData\\Local\\agy\\bin\\agy.exe';
     expect(findAgyExecutable({ Path: 'C:\\x', LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' }, 'win32', exists)).toBe('C:\\Users\\u\\AppData\\Local\\agy\\bin\\agy.exe');
@@ -166,6 +198,7 @@ describe('Backend: Antigravity chat (ACP)', () => {
     expect(events.find((e) => e.type === 'message' && e.message.type === 'system')?.message).toMatchObject({ subtype: 'init', session_id: 'S1', model: 'gemini-3.8-flash', permissionMode: 'default' });
     expect(events.find((e) => e.type === 'capabilities')?.modes).toHaveLength(2);
     expect(events.find((e) => e.type === 'applied_settings')).toMatchObject({ model: 'gemini-3.8-flash', effort: 'high' });
+    expect(service.modelOf('t1')).toBe('gemini-3.8-flash');
 
     expect(service.sendMessage('t1', { text: 'uno', images: [{ data: 'AAA', mediaType: 'image/png' }] })).toEqual({ success: true });
     expect(service.sendMessage('t1', { text: 'dos' })).toEqual({ success: true });

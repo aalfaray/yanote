@@ -1,3 +1,4 @@
+import { t, useLanguage } from '../lib/i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import { CodeMirrorEditor } from '@mdxeditor/editor';
 import type { CodeBlockEditorDescriptor, CodeBlockEditorProps } from '@mdxeditor/editor';
@@ -7,7 +8,9 @@ import type { CodeBlockEditorDescriptor, CodeBlockEditorProps } from '@mdxeditor
  * editor. Each CodeMirror view forces a full-document layout when created, which made long notes
  * with several code blocks take seconds to open.
  */
+
 const LazyCodeBlock: React.FC<CodeBlockEditorProps> = (props) => {
+  useLanguage();
   const { code, language, focusEmitter } = props;
   // Fresh (empty) blocks, e.g. inserted from the toolbar, go straight to the real editor
   const [active, setActive] = useState(() => code.trim() === '');
@@ -43,7 +46,7 @@ const LazyCodeBlock: React.FC<CodeBlockEditorProps> = (props) => {
     <pre
       className="mdxeditor-static-code"
       data-language={language || undefined}
-      title="Clic para editar el bloque de código"
+      title={t("Clic para editar el bloque de código")}
       onClick={() => {
         focusAfterMount.current = true;
         setActive(true);
@@ -55,6 +58,7 @@ const LazyCodeBlock: React.FC<CodeBlockEditorProps> = (props) => {
 };
 
 /** Same matching rule as MDXEditor's codeMirrorPlugin, but higher priority so it wins. */
+
 export function lazyCodeBlockDescriptor(languages: Record<string, string>): CodeBlockEditorDescriptor {
   return {
     priority: 10,

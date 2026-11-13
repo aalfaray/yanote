@@ -1,3 +1,4 @@
+import { t, getLanguage } from '../lib/i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SpeechSegment } from '../lib/speechText';
 import { logError } from '../lib/logger';
@@ -25,6 +26,7 @@ const getSynth = (): SpeechSynthesis | null =>
 const hasNativeEngine = () => typeof window !== 'undefined' && typeof window.electronAPI?.ttsSpeak === 'function';
 
 /** Waits briefly for voices to load (Chromium fills them asynchronously). */
+
 function loadVoices(synth: SpeechSynthesis, timeoutMs = 1200): Promise<SpeechSynthesisVoice[]> {
   const voices = synth.getVoices();
   if (voices.length > 0) return Promise.resolve(voices);
@@ -40,14 +42,16 @@ function loadVoices(synth: SpeechSynthesis, timeoutMs = 1200): Promise<SpeechSyn
 }
 
 /** Prefers a local Spanish voice, like the System.Speech script does. */
+
 export function pickVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  const spanish = voices.filter((v) => v.lang.toLowerCase().startsWith('es'));
+  const spanish = voices.filter((v) => v.lang.toLowerCase().startsWith(getLanguage()));
   return spanish.find((v) => v.localService) ?? spanish[0] ?? voices.find((v) => v.default) ?? voices[0] ?? null;
 }
 
 const RATE_STORAGE_KEY = 'yanote.speech.rate';
 
 /** Reading speed picked last time (shared by notes, chats and terminals). */
+
 export function loadSpeechRate(): number {
   try {
     const saved = Number(localStorage.getItem(RATE_STORAGE_KEY));
@@ -86,6 +90,7 @@ export function useSpeech() {
   const rateRef = useRef(state.rate);
   const runRef = useRef(0); // bumping it invalidates callbacks from older runs
   const engineRef = useRef<SpeechEngine | null>(null);
+  const voiceLanguageRef = useRef(getLanguage());
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   const showSegment = useCallback((index: number, status: SpeechStatus = 'speaking') => {
@@ -115,7 +120,7 @@ export function useSpeech() {
     (index: number, run: number) => {
       showSegment(index);
       const texts = segmentsRef.current.slice(index).map((s) => s.text);
-      window.electronAPI!.ttsSpeak!({ id: run, segments: texts, start: index, rate: rateRef.current }).catch((err: Error) => {
+      window.electronAPI!.ttsSpeak!({ id: run, segments: texts, start: index, rate: rateRef.current, language: getLanguage() }).catch((err: Error) => {
         if (run === runRef.current) finish(err.message);
       });
     },
@@ -136,7 +141,7 @@ export function useSpeech() {
         utterance.voice = voiceRef.current;
         utterance.lang = voiceRef.current.lang;
       } else {
-        utterance.lang = 'es-ES';
+        utterance.lang = getLanguage() === 'es' ? 'es-ES' : 'en-US';
       }
       utterance.rate = rateRef.current;
       utterance.onend = () => {
@@ -150,7 +155,7 @@ export function useSpeech() {
           runRef.current += 1;
           speakNative(index, runRef.current);
         } else {
-          finish(`Error de voz: ${event.error}`);
+          finish(t("Error de voz: {0}", [event.error]));
         }
       };
       synth.speak(utterance);
@@ -163,10 +168,15 @@ export function useSpeech() {
       halt();
       const run = runRef.current;
       if (segmentsRef.current.length === 0) {
-        finish('No hay texto para leer.');
+        finish(t("No hay texto para leer."));
         return;
       }
       const target = Math.max(0, Math.min(index, segmentsRef.current.length - 1));
+      if (voiceLanguageRef.current !== getLanguage()) {
+        engineRef.current = null;
+        voiceRef.current = null;
+        voiceLanguageRef.current = getLanguage();
+      }
 
       if (engineRef.current === null) {
         const synth = getSynth();
@@ -178,7 +188,7 @@ export function useSpeech() {
         } else if (hasNativeEngine()) {
           engineRef.current = 'native';
         } else {
-          finish('No hay voces de síntesis disponibles en este sistema.');
+          finish(t("No hay voces de síntesis disponibles en este sistema."));
           return;
         }
       }
@@ -190,6 +200,7 @@ export function useSpeech() {
   );
 
   /** Starts reading the given segments from `startIndex`. */
+
   const play = useCallback(
     (segments: SpeechSegment[], startIndex = 0) => {
       segmentsRef.current = segments.filter((s) => s.text.trim().length > 0);

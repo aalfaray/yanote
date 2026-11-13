@@ -1,3 +1,4 @@
+import { t, useLanguage, configureLanguage } from './lib/i18n';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TitleBar } from './components/TitleBar';
 import { TabBar } from './components/TabBar';
@@ -14,6 +15,9 @@ import { Save, Check, AlertCircle, FileText, FileDown } from 'lucide-react';
 import { parentDir, isMarkdownFile, baseName, notePathOf } from './lib/paths';
 import { copyText } from './lib/clipboard';
 import { ClaudeUsageMeter, useClaudeUsage } from './components/ClaudeUsageMeter';
+import { AntigravityUsageMeter } from './components/AntigravityUsageMeter';
+import { useAntigravityUsage } from './hooks/useAntigravityUsage';
+import { LoadingSkeleton } from './components/ui/Skeleton';
 import { chatNotificationFor } from './lib/claudeNotify';
 import { DismissButton } from './components/ui/DismissButton';
 import { IdeasDrawer } from './components/IdeasDrawer';
@@ -24,37 +28,23 @@ import { readAloudTarget, requestReadAloud } from './lib/readAloud';
 import { logError } from './lib/logger';
 import { AppContextMenu } from './components/ui/AppContextMenu';
 
-const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
-
-Este es un editor **portable y flotante** diseñado con la estética **Boldkit**.
-
-### ✨ Características destacadas:
-- **Superposición (Always on Top):** Haz clic en el botón de pin 📌 en la barra superior para mantener la ventana siempre visible encima de otras aplicaciones.
-- **Pestañas tipo Orca:** Abre múltiples notas simultáneamente con el botón \`+\`. Cada pestaña es un archivo markdown independiente.
-- **Editor Rico con @mdxeditor/editor:** Formato enriquecido, tablas, bloques de código, listas, enlaces y alternancia rápida a código fuente Markdown.
-- **Lectura en voz alta:** Escucha la nota completa, la selección o el párrafo actual con el botón 🔊 de la barra de herramientas.
-- **Resolución Compacta y Redimensionable:** Diseñado inicialmente en tamaño pequeño/compacto tipo bloc de notas flotante, con libertad total para agrandarlo o maximizarlo.
-
----
-> *Tip: Presiona Ctrl + S para guardar tu nota.*
-`;
-
-const WELCOME_TAB_ID = 'tab-welcome';
+const STARTUP_TAB_ID = 'tab-startup';
 
 export const App: React.FC = () => {
+  useLanguage();
   // Tabs State
   const [tabs, setTabs] = useState<TabItem[]>([
     {
-      id: WELCOME_TAB_ID,
-      title: 'Bienvenido.md',
+      id: STARTUP_TAB_ID,
+      title: 'scratch-1.md',
       path: null,
-      content: DEFAULT_WELCOME_MARKDOWN,
+      content: '',
       isDirty: false,
     },
   ]);
-  const [activeTabId, setActiveTabId] = useState<string>(WELCOME_TAB_ID);
+  const [activeTabId, setActiveTabId] = useState<string>(STARTUP_TAB_ID);
   // Set once the previous session is restored: saving before that would wipe it
-  const sessionReadyRef = useRef(false);
+  const [sessionReady, setSessionReady] = useState(!window.electronAPI);
   // Settings > "Avisarme cuando Claude termine" (on by default)
   const notifyClaudeRef = useRef(true);
   // Claude account new chats start with (Settings > accounts / the chat's account menu)
@@ -73,10 +63,16 @@ export const App: React.FC = () => {
   const [ideas, setIdeas] = useState<SavedIdea[]>([]);
   const ideasRef = useRef<SavedIdea[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+  const [openingFiles, setOpeningFiles] = useState(0);
+  const withFileLoading = useCallback(async <T,>(read: () => Promise<T>) => {
+    setOpeningFiles((n) => n + 1);
+    try { return await read(); } finally { setOpeningFiles((n) => n - 1); }
+  }, []);
   const recentFilesRef = useRef<RecentFile[]>([]);
   const [closingTab, setClosingTab] = useState<TabItem | null>(null);
   const [isQuitConfirmOpen, setIsQuitConfirmOpen] = useState(false);
   const [windowOpacity, setWindowOpacity] = useState(1);
+  const appearanceChanged = useRef({ top: false, dark: false, opacity: false });
   // Tab that should receive keyboard focus as soon as it renders (newly created tabs)
   const [focusTabId, setFocusTabId] = useState<string | null>(null);
   const clearFocusRequest = useCallback(() => setFocusTabId(null), []);
@@ -115,6 +111,8 @@ export const App: React.FC = () => {
       if (window.electronAPI) {
         try {
           const config = await window.electronAPI.getAppConfig();
+          const locale = await window.electronAPI.getLocaleInfo?.().catch((err) => { logError('App.locale', err); return undefined; });
+          configureLanguage(config.language || 'auto', locale?.systemLanguages);
           if (Array.isArray(config.ideas)) {
             ideasRef.current = config.ideas;
             setIdeas(config.ideas);
@@ -123,15 +121,15 @@ export const App: React.FC = () => {
             recentFilesRef.current = config.recentFiles;
             setRecentFiles(config.recentFiles);
           }
-          setIsAlwaysOnTop(config.alwaysOnTop || false);
+          if (!appearanceChanged.current.top) setIsAlwaysOnTop(config.alwaysOnTop || false);
           notifyClaudeRef.current = config.notifyClaude !== false;
           if (typeof config.activeClaudeAccount === 'string') activeAccountRef.current = config.activeClaudeAccount;
-          if (typeof config.opacity === 'number') setWindowOpacity(config.opacity);
+          if (!appearanceChanged.current.opacity && typeof config.opacity === 'number') setWindowOpacity(config.opacity);
           const dark = Boolean(config.darkMode);
-          setIsDarkMode(dark);
-          if (dark) {
+          if (!appearanceChanged.current.dark) setIsDarkMode(dark);
+          if (!appearanceChanged.current.dark && dark) {
             document.documentElement.classList.add('dark');
-          } else {
+          } else if (!appearanceChanged.current.dark) {
             document.documentElement.classList.remove('dark');
           }
 
@@ -143,39 +141,30 @@ export const App: React.FC = () => {
           const stamp = Date.now();
           for (const [i, t] of saved.entries()) {
             const id = `${t.kind === 'claude' ? 'claude' : t.kind === 'terminal' ? 'term' : 'tab'}-restored-${i}-${stamp}`;
-            let tab: TabItem | null = null;
-            if (!t.kind || t.kind === 'note') {
-              const contentRes = await window.electronAPI.readFile(t.path);
+            let tab: TabItem | null = restoreTab(t, id);
+            if (!tab && (!t.kind || t.kind === 'note')) {
+              const contentRes = await withFileLoading(() => window.electronAPI!.readFile(t.path));
               if (contentRes.success && contentRes.content !== undefined) {
                 tab = { id, title: t.title, path: t.path, content: contentRes.content, isDirty: false, isPinned: t.isPinned };
               }
-              if (tab && !Number.isInteger(config.activeTabIndex) && t.path === config.activeTabPath) activeRestored = tab;
-            } else {
-              tab = restoreTab(t, id);
             }
+            if (tab && (!t.kind || t.kind === 'note') && !Number.isInteger(config.activeTabIndex) && t.path === config.activeTabPath) activeRestored = tab;
             if (!tab) continue;
             restored.push(tab);
             if (i === config.activeTabIndex) activeRestored = tab;
           }
 
           // Only replace the startup placeholder, never tabs the user already opened
-          const untouched = (prev: TabItem[]) => prev.length === 1 && prev[0].id === WELCOME_TAB_ID;
-          if (restored.length) {
+          const untouched = (prev: TabItem[]) => prev.length === 1 && prev[0].id === STARTUP_TAB_ID && !prev[0].isDirty && !prev[0].content;
+          if (restored.length && untouched(tabsRef.current)) {
             const active = activeRestored || restored[restored.length - 1];
             setTabs((prev) => (untouched(prev) ? restored : prev));
-            setActiveTabId((prevId) => (prevId === WELCOME_TAB_ID ? active.id : prevId));
-          } else if (config.welcomeSeen) {
-            // Welcome was already shown once: start with an empty note instead
-            const blank: TabItem = { id: `tab-${Date.now()}-blank`, title: 'scratch-1.md', path: null, content: '', isDirty: false };
-            setTabs((prev) => (untouched(prev) ? [blank] : prev));
-            setActiveTabId((prevId) => (prevId === WELCOME_TAB_ID ? blank.id : prevId));
-          } else {
-            void window.electronAPI.saveAppConfig({ welcomeSeen: true });
+            setActiveTabId((prevId) => (prevId === STARTUP_TAB_ID ? active.id : prevId));
           }
         } catch (err) {
           logError('App.init', err);
         }
-        sessionReadyRef.current = true;
+        setSessionReady(true);
         // Launched with a folder/file ("Abrir con yanote"): open it once the notes are in place
         try {
           const target = await window.electronAPI.takeOpenTarget?.();
@@ -188,22 +177,21 @@ export const App: React.FC = () => {
     initApp();
   }, []);
 
-  // Remember the open tabs (and the active one) for the next start. The welcome note isn't kept.
-  // Saved notes are kept by path, so typing in them doesn't rewrite the config; unsaved ones keep their text.
-  const savedTabs = toSavedTabs(tabs, [WELCOME_TAB_ID]);
-  const keptTabs = tabs.filter((t) => t.id !== WELCOME_TAB_ID);
-  const sessionKey = JSON.stringify([savedTabs, Math.max(0, keptTabs.findIndex((t) => t.id === activeTabId))]);
+  // Persist pending edits as well as paths, with a debounce while typing.
+  const savedTabs = toSavedTabs(tabs);
+  const sessionKey = JSON.stringify([savedTabs, Math.max(0, tabs.findIndex((t) => t.id === activeTabId))]);
   useEffect(() => {
-    if (!sessionReadyRef.current || !window.electronAPI) return;
+    if (!sessionReady || !window.electronAPI) return;
     const timer = setTimeout(() => {
       const [openTabs, activeTabIndex] = JSON.parse(sessionKey);
       void window.electronAPI?.saveAppConfig({ openTabs, activeTabIndex });
     }, 800);
     return () => clearTimeout(timer);
-  }, [sessionKey]);
+  }, [sessionKey, sessionReady]);
   /** Writes the session right away (on quit the debounced save may not have run yet). */
+
   const saveSession = () => {
-    if (!sessionReadyRef.current || !window.electronAPI) return Promise.resolve();
+    if (!sessionReady || !window.electronAPI) return Promise.resolve();
     const [openTabs, activeTabIndex] = JSON.parse(sessionKey);
     return window.electronAPI
       .saveAppConfig({ openTabs, activeTabIndex })
@@ -213,6 +201,7 @@ export const App: React.FC = () => {
 
   // Dark Mode Toggle
   const handleToggleDarkMode = useCallback(async () => {
+    appearanceChanged.current.dark = true;
     setIsDarkMode((prev) => {
       const next = !prev;
       if (next) {
@@ -227,7 +216,7 @@ export const App: React.FC = () => {
       }
       setNotification({
         type: 'info',
-        text: next ? '🌙 Modo Oscuro Activado' : '☀️ Modo Claro Activado',
+        text: next ? t("🌙 Modo Oscuro Activado") : t("☀️ Modo Claro Activado"),
       });
       return next;
     });
@@ -235,6 +224,7 @@ export const App: React.FC = () => {
 
   // Window transparency: update the UI immediately, the main process applies & persists it
   const handleChangeOpacity = useCallback((value: number) => {
+    appearanceChanged.current.opacity = true;
     const next = Math.min(1, Math.max(0.3, value));
     setWindowOpacity(next);
     window.electronAPI?.setOpacity?.(next).catch((err) => {
@@ -244,13 +234,14 @@ export const App: React.FC = () => {
 
   // Superposición / Always on Top Toggle
   const handleToggleAlwaysOnTop = async () => {
+    appearanceChanged.current.top = true;
     if (window.electronAPI) {
       const nextState = !isAlwaysOnTop;
       const res = await window.electronAPI.setAlwaysOnTop(nextState);
       setIsAlwaysOnTop(res);
       setNotification({
         type: 'info',
-        text: res ? '📌 Superposición activada (Siempre visible)' : '📌 Superposición desactivada',
+        text: res ? t("📌 Superposición activada (Siempre visible)") : t("📌 Superposición desactivada"),
       });
     } else {
       setIsAlwaysOnTop(!isAlwaysOnTop);
@@ -334,9 +325,10 @@ export const App: React.FC = () => {
   };
 
   /** Sign-in runs Claude Code's own `auth login` in a terminal tab: yanote never sees the credentials */
+
   const handleClaudeLogin = async (account: { id: string; name: string }) => {
     const command = (await window.electronAPI?.claudeAccounts?.loginCommand(account.id)) || 'claude auth login';
-    const title = account.id === 'default' ? 'Iniciar sesión en Claude' : `Iniciar sesión: ${account.name}`;
+    const title = account.id === 'default' ? t("Iniciar sesión en Claude") : t("Iniciar sesión: {0}", [account.name]);
     handleNewTerminal('powershell', { title, initialCommand: command });
   };
 
@@ -382,7 +374,7 @@ export const App: React.FC = () => {
       const updated = prev.map((t) => (t.id === id ? { ...t, isPinned: isNowPinned } : t));
       setNotification({
         type: 'info',
-        text: isNowPinned ? `📌 Pestaña fijada: ${target.title}` : `Pestaña desfijada: ${target.title}`,
+        text: isNowPinned ? t("📌 Pestaña fijada: {0}", [target.title]) : t("Pestaña desfijada: {0}", [target.title]),
       });
       return [...updated.filter((t) => t.isPinned), ...updated.filter((t) => !t.isPinned)];
     });
@@ -403,7 +395,7 @@ export const App: React.FC = () => {
     setActiveTabId(id);
     setNotification({
       type: 'info',
-      text: 'Otras pestañas cerradas',
+      text: t("Otras pestañas cerradas"),
     });
   }, []);
 
@@ -434,7 +426,7 @@ export const App: React.FC = () => {
     }
     setNotification({
       type: 'info',
-      text: 'Pestañas cerradas',
+      text: t("Pestañas cerradas"),
     });
   }, []);
 
@@ -443,7 +435,7 @@ export const App: React.FC = () => {
       const next = prev === 'rich-text' ? 'source' : 'rich-text';
       setNotification({
         type: 'info',
-        text: next === 'source' ? '📝 Modo Código Fuente Markdown' : '👁️ Modo Vista Previa Enriquecida',
+        text: next === 'source' ? t("📝 Modo Código Fuente Markdown") : t("👁️ Modo Vista Previa Enriquecida"),
       });
       return next;
     });
@@ -452,15 +444,15 @@ export const App: React.FC = () => {
   // Tab menu > copy id / path / relative path (TabBar only forwards the click)
   const copyAndNotify = useCallback(async (text: string, done: string, scope: string) => {
     const ok = await copyText(text, scope);
-    setNotification(ok ? { type: 'success', text: `✓ ${done}: ${text}` } : { type: 'error', text: 'No se pudo copiar al portapapeles' });
+    setNotification(ok ? { type: 'success', text: `✓ ${done}: ${text}` } : { type: 'error', text: t("No se pudo copiar al portapapeles") });
   }, []);
-  const handleCopyId = useCallback((tab: TabItem) => void copyAndNotify(tab.id, 'ID copiado', 'App.copyId'), [copyAndNotify]);
+  const handleCopyId = useCallback((tab: TabItem) => void copyAndNotify(tab.id, t("ID copiado"), 'App.copyId'), [copyAndNotify]);
   const handleCopyPath = useCallback(
-    (tab: TabItem) => void copyAndNotify(notePathOf(tab, notesDir), 'Ruta copiada', 'App.copyPath'),
+    (tab: TabItem) => void copyAndNotify(notePathOf(tab, notesDir), t("Ruta copiada"), 'App.copyPath'),
     [copyAndNotify, notesDir]
   );
   const handleCopyRelativePath = useCallback(
-    (tab: TabItem) => void copyAndNotify(tab.title, 'Ruta relativa copiada', 'App.copyRelativePath'),
+    (tab: TabItem) => void copyAndNotify(tab.title, t("Ruta relativa copiada"), 'App.copyRelativePath'),
     [copyAndNotify]
   );
 
@@ -470,18 +462,18 @@ export const App: React.FC = () => {
       if (res.success) {
         setNotification({
           type: 'success',
-          text: '✓ Abriendo en el Explorador de archivos',
+          text: t("✓ Abriendo en el Explorador de archivos"),
         });
       } else {
         setNotification({
           type: 'info',
-          text: `Explorador: ${res.error || 'Abierto'}`,
+          text: t("Explorador: {0}", [res.error || 'Abierto']),
         });
       }
     } else {
       setNotification({
         type: 'info',
-        text: `Explorador (navegador): ${tab.path || tab.title}`,
+        text: t("Explorador (navegador): {0}", [tab.path || tab.title]),
       });
     }
   }, []);
@@ -549,7 +541,7 @@ export const App: React.FC = () => {
       setTabs((prev) =>
         prev.map((t) => (t.id === activeTabId ? { ...t, isDirty: false } : t))
       );
-      setNotification({ type: 'success', text: `Nota guardada (modo navegador): ${activeTab.title}` });
+      setNotification({ type: 'success', text: t("Nota guardada (modo navegador): {0}", [activeTab.title]) });
       return;
     }
 
@@ -571,7 +563,7 @@ export const App: React.FC = () => {
         );
         setNotification({
           type: 'success',
-          text: `✓ Guardado: ${activeTab.title}`,
+          text: t("✓ Guardado: {0}", [activeTab.title]),
         });
         // A note saved for the first time joins the history
         if (!activeTab.path) recordRecentFiles([{ path: targetPath, name: activeTab.title }]);
@@ -579,7 +571,7 @@ export const App: React.FC = () => {
       } else {
         setNotification({
           type: 'error',
-          text: `Error al guardar: ${res.error}`,
+          text: t("Error al guardar: {0}", [res.error]),
         });
       }
     } catch (err: any) {
@@ -591,7 +583,7 @@ export const App: React.FC = () => {
   const handleExportPdf = useCallback(async (tab: TabItem) => {
     if (tab.kind === 'terminal' || tab.kind === 'claude') return;
     if (!window.electronAPI?.exportPdf) {
-      setNotification({ type: 'info', text: 'Exportar a PDF solo está disponible en la app de escritorio' });
+      setNotification({ type: 'info', text: t("Exportar a PDF solo está disponible en la app de escritorio") });
       return;
     }
     try {
@@ -600,13 +592,13 @@ export const App: React.FC = () => {
       const html = markdownToPrintHtml(tab.content, tab.title.replace(/\.(md|markdown|mdx)$/i, ''), folder);
       const res = await window.electronAPI.exportPdf({ html, defaultName: tab.title, defaultDir: folder });
       if (res.success && res.path) {
-        setNotification({ type: 'success', text: `✓ PDF exportado: ${res.path.split(/[\\/]/).pop()}` });
+        setNotification({ type: 'success', text: t("✓ PDF exportado: {0}", [res.path.split(/[\\/]/).pop()]) });
         void window.electronAPI.openPath?.(res.path);
       } else if (!res.canceled) {
-        setNotification({ type: 'error', text: `No se pudo exportar: ${res.error}` });
+        setNotification({ type: 'error', text: t("No se pudo exportar: {0}", [res.error]) });
       }
     } catch (err: any) {
-      setNotification({ type: 'error', text: `No se pudo exportar: ${err?.message ?? err}` });
+      setNotification({ type: 'error', text: t("No se pudo exportar: {0}", [err?.message ?? err]) });
     }
   }, []);
 
@@ -626,7 +618,7 @@ export const App: React.FC = () => {
     };
     // The empty start-up note is just a placeholder: the file takes its place
     const isBlankPlaceholder = (prev: TabItem[]) =>
-      prev.length === 1 && !prev[0].path && !prev[0].kind && !prev[0].content && !prev[0].isDirty && prev[0].id !== WELCOME_TAB_ID;
+      prev.length === 1 && !prev[0].path && !prev[0].kind && !prev[0].content && !prev[0].isDirty;
     setTabs((prev) => (isBlankPlaceholder(prev) ? [newTab] : [...prev, newTab]));
     setActiveTabId(newTab.id);
   };
@@ -652,21 +644,21 @@ export const App: React.FC = () => {
       return;
     }
     if (!window.electronAPI) return;
-    const res = await window.electronAPI.readFile(file.path);
+    const res = await withFileLoading(() => window.electronAPI!.readFile(file.path));
     if (res.success && res.content !== undefined) {
       openFileInTab(file.path, file.name, res.content);
       recordRecentFiles([file]);
     } else {
       // Moved or deleted: drop it from the history
       updateRecentFiles(removeRecentFile(recentFilesRef.current, file.path));
-      setNotification({ type: 'error', text: `No se pudo abrir ${file.name}: ${res.error || 'ya no existe'}` });
+      setNotification({ type: 'error', text: t("No se pudo abrir {0}: {1}", [file.name, res.error || t("ya no existe")]) });
     }
   };
 
   // Browse the disk for one or more .md files (new-tab menu / Ctrl+O); each opens in its own tab
   const handleOpenFile = async () => {
     if (!window.electronAPI?.openMarkdownFile) return;
-    const res = await window.electronAPI.openMarkdownFile();
+    const res = await withFileLoading(() => window.electronAPI!.openMarkdownFile!());
     if (!res) return; // cancelled
 
     const now = Date.now();
@@ -693,7 +685,7 @@ export const App: React.FC = () => {
     recordRecentFiles(res.files);
 
     if (res.errors.length) {
-      setNotification({ type: 'error', text: `No se pudo abrir: ${res.errors.join(' · ')}` });
+      setNotification({ type: 'error', text: t("No se pudo abrir: {0}", [res.errors.join(' · ')]) });
     }
   };
   useEffect(() => {
@@ -707,15 +699,15 @@ export const App: React.FC = () => {
     if (target.type === 'folder') {
       setNotesDir(target.path);
       handleNewClaude(target.path);
-      setNotification({ type: 'success', text: `📂 Carpeta abierta: ${name}` });
+      setNotification({ type: 'success', text: t("📂 Carpeta abierta: {0}", [name]) });
       return;
     }
-    const res = await window.electronAPI?.readFile(target.path);
+    const res = await withFileLoading(async () => window.electronAPI?.readFile(target.path));
     if (res?.success && res.content !== undefined) {
       openFileInTab(target.path, name, res.content);
       recordRecentFiles([{ path: target.path, name }]);
     } else {
-      setNotification({ type: 'error', text: `No se pudo abrir ${name}: ${res?.error || 'error desconocido'}` });
+      setNotification({ type: 'error', text: t("No se pudo abrir {0}: {1}", [name, res?.error || t("error desconocido")]) });
     }
   };
   const openTargetRef = useRef(handleOpenTarget);
@@ -749,10 +741,10 @@ export const App: React.FC = () => {
       const from = tabs.find((t) => t.id === chatTabId) || tabs.find((t) => t.id === activeTabId);
       const cwd = from?.kind === 'claude' || from?.kind === 'terminal' ? from.cwd || notesDir : parentDir(from?.path ?? null) ?? undefined;
       updateIdeas(addIdea(ideasRef.current, { text, source: from?.title, cwd: cwd || undefined }));
-      setNotification({ type: 'success', text: '💡 Idea guardada' });
+      setNotification({ type: 'success', text: t("💡 Idea guardada") });
     } catch (err) {
       logError('App.saveIdea', err, { chatTabId });
-      setNotification({ type: 'error', text: 'No se pudo guardar la idea' });
+      setNotification({ type: 'error', text: t("No se pudo guardar la idea") });
     }
   };
   const pinInChat = (text: string, tabId: string) => {
@@ -807,17 +799,17 @@ export const App: React.FC = () => {
         errors.push(file.name);
         continue;
       }
-      const res = await window.electronAPI!.readFile(filePath);
+      const res = await withFileLoading(() => window.electronAPI!.readFile(filePath));
       if (res.success && res.content !== undefined) {
         openFileInTab(filePath, baseName(filePath), res.content);
         opened.push({ path: filePath, name: baseName(filePath) });
       } else {
-        errors.push(`${file.name}: ${res.error || 'no se pudo leer'}`);
+        errors.push(`${file.name}: ${res.error || t("no se pudo leer")}`);
       }
     }
     recordRecentFiles(opened);
-    if (errors.length) setNotification({ type: 'error', text: `No se pudo abrir: ${errors.join(' · ')}` });
-    else if (opened.length > 1) setNotification({ type: 'success', text: `✓ ${opened.length} notas abiertas` });
+    if (errors.length) setNotification({ type: 'error', text: t("No se pudo abrir: {0}", [errors.join(' · ')]) });
+    else if (opened.length > 1) setNotification({ type: 'success', text: t("✓ {0} notas abiertas", [opened.length]) });
   };
   const openDroppedRef = useRef(openDroppedFiles);
   useEffect(() => {
@@ -871,8 +863,11 @@ export const App: React.FC = () => {
   }, []);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
-  const claudeTabIds = tabs.filter((t) => t.kind === 'claude').map((t) => t.id);
-  const claudeUsage = useClaudeUsage(claudeTabIds, activeTab?.kind === 'claude' ? activeTab.id : undefined);
+  const claudeTabIds = tabs.filter((t) => t.kind === 'claude' && t.provider !== 'antigravity').map((t) => t.id);
+  const isClaudeCodeActive = activeTab?.kind === 'claude' && activeTab.provider !== 'antigravity';
+  const claudeUsage = useClaudeUsage(claudeTabIds, isClaudeCodeActive ? activeTab.id : undefined);
+  const isAntigravityActive = activeTab?.kind === 'claude' && activeTab.provider === 'antigravity';
+  const antigravityUsage = useAntigravityUsage(isAntigravityActive ? activeTab.id : undefined);
   const isClaudeActive = activeTab?.kind === 'claude';
   const isTerminalActive = activeTab?.kind === 'terminal' || isClaudeActive;
 
@@ -953,7 +948,9 @@ export const App: React.FC = () => {
             />
           ))}
 
-        {isTerminalActive ? null : activeTab ? (
+        {!sessionReady && tabs.length === 1 && activeTab?.id === STARTUP_TAB_ID ? (
+          <LoadingSkeleton label={t("Restaurando sesión")} className="p-5 max-w-3xl w-full mx-auto" />
+        ) : isTerminalActive ? null : activeTab ? (
           <Editor
             tabId={activeTab.id}
             markdown={activeTab.content}
@@ -966,10 +963,10 @@ export const App: React.FC = () => {
           />
         ) : (
           <div className="flex-1 flex items-center justify-center text-xs font-bold text-neutral-500">
-            Ninguna nota abierta. Haz clic en "+" para crear una nueva pestaña.
-          </div>
+            {t("Ninguna nota abierta. Haz clic en \"+\" para crear una nueva pestaña.")}</div>
         )}
 
+        {sessionReady && openingFiles > 0 && <LoadingSkeleton label={t("Abriendo archivos")} variant="line" className="absolute top-2 right-3 z-30 p-2 bg-[#FAF8F5] dark:bg-[#18181B] border-2 border-black dark:border-zinc-600 rounded pointer-events-none" />}
         {/* Drop hint while dragging files over the window (doesn't block the drop target below) */}
         {isDraggingFiles && (
           <div
@@ -978,7 +975,7 @@ export const App: React.FC = () => {
           >
             <div className="flex items-center gap-2 px-3 py-2 bg-[#FFE500] text-black border-2 border-black rounded shadow-[3px_3px_0px_#000] font-black text-xs text-center">
               <FileText size={16} strokeWidth={3} className="shrink-0" />
-              <span>Suelta tus .md para abrirlos</span>
+              <span>{t("Suelta tus .md para abrirlos")}</span>
             </div>
           </div>
         )}
@@ -1014,9 +1011,9 @@ export const App: React.FC = () => {
             <span className="text-black/60 dark:text-zinc-400 hidden min-[360px]:inline">{isClaudeActive ? 'Chat:' : isTerminalActive ? 'Terminal:' : 'Nota:'}</span>
             <span className="text-black dark:text-white font-black truncate">{activeTab?.title}</span>
             {activeTab?.isDirty && (
-              <span className="text-[#FF6B6B] font-black shrink-0" title="Cambios sin guardar">
+              <span className="text-[#FF6B6B] font-black shrink-0" title={t("Cambios sin guardar")}>
                 <span aria-hidden="true" className="min-[480px]:hidden">●</span>
-                <span className="hidden min-[480px]:inline">*sin guardar</span>
+                <span className="hidden min-[480px]:inline">{t("*sin guardar")}</span>
               </span>
             )}
           </span>
@@ -1029,11 +1026,11 @@ export const App: React.FC = () => {
           <button
             onClick={handleSaveActiveTab}
             className="h-5 flex items-center gap-1 px-1.5 leading-none bg-[#FFE500] hover:bg-[#FFD700] text-black border-2 border-black rounded shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer font-black whitespace-nowrap shrink-0"
-            title="Guardar nota (Ctrl + S)"
+            title={t("Guardar nota (Ctrl + S)")}
           >
             <Save size={10} strokeWidth={2.8} className="shrink-0" />
             <span className="whitespace-nowrap">
-              Guardar<span className="hidden min-[480px]:inline"> (Ctrl+S)</span>
+              {t("Guardar")}<span className="hidden min-[480px]:inline"> (Ctrl+S)</span>
             </span>
           </button>
 
@@ -1041,7 +1038,7 @@ export const App: React.FC = () => {
           <button
             onClick={() => activeTab && void handleExportPdf(activeTab)}
             className="h-5 flex items-center gap-1 px-1.5 leading-none bg-white dark:bg-[#27272A] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer font-black whitespace-nowrap shrink-0"
-            title="Exportar la nota a PDF"
+            title={t("Exportar la nota a PDF")}
           >
             <FileDown size={10} strokeWidth={2.8} className="shrink-0" />
             <span className="whitespace-nowrap">PDF</span>
@@ -1051,8 +1048,9 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0 ml-1">
-          {/* Claude plan usage (5-hour / weekly), while a Claude chat is open */}
-          <ClaudeUsageMeter usage={claudeUsage} />
+          {/* Claude Code plan usage belongs only to Claude Code chats. */}
+          {isClaudeCodeActive && <ClaudeUsageMeter usage={claudeUsage} />}
+          {isAntigravityActive && <AntigravityUsageMeter usage={antigravityUsage} />}
 
           {/* Superposición Status Badge */}
           <span
@@ -1060,7 +1058,7 @@ export const App: React.FC = () => {
               isAlwaysOnTop ? 'bg-[#78E08F] text-black' : 'bg-neutral-200 dark:bg-zinc-700 text-neutral-600 dark:text-zinc-300'
             }`}
           >
-            {isAlwaysOnTop ? 'FIJADO' : 'NORMAL'}
+            {isAlwaysOnTop ? t("FIJADO") : t("NORMAL")}
           </span>
         </div>
       </div>
@@ -1070,7 +1068,7 @@ export const App: React.FC = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onConfigChanged={refreshNotes}
-        onSaved={() => setNotification({ type: 'success', text: '¡Ajustes guardados correctamente!' })}
+        onSaved={() => setNotification({ type: 'success', text: t("¡Ajustes guardados correctamente!") })}
       />
 
       {contextMenu.menu && (
@@ -1084,6 +1082,7 @@ export const App: React.FC = () => {
       )}
 
       <IdeasDrawer
+        loading={!sessionReady}
         isOpen={isIdeasOpen}
         onClose={() => setIsIdeasOpen(false)}
         ideas={ideas}
@@ -1103,6 +1102,7 @@ export const App: React.FC = () => {
       />
 
       <RecentFilesDrawer
+        loading={!sessionReady}
         isOpen={isFilesDrawerOpen}
         onClose={() => setIsFilesDrawerOpen(false)}
         recentFiles={recentFiles}
@@ -1116,12 +1116,12 @@ export const App: React.FC = () => {
       {/* Neubrutalist Confirmation Modal for Closing Unsaved Tab */}
       <ConfirmModal
         isOpen={Boolean(closingTab)}
-        title="Cambios sin guardar"
-        message={`La nota "${closingTab?.title}" tiene cambios sin guardar.`}
-        subMessage="¿Deseas descartar los cambios y cerrar esta pestaña de todos modos?"
-        confirmText="Descartar y Cerrar"
-        cancelText="Cancelar"
-        saveAndCloseText="Guardar y Cerrar"
+        title={t("Cambios sin guardar")}
+        message={t("La nota \"{0}\" tiene cambios sin guardar.", [closingTab?.title])}
+        subMessage={t("¿Deseas descartar los cambios y cerrar esta pestaña de todos modos?")}
+        confirmText={t("Descartar y Cerrar")}
+        cancelText={t("Cancelar")}
+        saveAndCloseText={t("Guardar y Cerrar")}
         onConfirm={() => {
           if (closingTab) executeCloseTab(closingTab.id);
         }}
@@ -1140,21 +1140,21 @@ export const App: React.FC = () => {
       {/* Confirmation before quitting the whole app from the titlebar close button */}
       <ConfirmModal
         isOpen={isQuitConfirmOpen}
-        title="Cerrar yanote"
-        message="¿Estás seguro de que deseas cerrar el programa?"
+        title={t("Cerrar yanote")}
+        message={t("¿Estás seguro de que deseas cerrar el programa?")}
         subMessage={(() => {
           const unsaved = tabs.filter((t) => t.isDirty).length;
           const terminals = tabs.filter((t) => t.kind === 'terminal').length;
           const chats = tabs.filter((t) => t.kind === 'claude').length;
           const warnings = [
-            unsaved > 0 ? `${unsaved} ${unsaved === 1 ? 'nota tiene' : 'notas tienen'} cambios sin guardar que se perderán.` : '',
-            terminals > 0 ? `${terminals} ${terminals === 1 ? 'terminal abierta se cerrará' : 'terminales abiertas se cerrarán'}.` : '',
-            chats > 0 ? `${chats} ${chats === 1 ? 'chat con IA se cerrará' : 'chats con IA se cerrarán'}.` : '',
+            unsaved > 0 ? t("{0} {1} cambios sin guardar que se perderán.", [unsaved, unsaved === 1 ? t("nota tiene") : t("notas tienen")]) : '',
+            terminals > 0 ? `${terminals} ${terminals === 1 ? t("terminal abierta se cerrará") : t("terminales abiertas se cerrarán")}.` : '',
+            chats > 0 ? `${chats} ${chats === 1 ? t("chat con IA se cerrará") : t("chats con IA se cerrarán")}.` : '',
           ].filter(Boolean);
-          return warnings.length > 0 ? warnings.join(' ') : 'Todas tus notas están guardadas.';
+          return warnings.length > 0 ? warnings.join(' ') : t("Todas tus notas están guardadas.");
         })()}
-        confirmText="Sí, cerrar"
-        cancelText="Cancelar"
+        confirmText={t("Sí, cerrar")}
+        cancelText={t("Cancelar")}
         onConfirm={async () => {
           setIsQuitConfirmOpen(false);
           // Write the latest tabs right away: the debounced save may not have run yet

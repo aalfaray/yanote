@@ -1,3 +1,4 @@
+import { t, useLanguage } from '../../lib/i18n';
 import React, { useEffect, useRef } from 'react';
 import {
   Pencil,
@@ -27,6 +28,7 @@ export interface TabContextMenuProps {
   onCopyRelativePath: (tab: TabItem) => void;
   onRevealInExplorer: (tab: TabItem) => void;
   /** Only offered for note tabs */
+
   onExportPdf?: (tab: TabItem) => void;
 }
 
@@ -49,6 +51,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
   onRevealInExplorer,
   onExportPdf,
 }) => {
+  useLanguage();
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close when clicking outside or pressing Escape
@@ -99,7 +102,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
     <div
       ref={menuRef}
       role="menu"
-      aria-label="Menú contextual de pestaña"
+      aria-label={t("Menú contextual de pestaña")}
       data-testid="tab-context-menu"
       style={{ left: `${clampedX}px`, top: `${clampedY}px` }}
       className="fixed z-[999999] w-64 bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-700 rounded shadow-[4px_4px_0px_#000] dark:shadow-[4px_4px_0px_#000] py-1 select-none text-xs font-bold animate-in fade-in zoom-in-95 duration-100"
@@ -113,7 +116,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
       >
         <Pencil size={13} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
-        <span>Renombrar</span>
+        <span>{t("Renombrar")}</span>
       </button>
 
       <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
@@ -128,12 +131,12 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         {tab.isPinned ? (
           <>
             <PinOff size={13} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
-            <span>Desfijar pestaña</span>
+            <span>{t("Desfijar pestaña")}</span>
           </>
         ) : (
           <>
             <Pin size={13} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
-            <span>Fijar pestaña</span>
+            <span>{t("Fijar pestaña")}</span>
           </>
         )}
       </button>
@@ -145,7 +148,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         onClick={() => handleAction(() => onCopyId(tab))}
         className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group pl-[31px]"
       >
-        <span>Copiar ID de pestaña</span>
+        <span>{t("Copiar ID de pestaña")}</span>
       </button>
 
       <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
@@ -159,7 +162,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
       >
         <div className="flex items-center gap-2.5">
           <X size={13} strokeWidth={3} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
-          <span>Cerrar</span>
+          <span>{t("Cerrar")}</span>
         </div>
         <span className="text-[10px] font-mono opacity-60 text-neutral-500 dark:text-zinc-400 group-hover:text-black">
           Ctrl+W
@@ -182,7 +185,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
             : 'opacity-40 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent'
         }`}
       >
-        <span>Cerrar otras</span>
+        <span>{t("Cerrar otras")}</span>
       </button>
 
       {/* 6. Cerrar todas las pestañas del editor (Ctrl+Alt+W) */}
@@ -192,7 +195,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         onClick={() => handleAction(onCloseAll)}
         className="w-full px-3 py-1.5 flex items-center justify-between pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
       >
-        <span>Cerrar todas las pestañas del editor</span>
+        <span>{t("Cerrar todas las pestañas del editor")}</span>
         <span className="text-[10px] font-mono opacity-60 text-neutral-500 dark:text-zinc-400 group-hover:text-black ml-2">
           Ctrl+Alt+W
         </span>
@@ -207,7 +210,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         onClick={() => handleAction(onTogglePreview)}
         className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
       >
-        <span>Abrir vista previa de Markdown</span>
+        <span>{t("Abrir vista previa de Markdown")}</span>
       </button>
 
       {/* Exportar a PDF (solo notas) */}
@@ -219,7 +222,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
           className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
         >
           <FileDown size={13} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
-          <span>Exportar a PDF</span>
+          <span>{t("Exportar a PDF")}</span>
         </button>
       )}
 
@@ -232,7 +235,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         onClick={() => handleAction(() => onCopyPath(tab))}
         className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
       >
-        <span>Copiar ruta</span>
+        <span>{t("Copiar ruta")}</span>
       </button>
 
       {/* 9. Copiar ruta relativa */}
@@ -242,7 +245,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         onClick={() => handleAction(() => onCopyRelativePath(tab))}
         className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
       >
-        <span>Copiar ruta relativa</span>
+        <span>{t("Copiar ruta relativa")}</span>
       </button>
 
       <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
@@ -254,7 +257,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         onClick={() => handleAction(() => onRevealInExplorer(tab))}
         className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
       >
-        <span>Revelar en el Explorador de archivos</span>
+        <span>{t("Revelar en el Explorador de archivos")}</span>
       </button>
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { EditorView, basicSetup } from 'codemirror';
-import { EditorState } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
+import { getLanguage, useLanguage } from '../lib/i18n';
 import { markdown as markdownLang } from '@codemirror/lang-markdown';
 import type { TextRange } from '../lib/parseErrorPosition';
 
@@ -85,6 +86,8 @@ export const PlainMarkdownEditor: React.FC<PlainMarkdownEditorProps> = ({
   onAutoFocused,
   reveal = null,
 }) => {
+  const language = useLanguage();
+  const languageCompartment = useRef(new Compartment());
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -103,7 +106,7 @@ export const PlainMarkdownEditor: React.FC<PlainMarkdownEditorProps> = ({
         doc: valueRef.current,
         extensions: [
           basicSetup,
-          SPANISH_PHRASES,
+          languageCompartment.current.of(getLanguage() === 'es' ? SPANISH_PHRASES : []),
           markdownLang(),
           EditorView.lineWrapping,
           isDarkMode ? darkTheme : lightTheme,
@@ -119,6 +122,10 @@ export const PlainMarkdownEditor: React.FC<PlainMarkdownEditorProps> = ({
       viewRef.current = null;
     };
   }, [tabId, isDarkMode]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: languageCompartment.current.reconfigure(language === 'es' ? SPANISH_PHRASES : []) });
+  }, [language]);
 
   useEffect(() => {
     if (!autoFocus || !viewRef.current) return;

@@ -53,6 +53,7 @@ async function runEditCommand(action: EditCommand): Promise<void> {
  */
 export function useAppContextMenu(handlers: ContextMenuHandlers) {
   const [menu, setMenu] = useState<OpenContextMenu | null>(null);
+  const pendingSpelling = useRef<{ field: HTMLElement; x: number; y: number; at: number } | null>(null);
   const handlersRef = useRef(handlers);
   useEffect(() => {
     handlersRef.current = handlers;
@@ -63,6 +64,14 @@ export function useAppContextMenu(handlers: ContextMenuHandlers) {
       try {
         // Menus of their own (e.g. a tab's) already handled it
         if (e.defaultPrevented) return;
+        pendingSpelling.current = null;
+        const field = e.target instanceof Element ? e.target.closest<HTMLElement>('textarea[data-chat-composer]') : null;
+        if (field && window.electronAPI?.onSpellingContext) {
+          // Let Chromium inspect the clicked word before it forwards its spelling context.
+          pendingSpelling.current = { field, x: e.clientX, y: e.clientY, at: Date.now() };
+          setMenu(null);
+          return;
+        }
         const { ctx, termTabId } = readMenuContext(e.target, terminalSelection);
         const entries = buildMenu(ctx);
         e.preventDefault();
@@ -72,11 +81,28 @@ export function useAppContextMenu(handlers: ContextMenuHandlers) {
         setMenu(null);
       }
     };
+    const offSpelling = window.electronAPI?.onSpellingContext?.((spelling) => {
+      const pending = pendingSpelling.current;
+      if (!pending || !pending.field.isConnected || Date.now() - pending.at > 2000) return;
+      if ((pending.x || pending.y) && (Math.abs(pending.x - spelling.x) > 2 || Math.abs(pending.y - spelling.y) > 2)) return;
+      pendingSpelling.current = null;
+      const { ctx, termTabId } = readMenuContext(pending.field, terminalSelection);
+      if (spelling.word) ctx.spelling = { requestId: spelling.requestId, word: spelling.word, suggestions: spelling.suggestions };
+      const entries = buildMenu(ctx);
+      setMenu(entries ? { x: spelling.x, y: spelling.y, ctx, termTabId, entries } : null);
+    });
+    const onInput = () => { pendingSpelling.current = null; setMenu(null); };
     window.addEventListener('contextmenu', onContext);
-    return () => window.removeEventListener('contextmenu', onContext);
+    window.addEventListener('input', onInput);
+    return () => {
+      window.removeEventListener('contextmenu', onContext);
+      window.removeEventListener('input', onInput);
+      offSpelling?.();
+      pendingSpelling.current = null;
+    };
   }, []);
 
-  const close = useCallback(() => setMenu(null), []);
+  const close = useCallback(() => { pendingSpelling.current = null; setMenu(null); }, []);
 
   const runAction = useCallback(
     (action: MenuAction) => {
@@ -85,6 +111,13 @@ export function useAppContextMenu(handlers: ContextMenuHandlers) {
       if (!current) return;
       const { ctx, termTabId } = current;
       const text = ctx.selection;
+      if (action.startsWith('spell:') && ctx.spelling) {
+        const index = Number(action.slice(6));
+        const suggestion = ctx.spelling.suggestions[index];
+        if (Number.isInteger(index) && suggestion) void window.electronAPI?.replaceMisspelling?.(ctx.spelling.requestId, suggestion)
+          .catch((err) => logError('useAppContextMenu.correctSpelling', err));
+        return;
+      }
       try {
         const h = handlersRef.current;
         switch (action) {

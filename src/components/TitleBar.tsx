@@ -1,3 +1,4 @@
+import { t, useLanguage } from '../lib/i18n';
 import React from 'react';
 import { TransparencyControl } from './TransparencyControl';
 import { Pin, Minus, Square, X, Settings, History, Moon, Sun, Lightbulb } from 'lucide-react';
@@ -10,11 +11,14 @@ interface TitleBarProps {
   onOpenSettings: () => void;
   onOpenFiles: () => void;
   /** Saved ideas (right-click > "Guardar idea"); the button shows when provided */
+
   onOpenIdeas?: () => void;
   ideasCount?: number;
   /** When provided, the close button asks the app first (confirmation modal) instead of closing directly */
+
   onRequestClose?: () => void;
   /** Window opacity 0.3–1; the transparency button is shown when onChangeOpacity is provided */
+
   opacity?: number;
   onChangeOpacity?: (opacity: number) => void;
 }
@@ -44,6 +48,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   opacity = 1,
   onChangeOpacity,
 }) => {
+  useLanguage();
   const handleMinimize = () => {
     window.electronAPI?.minimize();
   };
@@ -72,12 +77,12 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         {/* Superposición (Always on Top) Toggle */}
         <button
           onClick={onToggleAlwaysOnTop}
-          title={isAlwaysOnTop ? 'Superposición activa (Siempre encima)' : 'Activar superposición (Siempre encima)'}
+          title={isAlwaysOnTop ? t("Superposición activa (Siempre encima)") : t("Activar superposición (Siempre encima)")}
           aria-pressed={isAlwaysOnTop}
           className={`${LABELED} min-[540px]:px-2 ${isAlwaysOnTop ? ACTIVE : NEUTRAL}`}
         >
           <Pin {...ICON_PROPS} className={isAlwaysOnTop ? 'fill-black rotate-45' : ''} />
-          <span className="hidden min-[540px]:inline">{isAlwaysOnTop ? 'ENCIMA' : 'FLOTANTE'}</span>
+          <span className="hidden min-[540px]:inline">{isAlwaysOnTop ? t('ENCIMA') : t("FLOTANTE")}</span>
         </button>
       </div>
 
@@ -86,12 +91,12 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         {/* Dark Mode Toggle */}
         <button
           onClick={onToggleDarkMode}
-          title={isDarkMode ? 'Cambiar a modo claro (Ctrl+Shift+D)' : 'Cambiar a modo oscuro (Ctrl+Shift+D)'}
+          title={isDarkMode ? t("Cambiar a modo claro (Ctrl+Shift+D)") : t("Cambiar a modo oscuro (Ctrl+Shift+D)")}
           aria-pressed={isDarkMode}
           className={`${LABELED} min-[560px]:px-2 ${isDarkMode ? ACTIVE : NEUTRAL}`}
         >
           {isDarkMode ? <Sun {...ICON_PROPS} /> : <Moon {...ICON_PROPS} />}
-          <span className="hidden min-[560px]:inline">{isDarkMode ? 'CLARO' : 'OSCURO'}</span>
+          <span className="hidden min-[560px]:inline">{isDarkMode ? t("CLARO") : t("OSCURO")}</span>
         </button>
 
         {/* Window transparency */}
@@ -108,7 +113,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
 
         {/* Saved ideas */}
         {onOpenIdeas && (
-          <button onClick={onOpenIdeas} title={`Ideas guardadas (${ideasCount})`} aria-label="Ideas guardadas" className={`${ICON} ${NEUTRAL} relative`}>
+          <button onClick={onOpenIdeas} title={t("Ideas guardadas ({0})", [ideasCount])} aria-label={t("Ideas guardadas")} className={`${ICON} ${NEUTRAL} relative`}>
             <Lightbulb {...ICON_PROPS} />
             {ideasCount > 0 && (
               <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[#FF6B6B] text-white text-[8.5px] leading-[14px] font-black border border-black">
@@ -119,25 +124,25 @@ export const TitleBar: React.FC<TitleBarProps> = ({
         )}
 
         {/* History of opened files */}
-        <button onClick={onOpenFiles} title="Archivos recientes" className={`${ICON} ${NEUTRAL}`}>
+        <button onClick={onOpenFiles} title={t("Archivos recientes")} className={`${ICON} ${NEUTRAL}`}>
           <History {...ICON_PROPS} />
         </button>
 
         {/* Settings Button */}
-        <button onClick={onOpenSettings} title="Configuración" className={`${ICON} ${NEUTRAL}`}>
+        <button onClick={onOpenSettings} title={t("Configuración")} className={`${ICON} ${NEUTRAL}`}>
           <Settings {...ICON_PROPS} />
         </button>
 
         <div className="h-5 w-[2px] bg-black/40 dark:bg-zinc-600 shrink-0" />
 
         {/* Window controls - ALWAYS visible and never pushed off */}
-        <button onClick={handleMinimize} title="Minimizar" className={`${ICON} ${NEUTRAL}`}>
+        <button onClick={handleMinimize} title={t("Minimizar")} className={`${ICON} ${NEUTRAL}`}>
           <Minus {...ICON_PROPS} />
         </button>
-        <button onClick={handleMaximize} title="Maximizar / Restaurar" className={`${ICON} ${NEUTRAL}`}>
+        <button onClick={handleMaximize} title={t("Maximizar / Restaurar")} className={`${ICON} ${NEUTRAL}`}>
           <Square size={12} strokeWidth={2.5} />
         </button>
-        <button onClick={handleClose} title="Cerrar" className={`${ICON} ${DANGER}`}>
+        <button onClick={handleClose} title={t("Cerrar")} className={`${ICON} ${DANGER}`}>
           <X {...ICON_PROPS} />
         </button>
       </div>

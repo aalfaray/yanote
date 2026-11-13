@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { toSavedTabs, restoreTab } from '../../src/lib/session';
 import { historyItems } from '../../src/lib/claudeChat';
 import type { TabItem } from '../../src/types/electron';
@@ -35,11 +35,21 @@ const tabs: TabItem[] = [
 describe('session helpers', () => {
   it('remembers every kind of tab (but not the welcome note)', () => {
     expect(toSavedTabs(tabs, ['tab-welcome'])).toEqual([
-      { kind: 'note', path: 'C:\\p\\plan.md', title: 'plan.md', isPinned: true },
+      { kind: 'note', path: 'C:\\p\\plan.md', title: 'plan.md', isPinned: true, content: '# Plan', isDirty: true },
       { kind: 'scratch', title: 'scratch-1.md', content: 'borrador sin guardar', isPinned: false },
       { kind: 'terminal', title: 'PowerShell', shell: 'powershell', cwd: 'C:\\p' },
       { kind: 'claude', title: 'Claude 2', cwd: 'C:\\p', sessionId: 'sess-123', accountId: 'acc-b', pins: [{ id: 'pin-1', text: 'Importante' }] },
     ]);
+  });
+
+  it('keeps empty pending text and full large edits, but reads clean notes from disk', () => {
+    for (const content of ['', 'x'.repeat(500_001)]) {
+      const [saved] = toSavedTabs([{ ...tabs[1], content }]);
+      expect(restoreTab(saved, 'restored')).toMatchObject({ content, isDirty: true, path: tabs[1].path });
+    }
+    const [clean] = toSavedTabs([{ ...tabs[1], isDirty: false }]);
+    expect(clean).not.toHaveProperty('content');
+    expect(restoreTab(clean, 'clean')).toBeNull();
   });
 
   it('rebuilds tabs that need no disk read', () => {
@@ -89,6 +99,19 @@ describe('App: opens with the tabs of last time', () => {
     } as any;
   });
 
+  it.each(['', 'pending changes'])('restores pending text %j even when the file is missing', async (content) => {
+    window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
+      openTabs: [{ kind: 'note', path: '/missing.md', title: 'missing.md', content, isDirty: true }],
+      activeTabIndex: 0,
+    });
+    window.electronAPI!.readFile = vi.fn().mockResolvedValue({ success: false });
+    render(<App />);
+    await screen.findAllByText('missing.md');
+    expect(screen.getByTestId('editor')).toHaveValue(content);
+    expect(screen.getByText(/Sin guardar/i)).toBeInTheDocument();
+    expect(window.electronAPI!.readFile).not.toHaveBeenCalled();
+  });
+
   it('restores notes, unsaved notes, terminals and chats in order, with the same active tab', async () => {
     render(<App />);
     const chat = await screen.findByTestId(/^chat-claude-restored-/);
@@ -101,6 +124,9 @@ describe('App: opens with the tabs of last time', () => {
     expect(screen.queryByText('Bienvenido.md')).not.toBeInTheDocument();
     // the chat (index 3) was the active tab
     expect(screen.getAllByText('Chat:').length).toBeGreaterThan(0);
-    await waitFor(() => expect(window.electronAPI!.readFile).toHaveBeenCalledWith('C:\\p\\plan.md'));
+    fireEvent.click(screen.getAllByText('plan.md')[0]);
+    expect(screen.getByTestId('editor')).toHaveValue('# Plan');
+    expect(screen.getByText(/Sin guardar/i)).toBeInTheDocument();
+    expect(window.electronAPI!.readFile).not.toHaveBeenCalledWith('C:\\p\\plan.md');
   });
 });

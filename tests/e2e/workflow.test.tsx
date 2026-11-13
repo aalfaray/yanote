@@ -32,7 +32,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
   beforeEach(() => {
     writtenFiles = {};
     mockNotes = [
-      { name: 'Bienvenido.md', path: '/notes/Bienvenido.md', updatedAt: new Date().toISOString(), size: 1024 },
+      { name: 'ejemplo.md', path: '/notes/ejemplo.md', updatedAt: new Date().toISOString(), size: 1024 },
     ];
 
     window.electronAPI = {
@@ -44,7 +44,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       getNotesPath: vi.fn().mockResolvedValue('/notes'),
       listNotes: vi.fn().mockImplementation(() => Promise.resolve({ success: true, notes: mockNotes })),
       readFile: vi.fn().mockImplementation((filePath) =>
-        Promise.resolve({ success: true, content: writtenFiles[filePath] || '# Bienvenido.md\n\nContenido de prueba' })
+        Promise.resolve({ success: true, content: writtenFiles[filePath] || '# ejemplo.md\n\nContenido de prueba' })
       ),
       writeFile: vi.fn().mockImplementation((filePath, content) => {
         writtenFiles[filePath] = content;
@@ -55,6 +55,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       getAppConfig: vi.fn().mockResolvedValue({
         notesPath: '/notes',
         alwaysOnTop: false,
+        openTabs: [{ kind: 'note', path: '/notes/ejemplo.md', title: 'ejemplo.md' }],
       }),
       saveAppConfig: vi.fn().mockResolvedValue({}),
       selectFolder: vi.fn().mockResolvedValue('/notes'),
@@ -67,7 +68,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     // 1. Create new tab with "+" button
@@ -113,7 +114,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     const darkBtn = screen.getByTitle(/Cambiar a modo oscuro/i);
@@ -131,7 +132,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     // Open second tab
@@ -142,8 +143,8 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1);
     });
 
-    // Right-click on Bienvenido.md tab
-    const bienvenidoTab = screen.getAllByText('Bienvenido.md')[0];
+    // Right-click on ejemplo.md tab
+    const bienvenidoTab = screen.getAllByText('ejemplo.md')[0];
     fireEvent.contextMenu(bienvenidoTab, { clientX: 100, clientY: 100 });
 
     // Verify context menu opened
@@ -158,7 +159,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       expect(screen.getByText(/Pestaña fijada/i)).toBeInTheDocument();
     });
 
-    // Right-click again on Bienvenido.md to verify menu now shows "Desfijar pestaña"
+    // Right-click again on ejemplo.md to verify menu now shows "Desfijar pestaña"
     fireEvent.contextMenu(bienvenidoTab, { clientX: 100, clientY: 100 });
     expect(screen.getByText('Desfijar pestaña')).toBeInTheDocument();
 
@@ -174,7 +175,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
 
     await waitFor(() => {
       expect(screen.queryByText('scratch-1.md')).not.toBeInTheDocument();
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -202,7 +203,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     const textarea = screen.getByTestId('mock-markdown-textarea');
@@ -223,7 +224,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     // Wait for initial note to load
-    await waitFor(() => expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1));
+    await waitFor(() => expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1));
 
     // Add new tab and make dirty
     fireEvent.click(screen.getByTitle(/Nueva nota Markdown/i));
@@ -252,7 +253,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     // Wait for initial note to load
-    await waitFor(() => expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1));
+    await waitFor(() => expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1));
 
     fireEvent.click(screen.getByTitle(/Nueva nota Markdown/i));
     await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
@@ -271,10 +272,10 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     // Click "Descartar y Cerrar"
     fireEvent.click(screen.getByText('Descartar y Cerrar'));
 
-    // Tab scratch-1.md should be gone, and Bienvenido.md should be active
+    // Tab scratch-1.md should be gone, and ejemplo.md should be active
     await waitFor(() => {
       expect(screen.queryByText('scratch-1.md')).not.toBeInTheDocument();
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -282,14 +283,15 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     (window.electronAPI?.getAppConfig as any).mockResolvedValue({
       notesPath: '/notes',
       alwaysOnTop: false,
+      openTabs: [{ kind: 'note', path: '/notes/ejemplo.md', title: 'ejemplo.md' }],
       recentFiles: [
         { path: '/proyectos/Plan.md', name: 'Plan.md', openedAt: Date.now() - 60_000 },
-        { path: '/notes/Bienvenido.md', name: 'Bienvenido.md', openedAt: Date.now() - 120_000 },
+        { path: '/notes/ejemplo.md', name: 'ejemplo.md', openedAt: Date.now() - 120_000 },
       ],
     });
     render(<App />);
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     fireEvent.click(screen.getByTitle('Archivos recientes'));
@@ -308,13 +310,13 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       expect.objectContaining({ recentFiles: expect.arrayContaining([expect.objectContaining({ path: '/proyectos/Plan.md' })]) })
     );
 
-    // Bienvenido.md is already open: picking it again must not duplicate the tab
+    // ejemplo.md is already open: picking it again must not duplicate the tab
     fireEvent.click(screen.getByTitle('Archivos recientes'));
-    const items = await screen.findAllByText('Bienvenido.md');
-    const before = screen.getAllByText('Bienvenido.md').length;
+    const items = await screen.findAllByText('ejemplo.md');
+    const before = screen.getAllByText('ejemplo.md').length;
     fireEvent.click(items[items.length - 1]);
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeLessThanOrEqual(before);
+      expect(screen.getAllByText('ejemplo.md').length).toBeLessThanOrEqual(before);
     });
   });
 
@@ -322,7 +324,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     const { container } = render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     expect(screen.queryByTitle(/git/i)).not.toBeInTheDocument();
@@ -335,23 +337,23 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
       notesPath: '/notes',
       alwaysOnTop: false,
-      openTabs: [{ path: '/notes/Bienvenido.md', title: 'Bienvenido.md' }],
+      openTabs: [{ path: '/notes/ejemplo.md', title: 'ejemplo.md' }],
     });
     render(<App />);
 
     await waitFor(() => {
-      expect(window.electronAPI?.readFile).toHaveBeenCalledWith('/notes/Bienvenido.md');
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(window.electronAPI?.readFile).toHaveBeenCalledWith('/notes/ejemplo.md');
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
-    fireEvent.doubleClick(screen.getByTitle(/Bienvenido\.md/i));
-    const input = screen.getByDisplayValue('Bienvenido.md');
+    fireEvent.doubleClick(screen.getByTitle(/ejemplo\.md/i));
+    const input = screen.getByDisplayValue('ejemplo.md');
     fireEvent.change(input, { target: { value: 'Renombrado.md' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
     await waitFor(() => {
       expect(window.electronAPI?.renameFile).toHaveBeenCalledWith(
-        '/notes/Bienvenido.md',
+        '/notes/ejemplo.md',
         '/notes/Renombrado.md'
       );
       expect(screen.getAllByText('Renombrado.md').length).toBeGreaterThanOrEqual(1);
@@ -362,7 +364,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     const textarea = screen.getByTestId('mock-markdown-textarea');
@@ -379,7 +381,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     fireEvent.keyDown(window, { key: 'd', ctrlKey: true, shiftKey: true });
@@ -399,7 +401,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     const textarea = screen.getByTestId('mock-markdown-textarea');
@@ -436,7 +438,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     const darkBtn = screen.getByTitle(/Cambiar a modo oscuro/i);
@@ -451,7 +453,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
     // Make active tab dirty
@@ -472,7 +474,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     fireEvent.click(cancelBtn);
 
     // Tab must still be present with content intact
-    expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     expect((screen.getByTestId('mock-markdown-textarea') as HTMLTextAreaElement).value).toBe(
       'Contenido no guardado para probar modal'
     );
@@ -482,11 +484,11 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
-    // Right-click and pin Bienvenido.md
-    const tabEl = screen.getAllByText('Bienvenido.md')[0];
+    // Right-click and pin ejemplo.md
+    const tabEl = screen.getAllByText('ejemplo.md')[0];
     fireEvent.contextMenu(tabEl, { clientX: 100, clientY: 100 });
     fireEvent.click(screen.getByText('Fijar pestaña'));
 
@@ -497,8 +499,8 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     // Try pressing Ctrl+W to close it
     fireEvent.keyDown(window, { key: 'w', ctrlKey: true });
 
-    // Should NOT close - Bienvenido.md remains open
-    expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+    // Should NOT close - ejemplo.md remains open
+    expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
   });
 
   it('[CHAOS E2E 15/16] Reveal in explorer IPC call handles failure safely without crashing app', async () => {
@@ -510,10 +512,10 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
-    const tabEl = screen.getAllByText('Bienvenido.md')[0];
+    const tabEl = screen.getAllByText('ejemplo.md')[0];
     fireEvent.contextMenu(tabEl, { clientX: 100, clientY: 100 });
 
     const revealBtn = screen.getByText('Revelar en el Explorador de archivos');
@@ -528,10 +530,10 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1);
     });
 
-    const tabEl = screen.getAllByText('Bienvenido.md')[0];
+    const tabEl = screen.getAllByText('ejemplo.md')[0];
     fireEvent.contextMenu(tabEl, { clientX: 100, clientY: 100 });
 
     const togglePreviewBtn = screen.getByText('Abrir vista previa de Markdown');
@@ -554,12 +556,15 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     const config = (extra: object) =>
       (window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({ notesPath: '/notes', alwaysOnTop: false, ...extra }));
 
-    it('shows the welcome note only on the first start and remembers it was seen', async () => {
+    it('starts with a blank note and no welcome on the first launch', async () => {
       config({});
       render(<App />);
-      await waitFor(() => expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith({ welcomeSeen: true }));
-      expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1);
-      // never opens notes from the folder on its own
+      expect(screen.queryByText('Bienvenido.md')).not.toBeInTheDocument();
+      expect(await screen.findByTestId('mock-markdown-textarea')).toHaveValue('');
+      await waitFor(() => expect(window.electronAPI?.saveAppConfig).toHaveBeenCalledWith({
+        openTabs: [{ kind: 'scratch', title: 'scratch-1.md', content: '', isPinned: false }],
+        activeTabIndex: 0,
+      }));
       expect(window.electronAPI?.readFile).not.toHaveBeenCalled();
     });
 
@@ -567,7 +572,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       config({ welcomeSeen: true });
       render(<App />);
       await waitFor(() => expect(screen.getAllByText('scratch-1.md').length).toBeGreaterThanOrEqual(1));
-      expect(screen.queryByText('Bienvenido.md')).not.toBeInTheDocument();
+      expect(screen.queryByText('ejemplo.md')).not.toBeInTheDocument();
     });
 
     it('reopens the notes left open last time, skipping missing ones, and keeps the active one', async () => {
@@ -589,7 +594,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       await waitFor(() => expect(screen.getAllByText('b.md').length).toBeGreaterThanOrEqual(1));
       expect(screen.getAllByText('a.md').length).toBeGreaterThanOrEqual(1);
       expect(screen.queryByText('borrado.md')).not.toBeInTheDocument();
-      expect(screen.queryByText('Bienvenido.md')).not.toBeInTheDocument();
+      expect(screen.queryByText('ejemplo.md')).not.toBeInTheDocument();
       expect((screen.getByTestId('mock-markdown-textarea') as HTMLTextAreaElement).value).toBe('# A');
     });
 
@@ -701,7 +706,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
 
   it('the floating notice has an x that closes it right away', async () => {
     render(<App />);
-    await waitFor(() => expect(screen.getAllByText('Bienvenido.md').length).toBeGreaterThanOrEqual(1));
+    await waitFor(() => expect(screen.getAllByText('ejemplo.md').length).toBeGreaterThanOrEqual(1));
     fireEvent.keyDown(screen.getByTestId('mock-markdown-textarea'), { key: 's', ctrlKey: true });
     const notice = await screen.findByText(/Guardado/);
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar aviso' }));

@@ -5,7 +5,7 @@ export const MAX_SCRATCH_CHARS = 500_000;
 
 /**
  * What to remember of the open tabs so the next start looks the same:
- * notes by path, unsaved notes with their text, terminals by shell/folder,
+ * notes by path with pending edits, unsaved notes with their text, terminals by shell/folder,
  * Claude chats by session (to resume them), account and pins.
  */
 export function toSavedTabs(tabs: TabItem[], skipIds: string[] = []): SavedTab[] {
@@ -25,7 +25,7 @@ export function toSavedTabs(tabs: TabItem[], skipIds: string[] = []): SavedTab[]
         ...(t.provider && t.provider !== 'claude' ? { provider: t.provider } : {}),
       });
     } else if (t.path) {
-      out.push({ kind: 'note', path: t.path, title: t.title, isPinned: Boolean(t.isPinned) });
+      out.push({ kind: 'note', path: t.path, title: t.title, isPinned: Boolean(t.isPinned), ...(t.isDirty ? { content: t.content, isDirty: true } : {}) });
     } else {
       out.push({ kind: 'scratch', title: t.title, content: t.content.slice(0, MAX_SCRATCH_CHARS), isPinned: Boolean(t.isPinned) });
     }
@@ -33,7 +33,7 @@ export function toSavedTabs(tabs: TabItem[], skipIds: string[] = []): SavedTab[]
   return out;
 }
 
-/** Tab for a saved entry that needs no disk read (everything but saved notes). */
+/** Tab for a saved entry that needs no disk read (including file notes with pending edits). */
 export function restoreTab(saved: SavedTab, id: string): TabItem | null {
   switch (saved.kind) {
     case 'terminal':
@@ -56,6 +56,9 @@ export function restoreTab(saved: SavedTab, id: string): TabItem | null {
       // Never saved to disk: it still counts as unsaved
       return { id, title: saved.title, path: null, content: saved.content, isDirty: saved.content.trim().length > 0, isPinned: saved.isPinned };
     default:
+      if (saved.isDirty === true && typeof saved.content === 'string') {
+        return { id, title: saved.title, path: saved.path, content: saved.content, isDirty: true, isPinned: saved.isPinned };
+      }
       return null;
   }
 }

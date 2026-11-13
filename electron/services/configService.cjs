@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { normalizeLanguage } = require('./languageService.cjs');
 const { getLogger } = require('./logService.cjs');
 
 const log = getLogger('configService');
@@ -14,7 +15,7 @@ function clampOpacity(value) {
   return Math.min(MAX_OPACITY, Math.max(MIN_OPACITY, Math.round(n * 100) / 100));
 }
 
-const LEGACY_KEYS = ['githubRepo', 'githubBranch', 'githubToken', 'autoSyncOnSave'];
+const LEGACY_KEYS = ['githubRepo', 'githubBranch', 'githubToken', 'autoSyncOnSave', 'welcomeSeen'];
 
 function getBaseDataDir(env = process.env, execPath = process.execPath, defaultUserData = '') {
   if (env.PORTABLE_EXECUTABLE_DIR) {
@@ -56,7 +57,9 @@ function sanitizeOpenTabs(list) {
     if (kind === 'note') {
       if (typeof t.path !== 'string' || !t.path.trim() || seenPaths.has(t.path)) continue;
       seenPaths.add(t.path);
-      out.push({ kind: 'note', path: t.path, title: title || path.basename(t.path), isPinned: Boolean(t.isPinned) });
+      out.push({ kind: 'note', path: t.path, title: title || path.basename(t.path), isPinned: Boolean(t.isPinned),
+        ...(t.isDirty === true && typeof t.content === 'string' ? { content: t.content, isDirty: true } : {}),
+      });
     } else if (kind === 'scratch') {
       if (typeof t.content !== 'string') continue;
       out.push({ kind: 'scratch', title: title || 'scratch.md', content: t.content.slice(0, MAX_SCRATCH_CHARS), isPinned: Boolean(t.isPinned) });
@@ -73,6 +76,7 @@ function sanitizeOpenTabs(list) {
         ...(typeof t.sessionId === 'string' && /^[\w-]{1,100}$/.test(t.sessionId) ? { sessionId: t.sessionId } : {}),
         ...(typeof t.accountId === 'string' && /^[\w-]{1,64}$/.test(t.accountId) ? { accountId: t.accountId } : {}),
         ...(pins.length ? { pins } : {}),
+        ...(t.provider === 'antigravity' ? { provider: 'antigravity' } : {}),
       });
     } else {
       continue;
@@ -115,6 +119,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
       }
       return {
         notesPath: parsed.notesPath || defaultNotesPath,
+        language: normalizeLanguage(parsed.language),
         alwaysOnTop: Boolean(parsed.alwaysOnTop),
         notifyClaude: parsed.notifyClaude !== false,
         ideas: sanitizeIdeas(parsed.ideas),
@@ -125,7 +130,6 @@ function loadConfig(configFilePath, defaultNotesPath) {
         openTabs: sanitizeOpenTabs(parsed.openTabs),
         activeTabPath: typeof parsed.activeTabPath === 'string' ? parsed.activeTabPath : null,
         activeTabIndex: Number.isInteger(parsed.activeTabIndex) && parsed.activeTabIndex >= 0 ? parsed.activeTabIndex : null,
-        welcomeSeen: Boolean(parsed.welcomeSeen),
         recentFiles: sanitizeRecentFiles(parsed.recentFiles),
       };
     }
@@ -136,6 +140,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
 
   return {
     notesPath: defaultNotesPath,
+    language: 'auto',
     alwaysOnTop: false,
     notifyClaude: true,
     ideas: [],
@@ -146,7 +151,6 @@ function loadConfig(configFilePath, defaultNotesPath) {
     openTabs: [],
     activeTabPath: null,
     activeTabIndex: null,
-    welcomeSeen: false,
     recentFiles: [],
   };
 }
@@ -157,6 +161,7 @@ function saveConfig(configFilePath, currentConfig, newConfig) {
       throw new Error('Objeto de configuración no válido');
     }
     const merged = { ...currentConfig, ...newConfig };
+    merged.language = normalizeLanguage(merged.language);
     if (merged.opacity !== undefined) merged.opacity = clampOpacity(merged.opacity);
     if (merged.recentFiles !== undefined) merged.recentFiles = sanitizeRecentFiles(merged.recentFiles);
     if (merged.openTabs !== undefined) merged.openTabs = sanitizeOpenTabs(merged.openTabs);

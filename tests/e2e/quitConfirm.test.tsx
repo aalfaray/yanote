@@ -30,7 +30,7 @@ describe('E2E: confirm before quitting from the titlebar close button', () => {
   it('asks for confirmation, saves the open tabs, and only closes after "Sí, cerrar"', async () => {
     render(<App />);
     // Wait for startup to finish: only then are the open tabs the session to remember
-    await waitFor(() => expect((window as any).electronAPI.saveAppConfig).toHaveBeenCalledWith({ welcomeSeen: true }));
+    await waitFor(() => expect((window as any).electronAPI.saveAppConfig).toHaveBeenCalledWith(expect.objectContaining({ openTabs: expect.any(Array) })));
     fireEvent.click(screen.getByTitle('Cerrar'));
 
     expect(screen.getByText('¿Estás seguro de que deseas cerrar el programa?')).toBeInTheDocument();

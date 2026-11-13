@@ -1,4 +1,10 @@
 import '@testing-library/jest-dom';
+import { beforeEach } from 'vitest';
+import { configureLanguage } from '../src/lib/i18n';
+
+// Keep existing Spanish assertions independent of the host machine's display language.
+configureLanguage('auto', ['es-PE']);
+beforeEach(() => configureLanguage('auto', ['es-PE']));
 
 // Global mocks for JSDOM
 if (typeof window !== 'undefined') {

@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import type { ChatProvider, ClaudeEffortLevel, ClaudeEvent, ClaudeImageInput, ClaudePermissionDecision, ElectronAPI } from '../types/electron';
 
 type Result = Promise<{ success: boolean; error?: string }>;
@@ -6,13 +7,17 @@ type Result = Promise<{ success: boolean; error?: string }>;
  * What a chat tab needs from its agent. Claude (Agent SDK) and Antigravity (ACP) both speak
  * the same event shapes, so one chat view serves both.
  */
+
 export interface ChatBackend {
   provider: ChatProvider;
   /** Name shown to the user */
+
   label: string;
   /** Product it runs on (for the exported transcript) */
+
   source: string;
   /** Command that signs in, typed into a terminal tab */
+
   loginCommand: string;
   start: (options: { id: string; cwd?: string; resume?: string; permissionMode?: string; model?: string; accountId?: string }) => Promise<{ success: boolean; error?: string; executable?: string }>;
   send: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => Result;
@@ -25,11 +30,12 @@ export interface ChatBackend {
   onEvent: (callback: (event: ClaudeEvent) => void) => (() => void) | undefined;
 }
 
-const unsupported = () => Promise.resolve({ success: false, error: 'Esta versión de yanote no permite enviar mensajes a este chat' });
+const unsupported = () => Promise.resolve({ success: false, error: t("Esta versión de yanote no permite enviar mensajes a este chat") });
 
 export const PROVIDER_LABELS: Record<ChatProvider, string> = { claude: 'Claude', antigravity: 'Antigravity' };
 
 /** The backend for a provider, or null outside Electron / when the build lacks it. */
+
 export function getChatBackend(api: ElectronAPI | undefined, provider: ChatProvider = 'claude'): ChatBackend | null {
   if (!api) return null;
   if (provider === 'antigravity') {

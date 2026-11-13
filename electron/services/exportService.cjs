@@ -17,10 +17,10 @@ function exportFileName(name, ext) {
   return `${base || 'documento'}.${ext}`;
 }
 
-function createExportService({ dialog, BrowserWindow, getParentWindow = () => null, getDefaultDir = () => os.homedir(), tmpDir = os.tmpdir() }) {
+function createExportService({ dialog, BrowserWindow, getParentWindow = () => null, getDefaultDir = () => os.homedir(), tmpDir = os.tmpdir(), translate = (text) => text }) {
   async function askSavePath({ defaultName, ext, filterName, defaultDir }) {
     const result = await dialog.showSaveDialog(getParentWindow(), {
-      title: ext === 'pdf' ? 'Exportar a PDF' : 'Guardar como',
+      title: translate(ext === 'pdf' ? 'Exportar a PDF' : 'Guardar como'),
       defaultPath: path.join(defaultDir || getDefaultDir(), exportFileName(defaultName, ext)),
       filters: [{ name: filterName, extensions: [ext] }],
     });

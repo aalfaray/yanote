@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ClaudeAccountMenu, describeAccountStatus } from '../../src/components/ClaudeAccountMenu';
 
 const accounts = [
@@ -68,6 +68,46 @@ describe('ClaudeAccountMenu', () => {
     expect(describeAccountStatus({ success: false, error: 'No encontré Claude Code' })).toBe('No encontré Claude Code');
     expect(describeAccountStatus({ success: true, loggedIn: true, method: 'api_key' })).toBe('API key');
     expect(describeAccountStatus({ success: true, loggedIn: true, email: 'a@b.c', plan: 'max' })).toBe('a@b.c · Max');
+  });
+
+  it('shows each account quota separately and prevents switching to an exhausted account', async () => {
+    api.status.mockResolvedValue({ success: true, loggedIn: true, plan: 'pro' });
+    api.usage = vi.fn(async (id: string) => ({ success: true, available: true,
+      fiveHour: { percent: id === 'default' ? 100 : 12, resetsAt: '2099-01-01T00:00:00Z' },
+      weekly: { percent: id === 'default' ? 20 : 34, resetsAt: null },
+    }));
+    const props = renderMenu('acc-b');
+    expect(await screen.findByTestId('account-5h-default')).toHaveTextContent('100%');
+    expect(await screen.findByTestId('account-5h-acc-b')).toHaveTextContent('12%');
+    expect(screen.getByTestId('account-week-acc-b')).toHaveTextContent('34%');
+    expect(screen.getByTitle('Cuenta sin cuota disponible')).toBeDisabled();
+    fireEvent.click(screen.getByTitle('Cuenta sin cuota disponible'));
+    expect(props.onSwitch).not.toHaveBeenCalled();
+    expect(screen.getByText('Límite alcanzado')).toBeInTheDocument();
+    expect(screen.getByTestId('account-usage-default').title).toContain('se reinicia');
+  });
+
+  it('shows a skeleton while checking quota, keeps old bars during refresh, and allows a recovered account', async () => {
+    let finish!: (usage: any) => void;
+    api.usage = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    renderMenu('acc-b');
+    expect(await screen.findByRole('status', { name: 'Cargando uso de Principal' })).toBeInTheDocument();
+    await act(async () => finish({ success: true, available: true, weekly: { percent: 100, resetsAt: null } }));
+    expect(screen.getByTitle('Cuenta sin cuota disponible')).toBeDisabled();
+    fireEvent.click(screen.getByLabelText('Actualizar uso de las cuentas'));
+    expect(screen.getByTestId('account-week-default')).toHaveTextContent('100%');
+    await act(async () => finish({ success: true, available: true, weekly: { percent: 40, resetsAt: null } }));
+    expect(screen.getByTitle('Continuar este chat con Principal')).toBeEnabled();
+    expect(screen.getByTestId('account-week-default')).toHaveTextContent('40%');
+  });
+
+  it('does not display a fake zero when usage is unavailable or query signed-out accounts', async () => {
+    api.usage = vi.fn().mockRejectedValue(new Error('offline'));
+    renderMenu();
+    expect(await screen.findByText('Uso no disponible')).toBeInTheDocument();
+    expect(api.usage).toHaveBeenCalledWith('default', false);
+    expect(api.usage).not.toHaveBeenCalledWith('acc-b', expect.anything());
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
   });
 
   it('signs an account out after confirming, warning that the main one is the whole PC', async () => {
