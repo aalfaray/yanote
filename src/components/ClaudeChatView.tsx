@@ -437,6 +437,35 @@ function saveEffortByModel(map: Record<string, ClaudeEffortLevel>) {
   }
 }
 
+const PREFS_STORAGE_KEY = 'yanote.claude.chatPrefs';
+
+/** Last permission mode and model picked in a chat: new chats start with them. */
+export interface ChatPrefs {
+  mode?: ClaudePermissionMode;
+  /** '' = Claude Code's default model */
+  model?: string;
+}
+
+export function loadChatPrefs(): ChatPrefs {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PREFS_STORAGE_KEY) || '{}');
+    const prefs: ChatPrefs = {};
+    if (parsed && MODES.some((m) => m.value === parsed.mode)) prefs.mode = parsed.mode;
+    if (parsed && typeof parsed.model === 'string') prefs.model = parsed.model;
+    return prefs;
+  } catch {
+    return {};
+  }
+}
+
+function saveChatPrefs(partial: ChatPrefs) {
+  try {
+    localStorage.setItem(PREFS_STORAGE_KEY, JSON.stringify({ ...loadChatPrefs(), ...partial }));
+  } catch {
+    // storage unavailable: the choice just won't be remembered
+  }
+}
+
 function readImage(file: File): Promise<ClaudeImageInput & { url: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -463,11 +492,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const [state, dispatch] = useReducer(chatReducer, undefined, initialChatState);
   const [draft, setDraft] = useState('');
   const [images, setImages] = useState<(ClaudeImageInput & { url: string })[]>([]);
-  const [mode, setMode] = useState<ClaudePermissionMode>('default');
+  const [mode, setMode] = useState<ClaudePermissionMode>(() => loadChatPrefs().mode ?? 'default');
   const [cmdIndex, setCmdIndex] = useState(0);
   const [starting, setStarting] = useState(true);
   const [restartKey, setRestartKey] = useState(0);
-  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedModel, setSelectedModel] = useState(() => loadChatPrefs().model ?? '');
+  // Read by the start effect: a restarted process (Reanudar, other account) keeps the picked model
+  const selectedModelRef = useRef(selectedModel);
+  selectedModelRef.current = selectedModel;
   const [effortByModel, setEffortByModel] = useState<Record<string, ClaudeEffortLevel>>(loadEffortByModel);
   const appliedEffortRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -497,7 +529,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     let cancelled = false;
     setStarting(true);
     api
-      .claudeStart({ id: tabId, cwd, permissionMode: mode, resume: sessionIdRef.current, accountId: accountRef.current })
+      .claudeStart({
+        id: tabId,
+        cwd,
+        permissionMode: mode,
+        resume: sessionIdRef.current,
+        accountId: accountRef.current,
+        ...(selectedModelRef.current ? { model: selectedModelRef.current } : {}),
+      })
       .then((res) => {
         if (cancelled) return;
         setStarting(false);
@@ -628,6 +667,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   const changeMode = async (next: ClaudePermissionMode) => {
     setMode(next);
+    saveChatPrefs({ mode: next });
     dispatch({ type: 'local_permission_mode', mode: next });
     const res = await api?.claudeSetPermissionMode?.(tabId, next);
     if (res && !res.success) dispatch({ type: 'notice', text: `No se pudo cambiar el modo: ${res.error}`, tone: 'error' });
@@ -670,6 +710,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       dispatch({ type: 'notice', text: `No se pudo cambiar el modelo: ${res.error}`, tone: 'error' });
       return;
     }
+    saveChatPrefs({ model });
     const next = activeModelInfo(state.models, model, undefined);
     const key = next?.resolvedModel ?? next?.value ?? 'default';
     const remembered = effortByModel[key];
@@ -682,6 +723,15 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       tone: 'info',
     });
   };
+
+  // A remembered model that this account/version no longer offers: back to the default
+  useEffect(() => {
+    if (!selectedModel || state.models.length === 0 || state.models.some((m) => m.value === selectedModel)) return;
+    setSelectedModel('');
+    saveChatPrefs({ model: '' });
+    void api?.claudeSetModel?.(tabId, null);
+    dispatch({ type: 'notice', text: `El modelo ${selectedModel} ya no está disponible: uso el predeterminado.`, tone: 'info' });
+  }, [state.models, selectedModel, api, tabId]);
 
   const changeEffort = async (level: ClaudeEffortLevel | '') => {
     setEffortByModel((prev) => {
