@@ -1,3 +1,4 @@
+import { t, useLanguage } from '../lib/i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import { Download, RefreshCw, X, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 import type { UpdateEvent, UpdateMode } from '../types/electron';
@@ -5,6 +6,7 @@ import { DismissButton } from './ui/DismissButton';
 
 interface UpdateNoticeProps {
   /** Notes with unsaved changes: restarting would lose them, so the user is warned first */
+
   unsavedCount: number;
 }
 
@@ -24,7 +26,9 @@ const btn =
  * "Tienes una nueva actualización vigente": asks before downloading, shows progress,
  * then restarts into the new version (installed build) or opens the download page (portable).
  */
+
 export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ unsavedCount }) => {
+  useLanguage();
   const [phase, setPhase] = useState<Phase>({ kind: 'hidden' });
   const [toast, setToast] = useState<Toast>(null);
   // "Más tarde" silences that version until the next app start
@@ -61,11 +65,11 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ unsavedCount }) => {
           }
           break;
         case 'none':
-          setToast({ tone: 'ok', text: `Ya tienes la última versión (v${evt.currentVersion})` });
+          setToast({ tone: 'ok', text: t("Ya tienes la última versión (v{0})", [evt.currentVersion]) });
           break;
         case 'error':
           setPhase((p) => (p.kind === 'downloading' ? { kind: 'hidden' } : p));
-          setToast({ tone: 'error', text: `Actualización: ${evt.error}` });
+          setToast({ tone: 'error', text: t("Actualización: {0}", [evt.error]) });
           break;
       }
     });
@@ -90,11 +94,11 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ unsavedCount }) => {
     const res = await window.electronAPI?.acceptUpdate?.();
     if (!res?.success) {
       setPhase({ kind: 'hidden' });
-      setToast({ tone: 'error', text: `No se pudo actualizar: ${res?.error ?? 'error desconocido'}` });
+      setToast({ tone: 'error', text: t("No se pudo actualizar: {0}", [res?.error ?? t("error desconocido")]) });
     } else if (res.opened) {
       dismissedRef.current = version;
       setPhase({ kind: 'hidden' });
-      setToast({ tone: 'ok', text: 'Abrí la página de descarga en tu navegador' });
+      setToast({ tone: 'ok', text: t("Abrí la página de descarga en tu navegador") });
     }
   };
 
@@ -116,10 +120,9 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ unsavedCount }) => {
           <div className="w-full max-w-sm bg-[#FAF8F5] dark:bg-[#18181B] text-black dark:text-zinc-100 border-[3px] border-black dark:border-zinc-700 rounded-lg shadow-[6px_6px_0px_#000] overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 bg-[#FFE500] border-b-2 border-black text-black">
               <span id="update-title" className="flex items-center gap-2 font-black text-xs tracking-wider uppercase">
-                <Sparkles size={15} strokeWidth={3} /> Nueva actualización
-              </span>
+                <Sparkles size={15} strokeWidth={3} /> {' '}{t("Nueva actualización")}</span>
               {phase.kind === 'available' && (
-                <button type="button" onClick={later} title="Más tarde" aria-label="Cerrar" className="p-1 hover:bg-black/10 rounded cursor-pointer">
+                <button type="button" onClick={later} title={t("Más tarde")} aria-label={t("Cerrar")} className="p-1 hover:bg-black/10 rounded cursor-pointer">
                   <X size={15} strokeWidth={3} />
                 </button>
               )}
@@ -129,13 +132,13 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ unsavedCount }) => {
               {phase.kind === 'available' && (
                 <>
                   <p className="font-black text-sm leading-snug">
-                    Tienes una nueva actualización vigente: <span className="whitespace-nowrap">v{phase.version}</span>
+                    {t("Tienes una nueva actualización vigente:")}{' '}<span className="whitespace-nowrap">v{phase.version}</span>
                   </p>
                   <p className="text-xs text-neutral-600 dark:text-zinc-400 font-medium">
-                    Tu versión actual es v{phase.currentVersion}.{' '}
+                    {t("Tu versión actual es v")}{phase.currentVersion}.{' '}
                     {phase.mode === 'portable'
-                      ? 'Estás usando la versión portable: al aceptar se abrirá la página de descarga.'
-                      : 'Al aceptar se descargará e instalará, y yanote se reiniciará.'}
+                      ? t("Estás usando la versión portable: al aceptar se abrirá la página de descarga.")
+                      : t("Al aceptar se descargará e instalará, y yanote se reiniciará.")}
                   </p>
                   {phase.notes && (
                     <div className="max-h-40 overflow-auto text-[11.5px] whitespace-pre-wrap p-2 rounded border-2 border-black/20 dark:border-zinc-700 bg-white dark:bg-[#1C1C20]">
@@ -144,23 +147,20 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ unsavedCount }) => {
                   )}
                   {phase.mode === 'auto' && unsavedCount > 0 && (
                     <p className="text-[11px] font-bold text-[#B45309] dark:text-[#FCD34D]">
-                      Tienes {unsavedCount} {unsavedCount === 1 ? 'nota sin guardar' : 'notas sin guardar'}: te pediré confirmación antes de reiniciar.
-                    </p>
+                      {t("Tienes")}{' '}{unsavedCount} {unsavedCount === 1 ? t("nota sin guardar") : t("notas sin guardar")}{t(": te pediré confirmación antes de reiniciar.")}</p>
                   )}
                   <div className="flex flex-wrap justify-end gap-2">
                     <button type="button" onClick={later} className={`${btn} bg-white dark:bg-[#27272A] dark:border-zinc-600`}>
-                      Más tarde
-                    </button>
+                      {t("Más tarde")}</button>
                     <button type="button" onClick={() => void accept()} autoFocus className={`${btn} bg-[#78E08F] text-black`}>
-                      <Download size={13} strokeWidth={3} /> Aceptar y actualizar
-                    </button>
+                      <Download size={13} strokeWidth={3} /> {' '}{t("Aceptar y actualizar")}</button>
                   </div>
                 </>
               )}
 
               {phase.kind === 'downloading' && (
                 <>
-                  <p className="font-black text-sm">Descargando v{phase.version}…</p>
+                  <p className="font-black text-sm">{t("Descargando v")}{phase.version}…</p>
                   <div
                     className="h-4 border-2 border-black rounded bg-white dark:bg-[#27272A] overflow-hidden"
                     role="progressbar"
@@ -176,21 +176,18 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ unsavedCount }) => {
 
               {phase.kind === 'ready' && (
                 <>
-                  <p className="font-black text-sm">v{phase.version} está lista para instalarse.</p>
+                  <p className="font-black text-sm">v{phase.version} {' '}{t("está lista para instalarse.")}</p>
                   {unsavedCount > 0 ? (
                     <p className="text-xs font-bold text-[#B45309] dark:text-[#FCD34D]">
-                      Tienes {unsavedCount} {unsavedCount === 1 ? 'nota sin guardar' : 'notas sin guardar'}. Guárdalas antes de reiniciar o se perderán los cambios.
-                      También se cerrarán las terminales y chats abiertos.
-                    </p>
+                      {t("Tienes")}{' '}{unsavedCount} {unsavedCount === 1 ? t("nota sin guardar") : t("notas sin guardar")}{t(". Guárdalas antes de reiniciar o se perderán los cambios. También se cerrarán las terminales y chats abiertos.")}</p>
                   ) : (
-                    <p className="text-xs text-neutral-600 dark:text-zinc-400 font-medium">yanote se cerrará y volverá a abrirse con la nueva versión.</p>
+                    <p className="text-xs text-neutral-600 dark:text-zinc-400 font-medium">{t("yanote se cerrará y volverá a abrirse con la nueva versión.")}</p>
                   )}
                   <div className="flex flex-wrap justify-end gap-2">
                     <button type="button" onClick={() => setPhase({ kind: 'hidden' })} className={`${btn} bg-white dark:bg-[#27272A] dark:border-zinc-600`}>
-                      Al cerrar yanote
-                    </button>
+                      {t("Al cerrar yanote")}</button>
                     <button type="button" onClick={restart} className={`${btn} ${unsavedCount > 0 ? 'bg-[#FF6B6B] text-white' : 'bg-[#78E08F] text-black'}`}>
-                      <RefreshCw size={13} strokeWidth={3} /> {unsavedCount > 0 ? 'Reiniciar de todos modos' : 'Reiniciar ahora'}
+                      <RefreshCw size={13} strokeWidth={3} /> {unsavedCount > 0 ? t("Reiniciar de todos modos") : t("Reiniciar ahora")}
                     </button>
                   </div>
                 </>
@@ -198,8 +195,7 @@ export const UpdateNotice: React.FC<UpdateNoticeProps> = ({ unsavedCount }) => {
 
               {phase.kind === 'restarting' && (
                 <p className="font-black text-sm flex items-center gap-2">
-                  <RefreshCw size={14} strokeWidth={3} className="animate-spin" /> Instalando v{phase.version} y reiniciando…
-                </p>
+                  <RefreshCw size={14} strokeWidth={3} className="animate-spin" /> {' '}{t("Instalando v")}{phase.version} {' '}{t("y reiniciando…")}</p>
               )}
             </div>
           </div>

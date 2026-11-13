@@ -9,6 +9,7 @@ import {
   matchCommands,
   activeModelInfo,
   effortLevelsFor,
+  modelLabel,
   inheritedEffort,
   modelOptionLabel,
   type ChatState,
@@ -126,6 +127,23 @@ describe('Frontend: Claude model / effort helpers', () => {
     expect(effortLevelsFor(models[2])).toEqual([]);
     expect(effortLevelsFor({ ...models[0], supportsEffort: false })).toEqual([]);
     expect(effortLevelsFor(undefined)).toEqual([]);
+  });
+
+  it('formats model ids as readable names', () => {
+    expect(modelLabel('claude-opus-5-5')).toBe('Opus 5.5');
+    expect(modelLabel('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
+    expect(modelLabel('claude-sonnet-5-5[1m]')).toBe('Sonnet 5.5 1M');
+    expect(modelLabel('opus')).toBe('opus');
+    expect(modelLabel(undefined)).toBe('');
+  });
+
+  it('stores the model and effort Claude resolved from its settings', () => {
+    const s = run([ev({ type: 'applied_settings', model: 'claude-opus-5-5', effort: 'medium' })]);
+    expect(s.appliedModel).toBe('claude-opus-5-5');
+    expect(s.appliedEffort).toBe('medium');
+    const cleared = run([ev({ type: 'applied_settings', model: null, effort: null })], s);
+    expect(cleared.appliedModel).toBe('claude-opus-5-5');
+    expect(cleared.appliedEffort).toBeNull();
   });
 });
 

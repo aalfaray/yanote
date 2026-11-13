@@ -1,3 +1,4 @@
+import { t, useLanguage, getLanguage } from '../lib/i18n';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -17,7 +18,7 @@ import { SpeechContext, type SelectionSnapshot } from './speechContext';
 import { DismissButton } from './ui/DismissButton';
 
 
-const formatRate = (rate: number) => `${rate}x`.replace('.', ',');
+const formatRate = (rate: number) => `${new Intl.NumberFormat(getLanguage()).format(rate)}x`;
 
 interface MenuItemProps {
   icon: React.ReactNode;
@@ -27,7 +28,7 @@ interface MenuItemProps {
   onSelect: () => void;
 }
 
-const MenuItem: React.FC<MenuItemProps> = ({ icon, label, hint, disabled, onSelect }) => (
+const MenuItem: React.FC<MenuItemProps> = ({ icon, label, hint, disabled, onSelect }) => { useLanguage(); return (
   <button
     type="button"
     role="menuitem"
@@ -40,10 +41,12 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, hint, disabled, onSele
     <span className="flex-1">{label}</span>
     {hint && <span className="text-[10px] font-semibold opacity-60">{hint}</span>}
   </button>
-);
+); };
 
 /** Toolbar button ("Leer en voz alta") with a dropdown of reading modes. */
+
 export const SpeechToolbarButton: React.FC = () => {
+  useLanguage();
   const ctx = useContext(SpeechContext);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -99,8 +102,8 @@ export const SpeechToolbarButton: React.FC = () => {
       <button
         ref={buttonRef}
         type="button"
-        title="Leer en voz alta (Ctrl+Shift+Espacio)"
-        aria-label="Leer en voz alta"
+        title={t("Leer en voz alta (Ctrl+Shift+Espacio)")}
+        aria-label={t("Leer en voz alta")}
         aria-haspopup="menu"
         aria-expanded={menu !== null}
         data-state={isActive ? 'on' : 'off'}
@@ -120,33 +123,33 @@ export const SpeechToolbarButton: React.FC = () => {
           <div
             ref={menuRef}
             role="menu"
-            aria-label="Opciones de lectura en voz alta"
+            aria-label={t("Opciones de lectura en voz alta")}
             data-testid="speech-menu"
             style={{ left: menu.x, top: menu.y }}
             className="fixed z-[999999] w-60 max-w-[calc(100vw-16px)] bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-700 rounded shadow-[4px_4px_0px_#000] py-1 select-none text-xs font-bold"
           >
-            <MenuItem icon={<FileText size={13} strokeWidth={2.5} />} label="Leer todo" onSelect={() => run(readAll)} />
+            <MenuItem icon={<FileText size={13} strokeWidth={2.5} />} label={t("Leer todo")} onSelect={() => run(readAll)} />
             <MenuItem
               icon={<TextSelect size={13} strokeWidth={2.5} />}
-              label="Leer selección"
+              label={t("Leer selección")}
               disabled={!hasSelection}
               onSelect={() => run(() => readSelection(snapshot))}
             />
             <MenuItem
               icon={<Pilcrow size={13} strokeWidth={2.5} />}
-              label="Leer párrafo actual"
+              label={t("Leer párrafo actual")}
               disabled={!hasCaret}
               onSelect={() => run(() => readParagraph(snapshot, false))}
             />
             <MenuItem
               icon={<ArrowDownToLine size={13} strokeWidth={2.5} />}
-              label="Leer desde aquí"
+              label={t("Leer desde aquí")}
               disabled={!hasCaret}
               onSelect={() => run(() => readParagraph(snapshot, true))}
             />
 
             <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
-            <div className="px-3 pt-0.5 pb-1 text-[10px] uppercase tracking-wide opacity-60">Velocidad</div>
+            <div className="px-3 pt-0.5 pb-1 text-[10px] uppercase tracking-wide opacity-60">{t("Velocidad")}</div>
             <div className="px-2 pb-1.5 flex gap-1">
               {SPEECH_RATES.map((rate) => (
                 <button
@@ -167,8 +170,7 @@ export const SpeechToolbarButton: React.FC = () => {
             </div>
             {!paragraphsAvailable && (
               <div className="px-3 pb-1 text-[10px] font-semibold opacity-60">
-                Las opciones por párrafo funcionan en la vista enriquecida.
-              </div>
+                {t("Las opciones por párrafo funcionan en la vista enriquecida.")}</div>
             )}
           </div>,
           document.body
@@ -181,7 +183,9 @@ const playerButton =
   'h-7 min-w-7 px-1 inline-flex items-center justify-center border-[1.5px] border-black dark:border-zinc-600 rounded bg-white dark:bg-[#27272A] shadow-[1.5px_1.5px_0px_#000] hover:bg-[#FFE500] hover:text-black transition-colors disabled:opacity-40';
 
 /** Floating mini-player shown while reading. */
+
 export const SpeechPlayerBar: React.FC<{ speech: SpeechController }> = ({ speech }) => {
+  useLanguage();
   const { state } = speech;
 
   if (state.status === 'idle') {
@@ -208,15 +212,15 @@ export const SpeechPlayerBar: React.FC<{ speech: SpeechController }> = ({ speech
       className="absolute bottom-2 right-2 min-[480px]:right-3 min-[480px]:bottom-3 max-w-[calc(100%-16px)] z-30 flex items-center justify-end gap-1 p-1 rounded border-2 border-black dark:border-zinc-700 bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 shadow-[3px_3px_0px_#000] text-xs font-black select-none"
     >
       <Volume2 size={14} strokeWidth={2.5} className="mx-1 shrink-0 animate-pulse hidden min-[380px]:block" />
-      <button type="button" className={playerButton} onClick={speech.previous} disabled={state.index === 0} title="Párrafo anterior" aria-label="Párrafo anterior">
+      <button type="button" className={playerButton} onClick={speech.previous} disabled={state.index === 0} title={t("Párrafo anterior")} aria-label={t("Párrafo anterior")}>
         <SkipBack size={13} strokeWidth={2.5} />
       </button>
       {state.status === 'speaking' ? (
-        <button type="button" className={`${playerButton} !bg-[#FFE500] text-black`} onClick={speech.pause} title="Pausar" aria-label="Pausar">
+        <button type="button" className={`${playerButton} !bg-[#FFE500] text-black`} onClick={speech.pause} title={t("Pausar")} aria-label={t("Pausar")}>
           <Pause size={13} strokeWidth={2.5} />
         </button>
       ) : (
-        <button type="button" className={`${playerButton} !bg-[#78E08F] text-black`} onClick={speech.resume} title="Reanudar" aria-label="Reanudar">
+        <button type="button" className={`${playerButton} !bg-[#78E08F] text-black`} onClick={speech.resume} title={t("Reanudar")} aria-label={t("Reanudar")}>
           <Play size={13} strokeWidth={2.5} />
         </button>
       )}
@@ -225,15 +229,15 @@ export const SpeechPlayerBar: React.FC<{ speech: SpeechController }> = ({ speech
         className={playerButton}
         onClick={speech.next}
         disabled={state.index >= state.total - 1}
-        title="Párrafo siguiente"
-        aria-label="Párrafo siguiente"
+        title={t("Párrafo siguiente")}
+        aria-label={t("Párrafo siguiente")}
       >
         <SkipForward size={13} strokeWidth={2.5} />
       </button>
-      <button type="button" className={playerButton} onClick={speech.stop} title="Detener (Esc)" aria-label="Detener">
+      <button type="button" className={playerButton} onClick={speech.stop} title={t("Detener (Esc)")} aria-label={t("Detener")}>
         <Square size={12} strokeWidth={2.5} />
       </button>
-      <button type="button" className={`${playerButton} text-[10px]`} onClick={cycleRate} title="Cambiar velocidad" aria-label="Cambiar velocidad">
+      <button type="button" className={`${playerButton} text-[10px]`} onClick={cycleRate} title={t("Cambiar velocidad")} aria-label={t("Cambiar velocidad")}>
         {formatRate(state.rate)}
       </button>
       <span className="px-1.5 tabular-nums opacity-70" aria-live="polite">

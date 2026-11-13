@@ -1,17 +1,22 @@
+import { t, useLanguage } from '../lib/i18n';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { findTextRanges } from '../lib/domSearch';
 
 interface FindBarProps {
   /** Element whose text is searched (the rich-text content) */
+
   getRoot: () => HTMLElement | null;
   initialQuery?: string;
   /** Bumped by the parent on every Ctrl+F so an open bar re-focuses and re-selects its input */
+
   focusRequest: number;
   /** Distance from the top of the editor (below the toolbar) */
+
   top: number;
   onClose: () => void;
   /** Lets the parent remember the term for the next Ctrl+F */
+
   onQueryChange?: (query: string) => void;
 }
 
@@ -45,7 +50,9 @@ function scrollToRange(range: Range | undefined) {
 }
 
 /** Ctrl+F bar for the rich-text editor: case/accent-insensitive, finds text in tables and code too. */
+
 export const FindBar: React.FC<FindBarProps> = ({ getRoot, initialQuery = '', focusRequest, top, onClose, onQueryChange }) => {
+  useLanguage();
   const [query, setQuery] = useState(initialQuery);
   const [ranges, setRanges] = useState<Range[]>([]);
   const [current, setCurrent] = useState(0);
@@ -149,8 +156,8 @@ export const FindBar: React.FC<FindBarProps> = ({ getRoot, initialQuery = '', fo
           onQueryChange?.(e.target.value);
         }}
         onKeyDown={onKeyDown}
-        placeholder="Buscar en la nota"
-        aria-label="Buscar en la nota"
+        placeholder={t("Buscar en la nota")}
+        aria-label={t("Buscar en la nota")}
         className="flex-1 min-w-0 h-6 px-1.5 text-xs font-bold rounded border-[1.5px] border-black dark:border-zinc-600 bg-white dark:bg-[#121212] outline-none focus:border-[#FFE500]"
       />
       <span
@@ -159,13 +166,13 @@ export const FindBar: React.FC<FindBarProps> = ({ getRoot, initialQuery = '', fo
       >
         {hasQuery ? (ranges.length ? `${current + 1}/${ranges.length}` : '0/0') : ''}
       </span>
-      <button type="button" className={iconButton} onClick={() => go(-1)} disabled={!ranges.length} title="Anterior (Shift+Enter)" aria-label="Coincidencia anterior">
+      <button type="button" className={iconButton} onClick={() => go(-1)} disabled={!ranges.length} title={t("Anterior (Shift+Enter)")} aria-label={t("Coincidencia anterior")}>
         <ChevronUp size={14} strokeWidth={2.5} />
       </button>
-      <button type="button" className={iconButton} onClick={() => go(1)} disabled={!ranges.length} title="Siguiente (Enter)" aria-label="Coincidencia siguiente">
+      <button type="button" className={iconButton} onClick={() => go(1)} disabled={!ranges.length} title={t("Siguiente (Enter)")} aria-label={t("Coincidencia siguiente")}>
         <ChevronDown size={14} strokeWidth={2.5} />
       </button>
-      <button type="button" className={iconButton} onClick={onClose} title="Cerrar (Esc)" aria-label="Cerrar búsqueda">
+      <button type="button" className={iconButton} onClick={onClose} title={t("Cerrar (Esc)")} aria-label={t("Cerrar búsqueda")}>
         <X size={14} strokeWidth={2.5} />
       </button>
     </div>

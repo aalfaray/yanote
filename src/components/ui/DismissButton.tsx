@@ -1,12 +1,14 @@
+import { t, useLanguage } from '../../lib/i18n';
 import React from 'react';
 import { X } from 'lucide-react';
 
 /** The "x" that closes an in-app notice or alert. Inherits the notice's text colour. */
+
 export const DismissButton: React.FC<{ onClick: () => void; label?: string; className?: string }> = ({
   onClick,
-  label = 'Cerrar aviso',
+  label = t("Cerrar aviso"),
   className = '',
-}) => (
+}) => { useLanguage(); return (
   <button
     type="button"
     onClick={(e) => {
@@ -19,4 +21,4 @@ export const DismissButton: React.FC<{ onClick: () => void; label?: string; clas
   >
     <X size={13} strokeWidth={3} />
   </button>
-);
+); };

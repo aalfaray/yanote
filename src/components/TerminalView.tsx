@@ -1,3 +1,4 @@
+import { t, useLanguage } from '../lib/i18n';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Volume2 } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
@@ -14,8 +15,10 @@ import { useReadAloudRequests } from '../hooks/useReadAloudRequests';
 import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
 import { DismissButton } from './ui/DismissButton';
+import { LoadingSkeleton } from './ui/Skeleton';
 
 /** Buffer as text lines, re-joining lines the terminal soft-wrapped. */
+
 function bufferLines(term: Terminal): string[] {
   const buf = term.buffer.active;
   const out: string[] = [];
@@ -36,6 +39,7 @@ interface TerminalViewProps {
   isDarkMode: boolean;
   cwd?: string;
   /** Typed into the shell once it starts */
+
   initialCommand?: string;
 }
 
@@ -64,7 +68,9 @@ const LIGHT_THEME = {
  * One xterm.js instance bound to one pseudo-terminal in the main process.
  * Kept mounted while the tab exists (hidden when inactive) so the buffer survives tab switches.
  */
+
 export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActive, isDarkMode, cwd, initialCommand }) => {
+  useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -72,6 +78,7 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
   // Right-click > "Leer en voz alta" on a selection of this tab
   useReadAloudRequests(tabId, speech.play);
   const [notice, setNotice] = useState<string | null>(null);
+  const [starting, setStarting] = useState(true);
 
   // Selected text if any, otherwise the latest answer (Claude Code reply or last command output)
   const readLatest = useCallback(() => {
@@ -81,7 +88,7 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       ? plainTextToSegments(term.getSelection())
       : extractLastResponse(bufferLines(term));
     if (paragraphs.length === 0) {
-      setNotice('No encontré una respuesta para leer');
+      setNotice(t("No encontré una respuesta para leer"));
       return;
     }
     speech.play(paragraphs.map((text) => ({ text })));
@@ -110,6 +117,8 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     const container = containerRef.current;
     const api = window.electronAPI;
     if (!container) return;
+    let cancelled = false;
+    setStarting(true);
 
     const term = new Terminal({
       fontFamily: 'Cascadia Mono, Consolas, "Courier New", monospace',
@@ -132,7 +141,8 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     }
 
     if (!api?.termCreate) {
-      term.writeln('La terminal solo está disponible en la app de escritorio (Electron).');
+      setStarting(false);
+      term.writeln(t("La terminal solo está disponible en la app de escritorio (Electron)."));
       return () => {
         term.dispose();
         termRef.current = null;
@@ -141,10 +151,11 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
 
     const offEvent = api.onTermEvent?.((evt) => {
       if (evt.id !== tabId) return;
+      setStarting(false);
       if (evt.type === 'data') {
         term.write(evt.data);
       } else {
-        term.writeln(`\r\n\x1b[33m[Proceso terminado con código ${evt.exitCode}]\x1b[0m`);
+        term.writeln(t("\r\n\u001b[33m[Proceso terminado con código {0}]\u001b[0m", [evt.exitCode]));
       }
     });
 
@@ -152,9 +163,16 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     const resizeSub = term.onResize(({ cols, rows }) => api.termResize?.(tabId, cols, rows));
 
     api.termCreate({ id: tabId, shell, cols: term.cols, rows: term.rows, cwd, initialCommand }).then((res) => {
+      if (cancelled) return;
+      setStarting(false);
       if (!res.success) {
-        term.writeln(`\x1b[31mNo se pudo iniciar la terminal: ${res.error}\x1b[0m`);
+        term.writeln(t("\u001b[31mNo se pudo iniciar la terminal: {0}\u001b[0m", [res.error]));
       }
+    }).catch((err) => {
+      if (cancelled) return;
+      setStarting(false);
+      setNotice(t("No se pudo iniciar la terminal"));
+      logError('TerminalView.start', err, { tabId });
     });
 
     // Ctrl+C copies when there is a selection; Ctrl+V pastes; Ctrl+Shift+Space reads aloud
@@ -211,6 +229,7 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     observer.observe(container);
 
     return () => {
+      cancelled = true;
       unregister();
       observer.disconnect();
       offEvent?.();
@@ -252,13 +271,14 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       data-term-tab={tabId}
     >
       <div ref={containerRef} className="w-full h-full" />
+      {starting && <div className="absolute inset-0 p-4 bg-[#FAF8F5] dark:bg-[#121212]"><LoadingSkeleton label={t("Iniciando terminal")} /></div>}
 
       {speech.state.status === 'idle' && (
         <button
           type="button"
           onClick={readLatest}
-          title="Leer en voz alta la última respuesta (Ctrl+Shift+Espacio). Si hay texto seleccionado, lee la selección."
-          aria-label="Leer la última respuesta"
+          title={t("Leer en voz alta la última respuesta (Ctrl+Shift+Espacio). Si hay texto seleccionado, lee la selección.")}
+          aria-label={t("Leer la última respuesta")}
           className="absolute top-2 right-3 z-20 h-7 w-7 inline-flex items-center justify-center border-2 border-black dark:border-zinc-600 rounded bg-white dark:bg-[#27272A] text-black dark:text-zinc-100 shadow-[1.5px_1.5px_0px_#000] opacity-60 hover:opacity-100 hover:bg-[#FFE500] hover:text-black transition"
         >
           <Volume2 size={14} strokeWidth={2.5} />

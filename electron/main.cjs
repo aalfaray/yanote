@@ -8,7 +8,11 @@ const { createSpeechService } = require('./services/speechService.cjs');
 const { createTerminalService } = require('./services/terminalService.cjs');
 const { savePastedImage } = require('./services/clipboardImageService.cjs');
 const { createClaudeChatService, findClaudeExecutable, findBundledExecutable } = require('./services/claudeChatService.cjs');
+const { createAntigravityChatService } = require('./services/antigravityChatService.cjs');
+const { createAntigravityUsageService } = require('./services/antigravityUsageService.cjs');
+const { createExportService } = require('./services/exportService.cjs');
 const { createClaudeAccountService } = require('./services/claudeAccountService.cjs');
+const { createClaudeAccountUsageService } = require('./services/claudeAccountUsageService.cjs');
 const { withFreshPath } = require('./services/terminalService.cjs');
 const { readClaudeDefaults } = require('./services/claudeSettings.cjs');
 const { createUpdateService } = require('./services/updateService.cjs');
@@ -16,6 +20,8 @@ const { parseOpenTarget } = require('./services/openTargetService.cjs');
 const { configureSharedLog } = require('./services/logService.cjs');
 const { createSafeIpc } = require('./services/safeIpc.cjs');
 const { createEditCommandService } = require('./services/editCommandService.cjs');
+const { createSpellcheckService } = require('./services/spellcheckService.cjs');
+const { createLanguageService } = require('./services/languageService.cjs');
 
 // System log (%APPDATA%/yanote/logs/yanote.log): every layer reports its failures here
 const logService = configureSharedLog({ dir: app.getPath('logs') });
@@ -24,6 +30,7 @@ process.on('uncaughtException', (err) => mainLog.error('uncaught exception', err
 process.on('unhandledRejection', (reason) => mainLog.error('unhandled promise rejection', reason));
 const ipc = createSafeIpc(ipcMain, logService.scoped('main:ipc'));
 const editCommandService = createEditCommandService(logService.scoped('editCommandService'));
+const spellcheckService = createSpellcheckService();
 
 // Unpackaged runs are `electron . <args>`: the app path is not something to open
 const ARG_SKIP = app.isPackaged ? 1 : 2;
@@ -40,6 +47,8 @@ const speechService = createSpeechService();
 const terminalService = createTerminalService();
 // Bundled Claude Code is the fallback when the user has none installed
 const claudeChatService = createClaudeChatService({ requireInstalledCli: app.isPackaged });
+const agyChatService = createAntigravityChatService();
+const agyUsageService = createAntigravityUsageService();
 let updateService = null;
 
 let mainWindow = null;
@@ -58,9 +67,11 @@ if (app && dataDir === app.getPath('userData')) {
 const configFilePath = path.join(dataDir, 'app-config.json');
 const defaultNotesPath = path.join(dataDir, 'notes');
 let appConfig = loadConfig(configFilePath, defaultNotesPath);
+const languageService = createLanguageService({ getPreference: () => appConfig.language, getSystemLanguages: () => app.getPreferredSystemLanguages() });
 
 function updateConfig(newConfig) {
   appConfig = saveConfig(configFilePath, appConfig, newConfig);
+  if (mainWindow && newConfig.language !== undefined) spellcheckService.configure(mainWindow.webContents.session, languageService.info().language);
   return appConfig;
 }
 
@@ -69,6 +80,10 @@ const claudeAccountService = createClaudeAccountService({
   getConfig: () => appConfig,
   saveConfig: (partial) => updateConfig(partial),
   accountsRoot: path.join(dataDir, 'claude-accounts'),
+  getExecutable: () => findClaudeExecutable(withFreshPath({ ...process.env })) || findBundledExecutable(),
+});
+const accountUsageService = createClaudeAccountUsageService({
+  accounts: claudeAccountService,
   getExecutable: () => findClaudeExecutable(withFreshPath({ ...process.env })) || findBundledExecutable(),
 });
 
@@ -89,10 +104,12 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
+      spellcheck: true,
     },
   });
 
   isAlwaysOnTop = appConfig.alwaysOnTop || false;
+  spellcheckService.attach(mainWindow.webContents, process.platform, languageService.info().language);
 
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
@@ -116,6 +133,8 @@ function createWindow() {
     speechService.stop();
     terminalService.killAll();
     claudeChatService.stopAll();
+    accountUsageService.stopAll();
+    agyChatService.stopAll();
     mainWindow = null;
   });
 }
@@ -175,6 +194,7 @@ app.on('second-instance', (_event, argv, workingDirectory) => {
 
 // Editing commands for the app's own right-click menu (the page has no native menu)
 ipc.handle('app:editCommand', (event, command) => editCommandService.run(event.sender, command));
+ipc.handle('spelling:replace', (event, requestId, suggestion) => spellcheckService.replace(event.sender, requestId, suggestion));
 
 // Renderer failures go to the same system log
 ipc.handle('log:write', (_, entry) => logService.writeFromRenderer(entry));
@@ -269,7 +289,7 @@ ipc.handle('fs:setNotesPath', async (_, newPath) => {
 ipc.handle('fs:selectFolder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory', 'createDirectory'],
-    title: 'Seleccionar carpeta para notas',
+    title: languageService.t('Seleccionar carpeta para notas'),
   });
   if (!result.canceled && result.filePaths.length > 0) {
     const selected = result.filePaths[0];
@@ -282,12 +302,12 @@ ipc.handle('fs:selectFolder', async () => {
 
 ipc.handle('fs:openMarkdownFile', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Abrir archivo Markdown',
+    title: languageService.t('Abrir archivo Markdown'),
     defaultPath: appConfig.notesPath,
     properties: ['openFile', 'multiSelections'],
     filters: [
       { name: 'Markdown', extensions: ['md', 'markdown', 'mdx', 'txt'] },
-      { name: 'Todos los archivos', extensions: ['*'] },
+      { name: languageService.t('Todos los archivos'), extensions: ['*'] },
     ],
   });
   if (result.canceled || result.filePaths.length === 0) return null;
@@ -325,6 +345,7 @@ ipc.handle('fs:renameFile', (_, oldPath, newPath) => {
 ipc.handle('fs:getAppConfig', () => {
   return appConfig;
 });
+ipc.handle('app:getLocaleInfo', () => languageService.info());
 
 ipc.handle('fs:saveAppConfig', (_, config) => {
   return updateConfig(config);
@@ -420,12 +441,17 @@ ipc.handle('claude:defaults', (_, accountId, cwd) =>
 // IPC - Claude accounts
 ipc.handle('claudeAccounts:list', () => claudeAccountService.list());
 ipc.handle('claudeAccounts:status', (_, id) => claudeAccountService.status(id));
-ipc.handle('claudeAccounts:logout', (_, id) => claudeAccountService.logout(id));
+ipc.handle('claudeAccounts:usage', (_, id, force) => accountUsageService.usage(id, force === true));
+ipc.handle('claudeAccounts:logout', async (_, id) => {
+  const result = await claudeAccountService.logout(id);
+  accountUsageService.invalidate(id);
+  return result;
+});
 ipc.handle('claudeAccounts:add', (_, name) => claudeAccountService.add(name));
 ipc.handle('claudeAccounts:rename', (_, id, name) => claudeAccountService.rename(id, name));
-ipc.handle('claudeAccounts:remove', (_, id) => claudeAccountService.remove(id));
+ipc.handle('claudeAccounts:remove', (_, id) => { accountUsageService.invalidate(id); return claudeAccountService.remove(id); });
 ipc.handle('claudeAccounts:setActive', (_, id) => claudeAccountService.setActive(id));
-ipc.handle('claudeAccounts:loginCommand', (_, id) => claudeAccountService.loginCommand(id));
+ipc.handle('claudeAccounts:loginCommand', (_, id) => { accountUsageService.invalidate(id); return claudeAccountService.loginCommand(id); });
 ipc.handle('claudeAccounts:copySession', (_, sessionId, fromId, toId) => claudeAccountService.copySession(sessionId, fromId, toId));
 
 // IPC - Windows notifications (e.g. a Claude chat finished); clicking one brings that tab back
@@ -455,6 +481,34 @@ ipc.handle('app:notify', (_, { title, body, tabId, skipIfFocused } = {}) => {
   note.show();
   return true;
 });
+
+// IPC - export (PDF, Markdown)
+const exportService = createExportService({
+  translate: (text) => languageService.t(text),
+  dialog,
+  BrowserWindow,
+  getParentWindow: () => mainWindow,
+  getDefaultDir: () => appConfig.notesPath,
+});
+ipc.handle('export:pdf', (_, options) => exportService.exportPdf(options));
+ipc.handle('export:saveText', (_, options) => exportService.saveText(options));
+ipc.handle('shell:openPath', (_, filePath) => (typeof filePath === 'string' && filePath ? shell.openPath(filePath) : ''));
+
+// Antigravity CLI (Gemini) chats: same renderer contract as Claude, driven over ACP
+ipc.handle('agy:start', (event, options) => {
+  const sender = event.sender;
+  return agyChatService.start({ ...options, fallbackCwd: appConfig.notesPath }, (chatEvent) => {
+    if (!sender.isDestroyed()) sender.send('agy:event', chatEvent);
+  });
+});
+ipc.handle('agy:send', (_, id, payload) => agyChatService.sendMessage(id, payload));
+ipc.handle('agy:respondPermission', (_, id, requestId, decision) => agyChatService.respondPermission(id, requestId, decision));
+ipc.handle('agy:interrupt', (_, id) => agyChatService.interrupt(id));
+ipc.handle('agy:setPermissionMode', (_, id, mode) => agyChatService.setPermissionMode(id, mode));
+ipc.handle('agy:setModel', (_, id, model) => agyChatService.setModel(id, model));
+ipc.handle('agy:setEffort', (_, id, level) => agyChatService.setEffort(id, level));
+ipc.handle('agy:stop', (_, id) => agyChatService.stop(id));
+ipc.handle('agy:usage', (_, id, force) => agyUsageService.usage(agyChatService.modelOf(id), force === true));
 
 // IPC - App version & updates
 ipc.handle('app:getVersion', () => app.getVersion());

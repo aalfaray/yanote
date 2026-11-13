@@ -1,3 +1,4 @@
+import { t, useLanguage } from '../lib/i18n';
 import React, { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 import {
   MDXEditor,
@@ -62,13 +63,16 @@ interface EditorProps {
    * `isNormalization` is true when the rich editor rewrote the markdown it was given on load
    * (spacing, bullet symbols…): not a user edit, so the note must not be marked unsaved.
    */
+
   onChange: (content: string, isNormalization?: boolean) => void;
   onSave?: () => void;
   isDarkMode?: boolean;
   viewMode?: 'rich-text' | 'source';
   /** Focus the editor (caret at the end) right after this tab mounts, e.g. a freshly created tab */
+
   autoFocus?: boolean;
   /** Called once the autoFocus request has been consumed */
+
   onAutoFocused?: () => void;
 }
 
@@ -82,6 +86,8 @@ export const Editor: React.FC<EditorProps> = ({
   autoFocus = false,
   onAutoFocused,
 }) => {
+  const language = useLanguage();
+  const editorTranslator = useCallback<typeof translateEditor>((...args) => translateEditor(...args), [language]);
   // Huge / table-heavy documents would freeze MDXEditor (it mounts a nested editor per table cell
   // even while showing source mode), so they get a plain CodeMirror editor instead.
   // Decided once per tab (from the content it opened with) so typing doesn't flip the mode.
@@ -271,17 +277,16 @@ export const Editor: React.FC<EditorProps> = ({
         {isHeavy ? (
           <div
             className="heavy-doc-banner shrink-0 flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold border-b-2 border-black dark:border-zinc-700 bg-[#FFE500] text-black"
-            title="El modo enriquecido se desactiva en archivos de este tamaño porque congelaría la app."
+            title={t("El modo enriquecido se desactiva en archivos de este tamaño porque congelaría la app.")}
           >
-            Archivo muy grande (más de 3 MB): se edita como código Markdown
-          </div>
+            {t("Archivo muy grande (más de 3 MB): se edita como código Markdown")}</div>
         ) : (
           <div className="parse-error-banner shrink-0 flex items-start gap-2 px-2 py-1 text-[11px] font-bold border-b-2 border-black dark:border-zinc-700 bg-[#FFE500] text-black">
             <span className="flex-1 min-w-0 break-words" title={parseError ?? ''}>
-              El modo enriquecido no pudo leer este archivo, se edita como código.{' '}
+              {t("El modo enriquecido no pudo leer este archivo, se edita como código.")}{' '}
               {errorRange && (
                 <span className="font-black">
-                  Error en la línea {errorRange.from.line}, columna {errorRange.from.column}.{' '}
+                  {t("Error en la línea")}{' '}{errorRange.from.line}{t(", columna")}{' '}{errorRange.from.column}.{' '}
                 </span>
               )}
               <span className="font-normal">{parseError}</span>
@@ -290,18 +295,16 @@ export const Editor: React.FC<EditorProps> = ({
               <button
                 onClick={goToError}
                 className="shrink-0 px-1.5 py-0.5 border-2 border-black rounded bg-black text-[#FFE500] hover:bg-white hover:text-black cursor-pointer"
-                title="Seleccionar en el editor el texto que causa el error"
+                title={t("Seleccionar en el editor el texto que causa el error")}
               >
-                Ir al error
-              </button>
+                {t("Ir al error")}</button>
             )}
             <button
               onClick={retryRichText}
               className="shrink-0 px-1.5 py-0.5 border-2 border-black rounded bg-white hover:bg-black hover:text-white cursor-pointer"
-              title="Volver a intentar el modo enriquecido (por ejemplo, después de corregir el texto)"
+              title={t("Volver a intentar el modo enriquecido (por ejemplo, después de corregir el texto)")}
             >
-              Reintentar
-            </button>
+              {t("Reintentar")}</button>
           </div>
         )}
         <PlainMarkdownEditor
@@ -323,7 +326,7 @@ export const Editor: React.FC<EditorProps> = ({
       <MDXEditor
         key={`${tabId}-${isDarkMode ? 'dark' : 'light'}-${viewMode}`}
         ref={editorRef}
-        translation={translateEditor}
+        translation={editorTranslator}
         markdown={markdown}
         onChange={onChange}
         onError={handleParseError}

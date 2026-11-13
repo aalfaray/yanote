@@ -1,16 +1,20 @@
+import { t, useLanguage } from '../lib/i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import type { ClaudeUsage, ClaudeUsageWindow } from '../types/electron';
 import { describeWindow, formatPercent, usageTone } from '../lib/claudeUsage';
 import { logWarn } from '../lib/logger';
+import { LoadingSkeleton } from './ui/Skeleton';
 
 const POLL_MS = 2 * 60 * 1000;
 /** Chat processes take a moment to start before they can answer */
+
 const FIRST_FETCH_MS = 2500;
 
 /**
  * Plan usage from Claude Code's /usage (5-hour and weekly windows), refreshed every couple of
  * minutes and after each Claude reply. Needs a live chat session, so it only runs while one is open.
  */
+
 export function useClaudeUsage(chatIds: string[], preferredId?: string): ClaudeUsage | null {
   const [usage, setUsage] = useState<ClaudeUsage | null>(null);
   const hasChats = chatIds.length > 0;
@@ -18,8 +22,12 @@ export function useClaudeUsage(chatIds: string[], preferredId?: string): ClaudeU
   preferredRef.current = preferredId && chatIds.includes(preferredId) ? preferredId : chatIds[0];
 
   useEffect(() => {
-    if (!hasChats || !window.electronAPI?.claudeUsage) {
+    if (!hasChats) {
       setUsage(null);
+      return;
+    }
+    if (!window.electronAPI?.claudeUsage) {
+      setUsage({ success: false, error: t("La consulta de uso de Claude no está disponible") });
       return;
     }
     let cancelled = false;
@@ -28,10 +36,11 @@ export function useClaudeUsage(chatIds: string[], preferredId?: string): ClaudeU
       try {
         const res = await window.electronAPI!.claudeUsage!(preferredRef.current);
         // A failed refresh keeps the last good numbers
-        if (!cancelled && res?.success) setUsage(res);
+        if (!cancelled) setUsage((prev) => res?.success ? res : prev || res || { success: false, error: t("Uso no disponible") });
       } catch (err) {
         // keep the last numbers and try again on the next tick (every 2 min)
         logWarn('ClaudeUsageMeter.refresh', `usage refresh failed: ${(err as Error)?.message ?? err}`);
+        if (!cancelled) setUsage((prev) => prev || { success: false, error: t("No se pudo consultar el uso de Claude") });
       }
     };
     const refreshSoon = (ms: number) => {
@@ -64,7 +73,7 @@ const TONE: Record<ReturnType<typeof usageTone>, string> = {
   high: 'bg-[#FF6B6B]',
 };
 
-const Meter: React.FC<{ label: string; win: ClaudeUsageWindow; testId: string }> = ({ label, win, testId }) => (
+export const UsageWindowMeter: React.FC<{ label: string; win: ClaudeUsageWindow; testId: string }> = ({ label, win, testId }) => { useLanguage(); return (
   <span data-testid={testId} className="flex items-center gap-1 leading-none">
     <span className="text-black/60 dark:text-zinc-400">{label}</span>
     <span className="relative h-2 w-6 min-[400px]:w-9 rounded-sm border border-black dark:border-zinc-500 bg-white dark:bg-zinc-800 overflow-hidden" aria-hidden="true">
@@ -72,23 +81,27 @@ const Meter: React.FC<{ label: string; win: ClaudeUsageWindow; testId: string }>
     </span>
     <span className="font-black tabular-nums">{formatPercent(win.percent)}</span>
   </span>
-);
+); };
 
 /** Compact "5h ▮▯ 16% · Sem ▮▯ 41%" for the status bar; hover for reset times. */
+
 export const ClaudeUsageMeter: React.FC<{ usage: ClaudeUsage | null }> = ({ usage }) => {
+  useLanguage();
+  if (!usage) return <LoadingSkeleton label={t("Cargando uso de Claude")} variant="usage" />;
+  if (!usage.success) return <span title={usage.error} className="px-1 opacity-60">{t("Uso no disponible")}</span>;
   if (!usage?.available || (!usage.fiveHour && !usage.weekly)) return null;
   const title = [
-    'Uso de tu plan de Claude (/usage)',
-    usage.fiveHour && describeWindow('Últimas 5 horas', usage.fiveHour),
-    usage.weekly && describeWindow('Semana', usage.weekly),
+    t("Uso de tu plan de Claude (/usage)"),
+    usage.fiveHour && describeWindow(t("Últimas 5 horas"), usage.fiveHour),
+    usage.weekly && describeWindow(t("Semana"), usage.weekly),
   ]
     .filter(Boolean)
     .join('\n');
   return (
     <span data-testid="claude-usage" title={title} aria-label={title} className="h-5 flex items-center gap-1.5 px-1 shrink-0 whitespace-nowrap">
-      {usage.fiveHour && <Meter label="5h" win={usage.fiveHour} testId="usage-5h" />}
+      {usage.fiveHour && <UsageWindowMeter label="5h" win={usage.fiveHour} testId="usage-5h" />}
       {usage.fiveHour && usage.weekly && <span className="text-black/30 dark:text-zinc-600">·</span>}
-      {usage.weekly && <Meter label="Sem" win={usage.weekly} testId="usage-week" />}
+      {usage.weekly && <UsageWindowMeter label={t("Sem")} win={usage.weekly} testId="usage-week" />}
     </span>
   );
 };

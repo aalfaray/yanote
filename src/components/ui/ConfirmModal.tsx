@@ -1,3 +1,4 @@
+import { t, useLanguage } from '../../lib/i18n';
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { Button } from './Button';
@@ -17,16 +18,17 @@ interface ConfirmModalProps {
 
 export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   isOpen,
-  title = 'Cambios sin guardar',
+  title = t("Cambios sin guardar"),
   message,
-  subMessage = 'Si cierras esta nota ahora, perderás las modificaciones realizadas.',
-  confirmText = 'Descartar y Cerrar',
-  cancelText = 'Cancelar',
+  subMessage = t("Si cierras esta nota ahora, perderás las modificaciones realizadas."),
+  confirmText = t("Descartar y Cerrar"),
+  cancelText = t("Cancelar"),
   saveAndCloseText,
   onConfirm,
   onCancel,
   onSaveAndConfirm,
 }) => {
+  useLanguage();
   if (!isOpen) return null;
 
   return (
@@ -43,7 +45,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           <button
             onClick={onCancel}
             className="p-1 hover:bg-black/20 rounded cursor-pointer transition-all"
-            title="Cerrar modal"
+            title={t("Cerrar modal")}
           >
             <X size={15} strokeWidth={3} />
           </button>

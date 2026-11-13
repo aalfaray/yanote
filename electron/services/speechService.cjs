@@ -16,7 +16,8 @@ $json = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($raw.
 $req = $json | ConvertFrom-Json
 $sintetizador = New-Object System.Speech.Synthesis.SpeechSynthesizer
 try {
-    $voz = $sintetizador.GetInstalledVoices() | Where-Object { $_.Enabled -and $_.VoiceInfo.Culture.Name -like 'es-*' } | Select-Object -First 1
+    $idioma = if ($req.language -eq 'en') { 'en-*' } else { 'es-*' }
+    $voz = $sintetizador.GetInstalledVoices() | Where-Object { $_.Enabled -and $_.VoiceInfo.Culture.Name -like $idioma } | Select-Object -First 1
     if ($null -ne $voz) { $sintetizador.SelectVoice($voz.VoiceInfo.Name) }
     $sintetizador.Rate = [int]$req.rate
     $sintetizador.Volume = 100
@@ -42,8 +43,8 @@ function toSapiRate(rate) {
   return Math.max(-10, Math.min(10, Math.round((value - 1) * 10)));
 }
 
-function encodeRequest({ segments, start = 0, rate = 1 }) {
-  const payload = JSON.stringify({ segments, start, rate: toSapiRate(rate) });
+function encodeRequest({ segments, start = 0, rate = 1, language }) {
+  const payload = JSON.stringify({ segments, start, rate: toSapiRate(rate), ...(language === 'es' || language === 'en' ? { language } : {}) });
   return Buffer.from(payload, 'utf8').toString('base64');
 }
 
@@ -129,7 +130,7 @@ function createSpeechService({ spawnFn = spawn, platform = process.platform } = 
       else finish({ type: 'error', message: stderrBuffer.trim() || `PowerShell terminó con código ${code}` });
     });
 
-    proc.stdin.end(encodeRequest({ segments, start: request.start || 0, rate: request.rate }));
+    proc.stdin.end(encodeRequest({ segments, start: request.start || 0, rate: request.rate, language: request.language }));
     return { success: true };
   }
 

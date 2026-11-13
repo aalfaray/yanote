@@ -1,3 +1,4 @@
+import { getLanguage } from './i18n';
 // Spanish translations for the built-in texts of @mdxeditor/editor (toolbar, tables, links, dialogs...).
 
 const ES: Record<string, string> = {
@@ -105,7 +106,7 @@ const ES: Record<string, string> = {
 
 /** MDXEditor `translation` prop: Spanish text, falling back to the library default. */
 export function translateEditor(key: string, defaultValue: string, interpolations?: Record<string, unknown>): string {
-  const template = ES[key] ?? defaultValue;
+  const template = getLanguage() === 'es' ? ES[key] ?? defaultValue : defaultValue;
   if (!interpolations) return template;
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, name: string) =>
     name in interpolations ? String(interpolations[name]) : match

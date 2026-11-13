@@ -1,9 +1,12 @@
-import type { ClaudeEvent, ClaudePermissionRequest, ClaudeSlashCommand, ClaudeModelInfo, ClaudeEffortLevel } from '../types/electron';
+import { t, getLanguage } from './i18n';
+import type { ClaudeEvent, ClaudePermissionRequest, ClaudeSlashCommand, ClaudeModelInfo, ClaudeEffortLevel, ChatModeInfo } from '../types/electron';
 
 /**
  * Turns the Agent SDK's message stream into a chat transcript.
  * Pure (state in, state out) so it can be unit-tested without Electron.
  */
+
+
 
 export interface ToolResult {
   text: string;
@@ -20,6 +23,7 @@ export type ChatItem =
       name: string;
       input: Record<string, unknown>;
       /** Raw JSON while the input is still streaming */
+
       partialInput: string;
       result?: ToolResult;
       parentToolUseId: string | null;
@@ -31,8 +35,10 @@ export type ChatItem =
 export interface ChatState {
   items: ChatItem[];
   /** A turn is in flight (from send until `result`) */
+
   running: boolean;
   /** Session ended (process exited or failed) */
+
   ended: boolean;
   sessionId?: string;
   model?: string;
@@ -42,16 +48,30 @@ export interface ChatState {
   status?: string | null;
   commands: ClaudeSlashCommand[];
   models: ClaudeModelInfo[];
+  /** Permission modes the agent offers (Antigravity); Claude uses the built-in list */
+
+  modes?: ChatModeInfo[];
+  /** Model id Claude will use for the next turn (from its resolved settings) */
+
+  appliedModel?: string;
+  /** Effort Claude will use for the next turn; null = the model sends no effort */
+
+  appliedEffort?: ClaudeEffortLevel | null;
   totalCostUsd: number;
   /** Context tokens of the last API call (input + cache) */
+
   contextTokens: number;
   /** stream message id -> block index -> item id */
+
   stream: Record<string, Record<number, string>>;
   /** Id of the top-level message currently streaming */
+
   currentMsg?: string;
   /** Claude Code answered "Not logged in": the user has to sign in (Anthropic's own flow) */
+
   authRequired: boolean;
   /** The account hit its usage limit: offer another account */
+
   rateLimited: boolean;
 }
 
@@ -76,6 +96,7 @@ let localSeq = 0;
 const localId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(localSeq++).toString(36)}`;
 
 /** tool_result content (string or blocks) -> plain text */
+
 export function toolResultText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
@@ -223,7 +244,7 @@ function onAssistant(state: ChatState, msg: Json): ChatState {
     if (err === 'authentication_failed') return { ...next, authRequired: true };
     if (err === 'rate_limit') next = { ...next, rateLimited: true };
     if (err) {
-      next = push(next, { kind: 'notice', id: localId('err'), text: `Error de la API: ${typeof err === 'string' ? err : JSON.stringify(err)}`, tone: 'error' });
+      next = push(next, { kind: 'notice', id: localId('err'), text: t("Error de la API: {0}", [typeof err === 'string' ? err : JSON.stringify(err)]), tone: 'error' });
     } else if ((next.authRequired || next.rateLimited) && content.length > 0) {
       next = { ...next, authRequired: false, rateLimited: false };
     }
@@ -267,12 +288,12 @@ function onSystem(state: ChatState, msg: Json): ChatState {
     case 'local_command_output':
       return push(state, { kind: 'text', id: localId('cmd'), msgId: '', text: str(msg.content), streaming: false, final: true, parentToolUseId: null });
     case 'compact_boundary':
-      return push(state, { kind: 'notice', id: localId('compact'), text: 'Conversación compactada', tone: 'info' });
+      return push(state, { kind: 'notice', id: localId('compact'), text: t("Conversación compactada"), tone: 'info' });
     case 'api_retry':
       return push(state, {
         kind: 'notice',
         id: localId('retry'),
-        text: `Reintentando la API (${msg.attempt}/${msg.max_retries})…`,
+        text: t("Reintentando la API ({0}/{1})…", [msg.attempt, msg.max_retries]),
         tone: 'info',
       });
     case 'informational':
@@ -383,7 +404,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             ...state,
             commands: ev.commands.length ? ev.commands : state.commands,
             models: ev.models.length ? ev.models : state.models,
+            modes: ev.modes?.length ? ev.modes : state.modes,
           };
+        case 'user_message':
+          return ev.text.trim() ? push(state, { kind: 'user', id: localId('user'), text: ev.text, imageCount: 0 }) : state;
+        case 'applied_settings':
+          return { ...state, appliedModel: ev.model ?? state.appliedModel, appliedEffort: ev.effort };
         case 'error':
           return { ...push(state, { kind: 'notice', id: localId('error'), text: ev.error, tone: 'error' }), running: false, ended: true };
         case 'exit':
@@ -399,6 +425,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
 /** Items shown at the top level; subagent (Task/Agent) items are folded into their parent tool card. */
 /** Text the user typed in a stored user turn; null for tool results and app-injected turns. */
+
 function typedUserText(content: unknown): { text: string; imageCount: number } | null {
   const blocks = typeof content === 'string' ? [{ type: 'text', text: content }] : Array.isArray(content) ? content : [];
   if (blocks.some((b) => isObj(b) && b.type === 'tool_result')) return null;
@@ -413,6 +440,7 @@ function typedUserText(content: unknown): { text: string; imageCount: number } |
 }
 
 /** Transcript items for stored messages, built with the same rules as live ones. */
+
 export function historyItems(messages: Record<string, unknown>[]): ChatItem[] {
   let h = initialChatState();
   for (const msg of messages) {
@@ -440,11 +468,13 @@ export function childItems(items: ChatItem[], parentId: string): ChatItem[] {
 }
 
 /** Pending permission prompts (oldest first). */
+
 export function pendingPermissions(items: ChatItem[]) {
   return items.filter((i): i is Extract<ChatItem, { kind: 'permission' }> => i.kind === 'permission' && i.status === 'pending');
 }
 
 /** Short one-line summary of a tool call, like Claude Code's "● Bash(npm test)". */
+
 export function toolSummary(name: string, input: Record<string, unknown>): string {
   const s = (k: string) => (typeof input[k] === 'string' ? (input[k] as string) : '');
   const base = (p: string) => p.split(/[\\/]/).pop() || p;
@@ -469,7 +499,7 @@ export function toolSummary(name: string, input: Record<string, unknown>): strin
     case 'Agent':
       return s('description') || s('subagent_type');
     case 'TodoWrite':
-      return 'Lista de tareas';
+      return t("Lista de tareas");
     case 'Skill':
       return s('skill');
     default: {
@@ -480,6 +510,7 @@ export function toolSummary(name: string, input: Record<string, unknown>): strin
 }
 
 /** Slash-command suggestions for what the user is typing ("/co" -> compact, config, …). */
+
 export function matchCommands(commands: ClaudeSlashCommand[], draft: string): ClaudeSlashCommand[] {
   const m = /^\/(\S*)$/.exec(draft);
   if (!m) return [];
@@ -495,17 +526,18 @@ export function formatTokens(n: number): string {
 }
 
 export const EFFORT_LABELS: Record<ClaudeEffortLevel, string> = {
-  low: 'Bajo',
-  medium: 'Medio',
-  high: 'Alto',
-  xhigh: 'Muy alto',
-  max: 'Máximo',
+  get low() { return t("Bajo"); },
+  get medium() { return t("Medio"); },
+  get high() { return t("Alto"); },
+  get xhigh() { return t("Muy alto"); },
+  get max() { return t("Máximo"); },
 };
 
 /**
  * The model the chat is running: the one picked in the selector, else the one Claude
  * reported (matched by alias or wire id), else the "default" row.
  */
+
 export function activeModelInfo(models: ClaudeModelInfo[], selected: string, reported?: string): ClaudeModelInfo | undefined {
   if (selected) {
     const picked = models.find((m) => m.value === selected);
@@ -522,17 +554,31 @@ export function activeModelInfo(models: ClaudeModelInfo[], selected: string, rep
   return models.find((m) => m.value === 'default');
 }
 
+/** 'claude-opus-5-5' -> 'Opus 5.5', 'claude-haiku-4-5-20251001' -> 'Haiku 4.5'; other ids pass through. */
+
+export function modelLabel(id: string | undefined): string {
+  if (!id) return '';
+  const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?(\[1m\])?$/i.exec(id);
+  if (!m) return id;
+  const family = m[1].charAt(0).toUpperCase() + m[1].slice(1);
+  return `${family} ${m[2]}${m[3] ? `.${m[3]}` : ''}${m[4] ? ' 1M' : ''}`;
+}
+
 /** Model and effort from Claude Code's own settings (read before the chat's first reply). */
+
 export interface ClaudeDefaults {
   model: string | null;
   effortLevel: ClaudeEffortLevel | null;
   /** Per-model effort, keyed by real model id (settings.json "modelSettings") */
+
   modelEfforts: Record<string, ClaudeEffortLevel>;
   /** CLAUDE_CODE_EFFORT_LEVEL, which wins over everything */
+
   effortFromEnv: ClaudeEffortLevel | null;
 }
 
 /** The effort Claude Code uses for `model` when yanote doesn't set one ('' = the model's own default). */
+
 export function inheritedEffort(defaults: ClaudeDefaults | null | undefined, model: ClaudeModelInfo | undefined): ClaudeEffortLevel | '' {
   if (!defaults || !model) return '';
   const levels = effortLevelsFor(model);
@@ -542,14 +588,97 @@ export function inheritedEffort(defaults: ClaudeDefaults | null | undefined, mod
 }
 
 /** Option text for a model row: the "default" row says which model it is. */
+
 export function modelOptionLabel(model: ClaudeModelInfo): string {
   if (model.value !== 'default') return model.displayName;
   const which = (model.description || '').split('·')[0].trim();
-  return which ? `Predeterminado · ${which}` : 'Predeterminado';
+  return which ? t("Predeterminado · {0}", [which]) : t("Predeterminado");
 }
 
 /** Effort levels the model accepts ([] when it has no effort control). */
+
 export function effortLevelsFor(model: ClaudeModelInfo | undefined): ClaudeEffortLevel[] {
   if (!model || model.supportsEffort === false) return [];
   return model.supportedEffortLevels ?? [];
+}
+
+/** Most telling argument of a tool call, for a one-line summary ('Bash: ls', 'Edit: src/a.ts'). */
+
+function exportToolSummary(input: Record<string, unknown>): string {
+  for (const key of ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description', 'prompt']) {
+    const v = input[key];
+    if (typeof v === 'string' && v.trim()) return v.trim().split('\n')[0].slice(0, 200);
+  }
+  return '';
+}
+
+/** A Markdown fence that cannot be closed early by backticks inside the text. */
+
+function fenced(text: string, lang = ''): string {
+  const longest = Math.max(2, ...(text.match(/`+/g) ?? []).map((m) => m.length));
+  const fence = '`'.repeat(longest + 1);
+  return `${fence}${lang}\n${text}\n${fence}`;
+}
+
+export interface ChatExportOptions {
+  /** Include tool calls (summarised) and their output */
+
+  includeTools?: boolean;
+  /** Max characters kept from each tool's output */
+
+  maxToolOutput?: number;
+  model?: string;
+  cwd?: string;
+  date?: Date;
+  /** Who answered ('Claude', 'Antigravity') */
+
+  assistantName?: string;
+  /** Tool the chat ran on, for the note to the next AI */
+
+  source?: string;
+}
+
+/**
+ * The conversation as portable Markdown, to save or paste into another AI session as context.
+ * Keeps the user's messages and Claude's answers; tool calls are summarised; thinking, notices
+ * and permission prompts are left out.
+ */
+
+export function chatToMarkdown(items: ChatItem[], opts: ChatExportOptions = {}): string {
+  const { includeTools = true, maxToolOutput = 1500, model, cwd, date = new Date(), assistantName = 'Claude', source = 'Claude Code' } = opts;
+  const lines: string[] = [t("# Conversación con {0}", [assistantName]), ''];
+  const meta = [
+    t("Exportada: {0}", [date.toLocaleString(getLanguage())]),
+    model ? t("Modelo: {0}", [model]) : '',
+    cwd ? t("Carpeta de trabajo: `{0}`", [cwd]) : '',
+  ].filter(Boolean);
+  lines.push(...meta.map((m) => `- ${m}`), '');
+  lines.push(
+    t("> Historial exportado desde yanote ({0}). Úsalo como contexto de la conversación anterior para continuar el trabajo.", [source]),
+    ''
+  );
+
+  let last: 'user' | 'assistant' | null = null;
+  for (const item of topLevelItems(items)) {
+    if (item.kind === 'user') {
+      const images = item.imageCount ? `\n\n_(${item.imageCount} ${item.imageCount === 1 ? t("imagen adjunta") : t("imágenes adjuntas")})_` : '';
+      lines.push('---', '', t("## 🧑 Usuario"), '', item.text + images, '');
+      last = 'user';
+    } else if (item.kind === 'text' && item.text.trim()) {
+      if (last !== 'assistant') lines.push(`## 🤖 ${assistantName}`, '');
+      lines.push(item.text.trim(), '');
+      last = 'assistant';
+    } else if (item.kind === 'tool' && includeTools) {
+      if (last !== 'assistant') lines.push(`## 🤖 ${assistantName}`, '');
+      const summary = exportToolSummary(item.input);
+      lines.push(`**🔧 ${item.name}**${summary ? `: \`${summary.replace(/`/g, "'")}\`` : ''}`, '');
+      if (item.result?.text.trim()) {
+        const out = item.result.text.trim();
+        const cut = out.length > maxToolOutput ? t("{0}\n… ({1} caracteres omitidos)", [out.slice(0, maxToolOutput), out.length - maxToolOutput]) : out;
+        lines.push(`<details><summary>${item.result.isError ? t("Error") : 'Resultado'}</summary>`, '', fenced(cut), '', '</details>', '');
+      }
+      last = 'assistant';
+    }
+  }
+  return `${lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;
 }

@@ -23,7 +23,25 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     } catch (_) {}
   });
 
+  it('round-trips pending file edits, including empty and large text, without overwriting disk', () => {
+    const notePath = path.join(tempDir, 'note.md');
+    fs.writeFileSync(notePath, 'on disk');
+    for (const content of ['', 'x'.repeat(500_001)]) {
+      const tab = { kind: 'note', path: notePath, title: 'note.md', isPinned: true, content, isDirty: true };
+      saveConfig(configPath, {}, { openTabs: [tab], welcomeSeen: true });
+      expect(loadConfig(configPath, notesPath).openTabs).toEqual([tab]);
+      expect(JSON.parse(fs.readFileSync(configPath, 'utf8'))).not.toHaveProperty('welcomeSeen');
+      expect(fs.readFileSync(notePath, 'utf8')).toBe('on disk');
+    }
+  });
+
   // --- 20% HAPPY PATH TESTS ---
+  it('keeps Antigravity as the provider when saving and reopening chat tabs', () => {
+    const tab = { kind: 'claude', title: 'Antigravity', sessionId: 'agy-session', provider: 'antigravity' };
+    saveConfig(configPath, {}, { openTabs: [tab] });
+    expect(loadConfig(configPath, notesPath).openTabs).toEqual([tab]);
+  });
+
   it('[HAPPY 1/2] returns valid default config when no config file exists', () => {
     const config = loadConfig(configPath, notesPath);
     expect(config).toBeDefined();
@@ -107,7 +125,7 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     expect(config.openTabs).toEqual([]);
   });
 
-  it('keeps only valid, unique saved tabs and the welcome flag', () => {
+  it('keeps only valid, unique saved tabs and ignores the retired welcome flag', () => {
     fs.writeFileSync(
       configPath,
       JSON.stringify({
@@ -118,10 +136,10 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
       'utf8'
     );
     const config = loadConfig(configPath, notesPath);
-    expect(config.welcomeSeen).toBe(true);
+    expect(config).not.toHaveProperty('welcomeSeen');
     expect(config.activeTabPath).toBe('C:\\n\\a.md');
     expect(config.openTabs).toEqual([{ kind: 'note', path: 'C:\\n\\a.md', title: 'a.md', isPinned: false }]);
-    expect(loadConfig(path.join(path.dirname(configPath), 'nuevo.json'), notesPath).welcomeSeen).toBe(false);
+    expect(loadConfig(path.join(path.dirname(configPath), 'nuevo.json'), notesPath)).not.toHaveProperty('welcomeSeen');
   });
 
   it('keeps saved ideas valid and bounded', () => {

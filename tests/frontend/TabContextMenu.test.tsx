@@ -136,8 +136,8 @@ describe('Frontend: TabContextMenu (Boldkit Neubrutalist) (20% Happy / 80% Destr
     render(<TabContextMenu {...defaultProps} x={100} y={590} />);
 
     const menu = screen.getByTestId('tab-context-menu');
-    // 600 - 350 - 8 = 242px
-    expect(menu.style.top).toBe('242px');
+    // 600 - 380 (menu height, incl. "Exportar a PDF") - 8 = 212px
+    expect(menu.style.top).toBe('212px');
   });
 
   it('[CHAOS 7/12] clicking Cerrar invokes onCloseTab with active tab', () => {

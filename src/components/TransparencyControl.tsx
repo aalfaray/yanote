@@ -1,3 +1,4 @@
+import { t, useLanguage } from '../lib/i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import { Blend } from 'lucide-react';
 
@@ -6,9 +7,11 @@ const PRESETS = [1, 0.85, 0.7, 0.5];
 
 interface TransparencyControlProps {
   /** Current window opacity, 0.3–1 */
+
   opacity: number;
   onChange: (opacity: number) => void;
   /** Button classes shared with the rest of the titlebar */
+
   buttonClassName: string;
   activeClassName: string;
   idleClassName: string;
@@ -18,6 +21,7 @@ interface TransparencyControlProps {
 const toPercent = (value: number) => Math.round(value * 100);
 
 /** Titlebar button + popover with a slider to grade the whole window's transparency. */
+
 export const TransparencyControl: React.FC<TransparencyControlProps> = ({
   opacity,
   onChange,
@@ -26,6 +30,7 @@ export const TransparencyControl: React.FC<TransparencyControlProps> = ({
   idleClassName,
   iconProps,
 }) => {
+  useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, right: 0 });
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -64,7 +69,7 @@ export const TransparencyControl: React.FC<TransparencyControlProps> = ({
     <div ref={wrapperRef} className="shrink-0 flex">
       <button
         onClick={toggle}
-        title={`Transparencia de la ventana (${toPercent(opacity)}%)`}
+        title={t("Transparencia de la ventana ({0}%)", [toPercent(opacity)])}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         aria-pressed={isTransparent}
@@ -77,12 +82,12 @@ export const TransparencyControl: React.FC<TransparencyControlProps> = ({
         <div
           ref={panelRef}
           role="dialog"
-          aria-label="Transparencia"
+          aria-label={t("Transparencia")}
           style={{ top: pos.top, right: pos.right }}
           className="no-drag fixed z-50 w-56 bg-white dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[3px_3px_0px_#000] p-3 flex flex-col gap-2.5"
         >
           <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider">
-            <span>Transparencia</span>
+            <span>{t("Transparencia")}</span>
             <span className="px-1.5 py-0.5 bg-[#FFE500] text-black border-2 border-black rounded text-[10px] tabular-nums">
               {toPercent(opacity)}%
             </span>
@@ -95,13 +100,13 @@ export const TransparencyControl: React.FC<TransparencyControlProps> = ({
             step={1}
             value={toPercent(opacity)}
             onChange={(e) => onChange(Number(e.target.value) / 100)}
-            aria-label="Opacidad de la ventana"
+            aria-label={t("Opacidad de la ventana")}
             className="opacity-slider w-full"
           />
 
           <div className="flex items-center justify-between text-[9px] font-bold text-neutral-500 dark:text-zinc-400 -mt-1">
-            <span>Más transparente</span>
-            <span>Opaca</span>
+            <span>{t("Más transparente")}</span>
+            <span>{t("Opaca")}</span>
           </div>
 
           <div className="grid grid-cols-4 gap-1.5">

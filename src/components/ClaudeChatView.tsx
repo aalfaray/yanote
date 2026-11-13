@@ -1,3 +1,4 @@
+import { t, useLanguage, getLanguage } from '../lib/i18n';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -17,10 +18,13 @@ import {
   CircleAlert,
   ListTodo,
   Sparkles,
+  ClipboardCopy,
+  Download,
   UserRound,
   ChevronDown,
 } from 'lucide-react';
-import type { ChatPin, ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionMode, ClaudePermissionRequest } from '../types/electron';
+import type { ChatPin, ChatProvider, ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionMode, ClaudePermissionRequest } from '../types/electron';
+import { getChatBackend, PROVIDER_LABELS } from '../lib/chatBackends';
 import { loadChatPrefs, saveChatPrefs, loadEffortByModel, saveEffortByModel } from '../lib/claudeChatPrefs';
 import { copyText } from '../lib/clipboard';
 import { logError } from '../lib/logger';
@@ -33,12 +37,14 @@ import {
   toolSummary,
   matchCommands,
   formatTokens,
+  chatToMarkdown,
   activeModelInfo,
   inheritedEffort,
   modelOptionLabel,
   type ClaudeDefaults,
   effortLevelsFor,
   EFFORT_LABELS,
+  modelLabel,
   type ChatItem,
 } from '../lib/claudeChat';
 import { markdownToSegments } from '../lib/speechText';
@@ -47,6 +53,7 @@ import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
 import { DismissButton } from './ui/DismissButton';
 import { ClaudeAccountMenu } from './ClaudeAccountMenu';
+import { LoadingSkeleton } from './ui/Skeleton';
 import { PinnedStrip } from './ChatPinnedStrip';
 
 interface ClaudeChatViewProps {
@@ -54,27 +61,36 @@ interface ClaudeChatViewProps {
   cwd?: string;
   isActive: boolean;
   /** Called once Claude reports its session id (used to resume after a restart) */
+
   onSessionId?: (sessionId: string) => void;
   resumeSessionId?: string;
   /** Opens Claude Code's own sign-in (`claude auth login`) for that account */
+
   onLogin?: (account: { id: string; name: string }) => void;
   /** Claude account this chat uses (see ClaudeAccountMenu); the main one when missing */
+
   accountId?: string;
   /** The user moved this chat to another account */
+
   onAccountChange?: (accountId: string) => void;
   /** Text already typed in the message box when the chat opens (e.g. sent from another chat); not sent automatically */
+
   initialDraft?: string;
   /** Paragraphs pinned on top of this chat (right-click > "Fijar en este chat") */
+
   pins?: ChatPin[];
   onUnpin?: (pinId: string) => void;
+  /** Agent behind this chat: Claude Code (default) or Antigravity CLI (Gemini) */
+
+  provider?: ChatProvider;
 }
 
-const MODES: { value: ClaudePermissionMode; label: string; hint: string }[] = [
-  { value: 'default', label: 'Preguntar', hint: 'Pide permiso antes de editar o ejecutar' },
-  { value: 'acceptEdits', label: 'Aceptar ediciones', hint: 'Edita archivos sin preguntar; pide permiso para comandos' },
-  { value: 'plan', label: 'Planificar', hint: 'Solo lee y propone un plan, sin cambiar nada' },
-  { value: 'auto', label: 'Auto', hint: 'Un clasificador aprueba o rechaza cada acción' },
-  { value: 'bypassPermissions', label: 'Acceso total', hint: 'Sin ninguna confirmación (peligroso)' },
+const getModes = () => [
+  { value: 'default', label: t("Preguntar"), hint: t("Pide permiso antes de editar o ejecutar") },
+  { value: 'acceptEdits', label: t("Aceptar ediciones"), hint: t("Edita archivos sin preguntar; pide permiso para comandos") },
+  { value: 'plan', label: t("Planificar"), hint: t("Solo lee y propone un plan, sin cambiar nada") },
+  { value: 'auto', label: 'Auto', hint: t("Un clasificador aprueba o rechaza cada acción") },
+  { value: 'bypassPermissions', label: t("Acceso total"), hint: t("Sin ninguna confirmación (peligroso)") },
 ];
 
 const btn =
@@ -102,6 +118,7 @@ const Markdown: React.FC<{ text: string }> = React.memo(({ text }) => (
 ));
 
 const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  useLanguage();
   const ref = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   return (
@@ -111,7 +128,7 @@ const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </pre>
       <button
         type="button"
-        title="Copiar código"
+        title={t("Copiar código")}
         onClick={() => {
           void copyText(ref.current?.innerText ?? '', 'ClaudeChatView.copyCode');
           setCopied(true);
@@ -127,17 +144,17 @@ const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 /* ---------------------------------- Tools ----------------------------------- */
 
-const Pre: React.FC<{ text: string; tone?: 'plain' | 'error'; max?: number }> = ({ text, tone = 'plain', max = 4000 }) => (
+const Pre: React.FC<{ text: string; tone?: 'plain' | 'error'; max?: number }> = ({ text, tone = 'plain', max = 4000 }) => { useLanguage(); return (
   <pre
     className={`overflow-auto max-h-72 whitespace-pre-wrap break-words text-[11.5px] p-2 rounded border border-black/30 dark:border-zinc-700 ${
       tone === 'error' ? 'bg-[#FFE4E4] text-[#9B1C1C] dark:bg-[#3A1515] dark:text-[#FCA5A5]' : 'bg-[#F4F1EA] dark:bg-[#0D0D0F]'
     }`}
   >
-    {text.length > max ? `${text.slice(0, max)}\n… (${text.length - max} caracteres más)` : text}
+    {text.length > max ? t("{0}\n… ({1} caracteres más)", [text.slice(0, max), text.length - max]) : text}
   </pre>
-);
+); };
 
-const Diff: React.FC<{ oldText: string; newText: string }> = ({ oldText, newText }) => (
+const Diff: React.FC<{ oldText: string; newText: string }> = ({ oldText, newText }) => { useLanguage(); return (
   <pre className="overflow-auto max-h-72 text-[11.5px] rounded border border-black/30 dark:border-zinc-700 bg-[#F4F1EA] dark:bg-[#0D0D0F]">
     {oldText.split('\n').map((l, i) => (
       <div key={`o${i}`} className="px-2 bg-[#FFE4E4] text-[#9B1C1C] dark:bg-[#3A1515] dark:text-[#FCA5A5] whitespace-pre-wrap break-words">
@@ -150,11 +167,11 @@ const Diff: React.FC<{ oldText: string; newText: string }> = ({ oldText, newText
       </div>
     ))}
   </pre>
-);
+); };
 
 type Todo = { content?: string; activeForm?: string; status?: string };
 
-const TodoList: React.FC<{ todos: Todo[] }> = ({ todos }) => (
+const TodoList: React.FC<{ todos: Todo[] }> = ({ todos }) => { useLanguage(); return (
   <ul className="space-y-1 text-[12px]">
     {todos.map((t, i) => (
       <li key={i} className="flex items-start gap-1.5">
@@ -171,10 +188,12 @@ const TodoList: React.FC<{ todos: Todo[] }> = ({ todos }) => (
       </li>
     ))}
   </ul>
-);
+); };
 
 /** Body of a tool call, shaped per tool like Claude Code's own renderers. */
+
 const ToolDetails: React.FC<{ name: string; input: Record<string, unknown>; result?: { text: string; isError: boolean } }> = ({ name, input, result }) => {
+  useLanguage();
   const s = (k: string) => (typeof input[k] === 'string' ? (input[k] as string) : '');
   let body: React.ReactNode;
   if (name === 'Bash' || name === 'PowerShell') {
@@ -204,6 +223,7 @@ const ToolDetails: React.FC<{ name: string; input: Record<string, unknown>; resu
 };
 
 const ToolCard: React.FC<{ item: Extract<ChatItem, { kind: 'tool' }>; all: ChatItem[]; running: boolean }> = ({ item, all, running }) => {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const summary = toolSummary(item.name, item.input);
   const done = Boolean(item.result);
@@ -214,8 +234,7 @@ const ToolCard: React.FC<{ item: Extract<ChatItem, { kind: 'tool' }>; all: ChatI
     return (
       <div className={`${card} p-2`}>
         <div className="flex items-center gap-1.5 text-[11px] font-black mb-1.5">
-          <ListTodo size={13} strokeWidth={2.5} /> Tareas
-        </div>
+          <ListTodo size={13} strokeWidth={2.5} /> {' '}{t("Tareas")}</div>
         <TodoList todos={item.input.todos as Todo[]} />
       </div>
     );
@@ -236,7 +255,7 @@ const ToolCard: React.FC<{ item: Extract<ChatItem, { kind: 'tool' }>; all: ChatI
         />
         <span className="text-[11px] font-black shrink-0">{item.name.replace(/^mcp__/, '')}</span>
         <span className="text-[11px] font-mono opacity-70 truncate min-w-0 flex-1">{summary}</span>
-        {children.length > 0 && <span className="text-[10px] font-black opacity-60 shrink-0">{children.filter((c) => c.kind === 'tool').length} pasos</span>}
+        {children.length > 0 && <span className="text-[10px] font-black opacity-60 shrink-0">{children.filter((c) => c.kind === 'tool').length} {' '}{t("pasos")}</span>}
         <ChevronRight size={13} strokeWidth={3} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
       {open && (
@@ -268,6 +287,7 @@ const QuestionPrompt: React.FC<{ request: ClaudePermissionRequest; onAnswer: (an
   onAnswer,
   onDeny,
 }) => {
+  useLanguage();
   const questions = (Array.isArray(request.input.questions) ? request.input.questions : []) as Question[];
   const [picked, setPicked] = useState<Record<string, string[]>>({});
   const [other, setOther] = useState<Record<string, string>>({});
@@ -304,7 +324,7 @@ const QuestionPrompt: React.FC<{ request: ClaudePermissionRequest; onAnswer: (an
             <input
               value={other[q.question] || ''}
               onChange={(e) => setOther((p) => ({ ...p, [q.question]: e.target.value }))}
-              placeholder="Otra respuesta…"
+              placeholder={t("Otra respuesta…")}
               className="w-full px-2 py-1.5 text-[12px] border-2 border-black dark:border-zinc-600 rounded bg-white dark:bg-[#121212] outline-none focus:bg-[#FFFDE8] dark:focus:bg-[#1A1A1D]"
             />
           </div>
@@ -323,11 +343,9 @@ const QuestionPrompt: React.FC<{ request: ClaudePermissionRequest; onAnswer: (an
           }
           className={`${btn} h-7 px-2.5 bg-[#78E08F] text-black`}
         >
-          <Check size={12} strokeWidth={3} /> Responder
-        </button>
+          <Check size={12} strokeWidth={3} /> {' '}{t("Responder")}</button>
         <button type="button" onClick={onDeny} className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}>
-          Omitir
-        </button>
+          {t("Omitir")}</button>
       </div>
     </div>
   );
@@ -336,7 +354,9 @@ const QuestionPrompt: React.FC<{ request: ClaudePermissionRequest; onAnswer: (an
 const PermissionCard: React.FC<{
   item: Extract<ChatItem, { kind: 'permission' }>;
   onDecide: (requestId: string, decision: { behavior: 'allow' | 'deny'; always?: boolean; updatedInput?: Record<string, unknown>; message?: string }) => void;
-}> = ({ item, onDecide }) => {
+  agentName?: string;
+}> = ({ item, onDecide, agentName = 'Claude' }) => {
+  useLanguage();
   const { request, status } = item;
   const isQuestion = request.toolName === 'AskUserQuestion';
   const isPlan = request.toolName === 'ExitPlanMode';
@@ -344,10 +364,10 @@ const PermissionCard: React.FC<{
 
   if (status !== 'pending') {
     const label = isQuestion
-      ? status === 'allowed' ? 'Respondido' : 'Pregunta omitida'
+      ? status === 'allowed' ? t("Respondido") : t("Pregunta omitida")
       : isPlan
-      ? status === 'allowed' ? 'Plan aprobado' : 'Plan rechazado'
-      : status === 'allowed' ? 'Permitido' : status === 'denied' ? 'Rechazado' : 'Cancelado';
+      ? status === 'allowed' ? t("Plan aprobado") : t("Plan rechazado")
+      : status === 'allowed' ? t("Permitido") : status === 'denied' ? t("Rechazado") : t("Cancelado");
     return (
       <div className="text-[10.5px] font-black opacity-60 flex items-center gap-1 pl-1">
         {status === 'allowed' ? <Check size={11} strokeWidth={3} /> : <X size={11} strokeWidth={3} />}
@@ -357,10 +377,10 @@ const PermissionCard: React.FC<{
   }
 
   return (
-    <div className={`${card} p-2.5 bg-[#FFFBDA] dark:bg-[#26240F] border-[#000] space-y-2`} role="alertdialog" aria-label="Permiso solicitado">
+    <div className={`${card} p-2.5 bg-[#FFFBDA] dark:bg-[#26240F] border-[#000] space-y-2`} role="alertdialog" aria-label={t("Permiso solicitado")}>
       <div className="flex items-center gap-1.5 text-[12px] font-black">
         <ShieldCheck size={14} strokeWidth={2.5} />
-        {isQuestion ? 'Claude te pregunta' : isPlan ? 'Claude propone este plan' : request.title || `Claude quiere usar ${request.toolName}`}
+        {isQuestion ? t("{0} te pregunta", [agentName]) : isPlan ? t("{0} propone este plan", [agentName]) : request.title || t("{0} quiere usar {1}", [agentName, request.toolName])}
       </div>
       {request.decisionReason && !isQuestion && <div className="text-[11px] opacity-70">{request.decisionReason}</div>}
 
@@ -368,7 +388,7 @@ const PermissionCard: React.FC<{
         <QuestionPrompt
           request={request}
           onAnswer={(answers) => onDecide(request.requestId, { behavior: 'allow', updatedInput: { ...request.input, answers } })}
-          onDeny={() => onDecide(request.requestId, { behavior: 'deny', message: 'El usuario no quiso responder' })}
+          onDeny={() => onDecide(request.requestId, { behavior: 'deny', message: t("El usuario no quiso responder") })}
         />
       ) : (
         <>
@@ -379,11 +399,11 @@ const PermissionCard: React.FC<{
           ) : (
             <ToolDetails name={request.toolName} input={request.input} />
           )}
-          {request.blockedPath && <div className="text-[11px] font-mono break-all opacity-70">Ruta: {request.blockedPath}</div>}
+          {request.blockedPath && <div className="text-[11px] font-mono break-all opacity-70">{t("Ruta:")}{' '}{request.blockedPath}</div>}
           <input
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder={isPlan ? 'Qué cambiar del plan (opcional)…' : 'Motivo para rechazar / qué hacer en su lugar (opcional)…'}
+            placeholder={isPlan ? t("Qué cambiar del plan (opcional)…") : t("Motivo para rechazar / qué hacer en su lugar (opcional)…")}
             className="w-full px-2 py-1 text-[11.5px] border-2 border-black dark:border-zinc-600 rounded bg-white dark:bg-[#121212] outline-none"
           />
           <div className="flex flex-wrap gap-1.5">
@@ -393,29 +413,28 @@ const PermissionCard: React.FC<{
               onClick={() => onDecide(request.requestId, { behavior: 'allow' })}
               className={`${btn} h-7 px-2.5 bg-[#78E08F] text-black`}
             >
-              <Check size={12} strokeWidth={3} /> {isPlan ? 'Aprobar plan' : 'Permitir'}
+              <Check size={12} strokeWidth={3} /> {isPlan ? t("Aprobar plan") : t("Permitir")}
             </button>
             {request.canAlwaysAllow && !isPlan && (
               <button
                 type="button"
                 onClick={() => onDecide(request.requestId, { behavior: 'allow', always: true })}
                 className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}
-                title="No volver a preguntar por esto en esta sesión"
+                title={t("No volver a preguntar por esto en esta sesión")}
               >
-                Permitir siempre
-              </button>
+                {t("Permitir siempre")}</button>
             )}
             <button
               type="button"
               onClick={() =>
                 onDecide(request.requestId, {
                   behavior: 'deny',
-                  message: reason.trim() || (isPlan ? 'El usuario quiere seguir planificando' : 'El usuario rechazó esta acción'),
+                  message: reason.trim() || (isPlan ? t("El usuario quiere seguir planificando") : t("El usuario rechazó esta acción")),
                 })
               }
               className={`${btn} h-7 px-2.5 bg-[#FF6B6B] text-white`}
             >
-              <X size={12} strokeWidth={3} /> {isPlan ? 'Seguir planificando' : 'Rechazar'}
+              <X size={12} strokeWidth={3} /> {isPlan ? t("Seguir planificando") : t("Rechazar")}
             </button>
           </div>
         </>
@@ -451,18 +470,23 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   initialDraft,
   pins = [],
   onUnpin,
+  provider = 'claude',
 }) => {
+  useLanguage();
   const [state, dispatch] = useReducer(chatReducer, undefined, initialChatState);
   // A sent-over text gets an empty line below it, ready for the user to add their own words
   const [draft, setDraft] = useState(initialDraft ? `${initialDraft}
 
 ` : '');
   const [images, setImages] = useState<(ClaudeImageInput & { url: string })[]>([]);
-  const [mode, setMode] = useState<ClaudePermissionMode>(() => loadChatPrefs().mode ?? 'default');
+  // Claude's last mode/model carry over to new chats; other agents have their own sets
+  const isClaude = provider === 'claude';
+  const [mode, setMode] = useState<string>(() => (isClaude ? loadChatPrefs().mode : undefined) ?? 'default');
   const [cmdIndex, setCmdIndex] = useState(0);
   const [starting, setStarting] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(Boolean(provider === 'claude' && resumeSessionId && window.electronAPI?.claudeHistory));
   const [restartKey, setRestartKey] = useState(0);
-  const [selectedModel, setSelectedModel] = useState(() => loadChatPrefs().model ?? '');
+  const [selectedModel, setSelectedModel] = useState(() => (isClaude ? loadChatPrefs().model : undefined) ?? '');
   // Read by the start effect: a restarted process (Reanudar, other account) keeps the picked model
   const selectedModelRef = useRef(selectedModel);
   selectedModelRef.current = selectedModel;
@@ -476,33 +500,43 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const [accountId, setAccountId] = useState(initialAccountId || 'default');
   const accountRef = useRef(accountId);
   accountRef.current = accountId;
-  const [accountName, setAccountName] = useState('Principal');
+  const [accountName, setAccountName] = useState(t("Principal"));
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [claudeDefaults, setClaudeDefaults] = useState<ClaudeDefaults | null>(null);
+  const [defaultsLoading, setDefaultsLoading] = useState(Boolean(provider === 'claude' && window.electronAPI?.claudeDefaults));
+  const [accountReadyId, setAccountReadyId] = useState<string | null>(null);
   const speech = useSpeech();
   // Right-click > "Leer en voz alta" on a selection of this tab
   useReadAloudRequests(tabId, speech.play);
   const api = window.electronAPI;
+  const backend = useMemo(() => getChatBackend(api, provider), [api, provider]);
+  const agentName = PROVIDER_LABELS[provider];
+  // Claude's modes are built in; Antigravity reports its own
+  const modes = provider === 'claude' || !state.modes?.length ? getModes() : state.modes.map((m) => ({ value: m.id, label: m.name, hint: m.description || m.name }));
 
-  // Start (or resume) the Claude Code process for this tab
+  // Start (or resume) the agent process for this tab
   useEffect(() => {
-    if (!api?.claudeStart) {
-      dispatch({ type: 'notice', text: 'El chat con Claude solo está disponible en la app de escritorio (Electron).', tone: 'error' });
+    if (!backend) {
+      dispatch({
+        type: 'notice',
+        text: api ? t("Esta versión de yanote no incluye el chat con {0}.", [agentName]) : t("El chat con {0} solo está disponible en la app de escritorio (Electron).", [agentName]),
+        tone: 'error',
+      });
       setStarting(false);
       return;
     }
-    const off = api.onClaudeEvent?.((evt) => {
+    const off = backend.onEvent((evt) => {
       if (evt.id === tabId) dispatch({ type: 'event', event: evt });
     });
     let cancelled = false;
     setStarting(true);
-    api
-      .claudeStart({
+    backend
+      .start({
         id: tabId,
         cwd,
         permissionMode: mode,
         resume: sessionIdRef.current,
-        accountId: accountRef.current,
+        ...(isClaude ? { accountId: accountRef.current } : {}),
         ...(selectedModelRef.current ? { model: selectedModelRef.current } : {}),
       })
       .then((res) => {
@@ -510,13 +544,20 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
         setStarting(false);
         executableRef.current = res.executable;
         if (!res.success) {
-          dispatch({ type: 'notice', text: `No se pudo iniciar Claude: ${res.error}`, tone: 'error' });
+          dispatch({ type: 'event', event: { id: tabId, type: 'error', error: t("No se pudo iniciar {0}: {1}", [agentName, res.error]) } });
+        } else {
+          dispatch({ type: 'auth_retry' });
         }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setStarting(false);
+        dispatch({ type: 'event', event: { id: tabId, type: 'error', error: t("No se pudo iniciar {0}: {1}", [agentName, err instanceof Error ? err.message : String(err)]) } });
       });
     return () => {
       cancelled = true;
       off?.();
-      api.claudeStop?.(tabId);
+      backend.stop(tabId);
     };
     // One process per tab (and per manual restart); mode changes go through setPermissionMode
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -531,8 +572,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   // Mirror the mode the CLI reports (e.g. after a plan is approved it leaves "plan")
   useEffect(() => {
-    if (state.permissionMode && MODES.some((m) => m.value === state.permissionMode)) setMode(state.permissionMode as ClaudePermissionMode);
-  }, [state.permissionMode]);
+    if (state.permissionMode && (provider !== 'claude' || getModes().some((m) => m.value === state.permissionMode))) setMode(state.permissionMode);
+  }, [state.permissionMode, provider]);
 
   // Keep following the conversation unless the user scrolled up
   useLayoutEffect(() => {
@@ -566,22 +607,27 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   // What Claude Code will start with (its settings), shown before the first reply
   useEffect(() => {
+    if (!isClaude || !api?.claudeDefaults) return;
     let cancelled = false;
+    setDefaultsLoading(true);
     void api?.claudeDefaults?.(accountId, cwd).then((d) => {
       if (!cancelled) setClaudeDefaults(d);
-    });
+    }).catch((err) => logError('ClaudeChatView.defaults', err)).finally(() => { if (!cancelled) setDefaultsLoading(false); });
     return () => {
       cancelled = true;
     };
-  }, [api, accountId, cwd]);
+  }, [api, isClaude, accountId, cwd]);
 
   // A chat restored after a restart: show the conversation so far (Claude resumes it on the next message)
   useEffect(() => {
-    if (!resumeSessionId || !api?.claudeHistory) return;
+    if (!isClaude || !resumeSessionId || !api?.claudeHistory) return;
     let cancelled = false;
     void api.claudeHistory(resumeSessionId, accountRef.current).then((messages) => {
       if (!cancelled && Array.isArray(messages) && messages.length) dispatch({ type: 'history', messages });
-    });
+    }).catch((err) => {
+      if (!cancelled) dispatch({ type: 'notice', text: t("No se pudo cargar el historial anterior."), tone: 'error' });
+      logError('ClaudeChatView.history', err);
+    }).finally(() => { if (!cancelled) setHistoryLoading(false); });
     return () => {
       cancelled = true;
     };
@@ -608,27 +654,29 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   // Name of the account in use, for the header chip
   useEffect(() => {
+    if (!isClaude || !api?.claudeAccounts) return;
     let cancelled = false;
     void api?.claudeAccounts?.list().then(({ accounts }) => {
-      if (!cancelled) setAccountName(accounts.find((a) => a.id === accountId)?.name || 'Principal');
-    });
+      if (!cancelled) setAccountName(accounts.find((a) => a.id === accountId)?.name || t("Principal"));
+    }).catch((err) => logError('ClaudeChatView.accountName', err)).finally(() => { if (!cancelled) setAccountReadyId(accountId); });
     return () => {
       cancelled = true;
     };
-  }, [api, accountId, accountMenuOpen]);
+  }, [api, isClaude, accountId, accountMenuOpen]);
 
   /** Continue this conversation with another account: copy it there, then resume it with that sign-in. */
+
   const switchAccount = async (account: { id: string; name: string }) => {
     setAccountMenuOpen(false);
     if (account.id === accountRef.current) return;
-    if (state.running) await api?.claudeInterrupt?.(tabId);
+    if (state.running) await backend?.interrupt(tabId);
     const sid = sessionIdRef.current;
     if (sid) {
       const res = await api?.claudeAccounts?.copySession(sid, accountRef.current, account.id);
       if (res && !res.success) {
         // Nothing to carry over: the other account starts a fresh conversation
         sessionIdRef.current = undefined;
-        dispatch({ type: 'notice', text: `No se pudo pasar la conversación a ${account.name}: empieza una nueva.`, tone: 'error' });
+        dispatch({ type: 'notice', text: t("No se pudo pasar la conversación a {0}: empieza una nueva.", [account.name]), tone: 'error' });
       }
     }
     accountRef.current = account.id;
@@ -637,46 +685,52 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     void api?.claudeAccounts?.setActive(account.id);
     onAccountChange?.(account.id);
     dispatch({ type: 'auth_retry' });
-    dispatch({ type: 'notice', text: `Ahora usas la cuenta ${account.name}`, tone: 'info' });
+    dispatch({ type: 'notice', text: t("Ahora usas la cuenta {0}", [account.name]), tone: 'info' });
     setRestartKey((k) => k + 1);
   };
 
   const send = useCallback(async () => {
     const text = draft.trim();
     // The CLI's /login and /logout don't work inside an app: open the account switcher instead
-    if (/^\/(login|logout|cuenta|account)\s*$/i.test(text)) {
+    if (isClaude && /^\/(login|logout|cuenta|account)\s*$/i.test(text)) {
       setDraft('');
       setAccountMenuOpen(true);
       return;
     }
-    if ((!text && images.length === 0) || !api?.claudeSend || state.ended) return;
+    if ((!text && images.length === 0) || !backend || starting || state.ended) return;
     const payload = { text, images: images.map(({ data, mediaType }) => ({ data, mediaType })) };
     dispatch({ type: 'send', text, imageCount: images.length });
     setDraft('');
     setImages([]);
     stickRef.current = true;
-    const res = await api.claudeSend(tabId, payload);
-    if (!res.success) dispatch({ type: 'notice', text: res.error || 'No se pudo enviar el mensaje', tone: 'error' });
-  }, [draft, images, api, tabId, state.ended]);
+    try {
+      const res = await backend.send(tabId, payload);
+      if (!res.success) throw new Error(res.error || t("No se pudo enviar el mensaje"));
+    } catch (err) {
+      dispatch({ type: 'event', event: { id: tabId, type: 'error', error: err instanceof Error ? err.message : String(err) } });
+      setDraft((current) => current || text);
+      setImages((current) => current.length ? current : images);
+    }
+  }, [draft, images, backend, tabId, starting, state.ended]);
 
   const interrupt = useCallback(() => {
-    api?.claudeInterrupt?.(tabId);
-  }, [api, tabId]);
+    backend?.interrupt(tabId);
+  }, [backend, tabId]);
 
   const decide = useCallback(
     (requestId: string, decision: { behavior: 'allow' | 'deny'; always?: boolean; updatedInput?: Record<string, unknown>; message?: string }) => {
       dispatch({ type: 'permission_resolved', requestId, allowed: decision.behavior === 'allow' });
-      api?.claudeRespondPermission?.(tabId, requestId, decision);
+      backend?.respondPermission(tabId, requestId, decision);
     },
-    [api, tabId]
+    [backend, tabId]
   );
 
-  const changeMode = async (next: ClaudePermissionMode) => {
+  const changeMode = async (next: string) => {
     setMode(next);
-    saveChatPrefs({ mode: next });
+    if (isClaude) saveChatPrefs({ mode: next as ClaudePermissionMode });
     dispatch({ type: 'local_permission_mode', mode: next });
-    const res = await api?.claudeSetPermissionMode?.(tabId, next);
-    if (res && !res.success) dispatch({ type: 'notice', text: `No se pudo cambiar el modo: ${res.error}`, tone: 'error' });
+    const res = await backend?.setPermissionMode(tabId, next);
+    if (res && !res.success) dispatch({ type: 'notice', text: t("No se pudo cambiar el modo: {0}", [res.error]), tone: 'error' });
   };
 
   const modelInfo = activeModelInfo(state.models, selectedModel, state.model || claudeDefaults?.model || undefined);
@@ -688,13 +742,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const shownEffort: ClaudeEffortLevel | '' = effort || inheritedEffort(claudeDefaults, modelInfo);
 
   /** Sends the effort remembered for `key` (or the default) to the running session. */
+
   const applyEffort = useCallback(
     async (key: string, level: ClaudeEffortLevel | '') => {
       appliedEffortRef.current = `${key}:${level}`;
-      const res = await api?.claudeSetEffort?.(tabId, level || null);
-      if (res && !res.success) dispatch({ type: 'notice', text: `No se pudo cambiar el esfuerzo: ${res.error}`, tone: 'error' });
+      const res = await backend?.setEffort(tabId, level || null);
+      if (res && !res.success) dispatch({ type: 'notice', text: t("No se pudo cambiar el esfuerzo: {0}", [res.error]), tone: 'error' });
     },
-    [api, tabId]
+    [backend, tabId]
   );
 
   // Once Claude reports its model, apply the effort the user picked for it in earlier chats
@@ -711,12 +766,12 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   const changeModel = async (model: string) => {
     setSelectedModel(model);
-    const res = await api?.claudeSetModel?.(tabId, model || null);
+    const res = await backend?.setModel(tabId, model || null);
     if (res && !res.success) {
-      dispatch({ type: 'notice', text: `No se pudo cambiar el modelo: ${res.error}`, tone: 'error' });
+      dispatch({ type: 'notice', text: t("No se pudo cambiar el modelo: {0}", [res.error]), tone: 'error' });
       return;
     }
-    saveChatPrefs({ model });
+    if (isClaude) saveChatPrefs({ model });
     const next = activeModelInfo(state.models, model, undefined);
     const key = next?.resolvedModel ?? next?.value ?? 'default';
     const remembered = effortByModel[key];
@@ -725,7 +780,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     if (effortLevelsFor(next).length > 0 || effort) await applyEffort(key, level);
     dispatch({
       type: 'notice',
-      text: `Modelo: ${next?.displayName || model || 'predeterminado'}${level ? ` · esfuerzo ${EFFORT_LABELS[level].toLowerCase()}` : ''}`,
+      text: t("Modelo: {0}{1}", [next?.displayName || model || 'predeterminado', level ? t(" · esfuerzo {0}", [EFFORT_LABELS[level].toLowerCase()]) : '']),
       tone: 'info',
     });
   };
@@ -734,10 +789,10 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   useEffect(() => {
     if (!selectedModel || state.models.length === 0 || state.models.some((m) => m.value === selectedModel)) return;
     setSelectedModel('');
-    saveChatPrefs({ model: '' });
-    void api?.claudeSetModel?.(tabId, null);
-    dispatch({ type: 'notice', text: `El modelo ${selectedModel} ya no está disponible: uso el predeterminado.`, tone: 'info' });
-  }, [state.models, selectedModel, api, tabId]);
+    if (isClaude) saveChatPrefs({ model: '' });
+    void backend?.setModel(tabId, null);
+    dispatch({ type: 'notice', text: t("El modelo {0} ya no está disponible: uso el predeterminado.", [selectedModel]), tone: 'info' });
+  }, [state.models, selectedModel, backend, isClaude, tabId]);
 
   const changeEffort = async (level: ClaudeEffortLevel | '') => {
     setEffortByModel((prev) => {
@@ -788,6 +843,33 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const lastTextId = [...visible].reverse().find((i) => i.kind === 'text')?.id;
   const streamingSomething = state.items.some((i) => (i.kind === 'text' || i.kind === 'thinking') && i.streaming);
   const cwdName = (state.cwd || cwd || '').split(/[\\/]/).filter(Boolean).pop();
+  // What Claude will really use next turn (its resolved settings), falling back to what it last reported
+  const shownModelId = state.appliedModel || state.model;
+  // Claude ids read better formatted; other agents (Antigravity) report their own display names
+  const shownModel = shownModelId?.startsWith('claude-')
+    ? modelLabel(shownModelId)
+    : state.models.find((m) => m.value === shownModelId)?.displayName || modelLabel(shownModelId);
+  const headerEffort = state.appliedEffort ? EFFORT_LABELS[state.appliedEffort] : '';
+
+  // Export the conversation as Markdown, to keep it or paste it into another AI session
+  const hasConversation = state.items.some((i) => i.kind === 'user' || i.kind === 'text');
+  const exportMarkdown = () =>
+    chatToMarkdown(state.items, { model: shownModel || undefined, cwd: state.cwd || cwd, assistantName: agentName, source: backend?.source });
+  const copyConversation = async () => {
+    try {
+      await navigator.clipboard.writeText(exportMarkdown());
+      dispatch({ type: 'notice', text: t("Conversación copiada como Markdown: pégala en cualquier otra IA."), tone: 'info' });
+    } catch (err) {
+      dispatch({ type: 'notice', text: t("No se pudo copiar: {0}", [err instanceof Error ? err.message : String(err)]), tone: 'error' });
+    }
+  };
+  const saveConversation = async () => {
+    if (!api?.saveTextAs) return;
+    const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '-');
+    const res = await api.saveTextAs({ content: exportMarkdown(), defaultName: `chat-${provider} ${stamp}`, defaultDir: state.cwd || cwd });
+    if (res.success) dispatch({ type: 'notice', text: t("Conversación guardada en {0}", [res.path]), tone: 'info' });
+    else if (!res.canceled) dispatch({ type: 'notice', text: t("No se pudo guardar: {0}", [res.error]), tone: 'error' });
+  };
 
   return (
     <div
@@ -800,41 +882,76 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       <div className="h-8 shrink-0 flex items-center gap-1.5 px-2 border-b-2 border-black dark:border-zinc-700 text-[10.5px] font-black overflow-hidden whitespace-nowrap">
         <Sparkles size={13} strokeWidth={2.5} className="shrink-0 text-[#D97757]" />
         <span className="truncate min-w-0" title={state.cwd || cwd}>
-          {cwdName || 'Claude'}
+          {cwdName || agentName}
         </span>
-        {state.model && <span className="hidden min-[420px]:inline opacity-60 truncate">· {state.model}</span>}
+        {shownModel && (
+          <span
+            className="hidden min-[360px]:inline opacity-60 truncate"
+            title={t("Modelo: {0}{1}", [state.appliedModel || state.model, headerEffort ? t(" · esfuerzo {0}", [headerEffort.toLowerCase()]) : ''])}
+            data-testid="claude-model-effort"
+          >
+            · {shownModel}
+            {headerEffort && ` · ${headerEffort}`}
+          </span>
+        )}
+        {!shownModel && (starting || defaultsLoading) && <LoadingSkeleton label={t("Cargando modelo del chat")} variant="line" className="hidden min-[360px]:flex" />}
         <span className="flex-1" />
-        <button
-          type="button"
-          onClick={() => setAccountMenuOpen((o) => !o)}
-          title={`Cuenta de Claude: ${accountName} (clic para cambiar)`}
-          aria-label={`Cuenta de Claude: ${accountName}`}
-          aria-expanded={accountMenuOpen}
-          className={`${btn} h-6 px-1.5 max-w-[9rem] shrink-0 bg-white dark:bg-[#27272A] ${accountMenuOpen ? 'bg-[#FFE500] text-black' : ''}`}
-        >
-          <UserRound size={11} strokeWidth={3} className="shrink-0" />
-          <span className="truncate hidden min-[400px]:inline">{accountName}</span>
-          <ChevronDown size={10} strokeWidth={3} className="shrink-0" />
-        </button>
+        {isClaude && (
+          <button
+            type="button"
+            onClick={() => setAccountMenuOpen((o) => !o)}
+            title={t("Cuenta de Claude: {0} (clic para cambiar)", [accountName])}
+            aria-label={t("Cuenta de Claude: {0}", [accountName])}
+            aria-expanded={accountMenuOpen}
+            className={`${btn} h-6 px-1.5 max-w-[9rem] shrink-0 bg-white dark:bg-[#27272A] ${accountMenuOpen ? 'bg-[#FFE500] text-black' : ''}`}
+          >
+            <UserRound size={11} strokeWidth={3} className="shrink-0" />
+            <span className="truncate hidden min-[400px]:inline">{api?.claudeAccounts && accountReadyId !== accountId ? <LoadingSkeleton label={t("Cargando cuenta del chat")} variant="line" className="max-w-16" /> : accountName}</span>
+            <ChevronDown size={10} strokeWidth={3} className="shrink-0" />
+          </button>
+        )}
         {state.contextTokens > 0 && (
-          <span className="hidden min-[480px]:inline opacity-60" title="Tokens de contexto de la última llamada">
+          <span className="hidden min-[480px]:inline opacity-60" title={t("Tokens de contexto de la última llamada")}>
             {formatTokens(state.contextTokens)} ctx
           </span>
         )}
         {state.totalCostUsd > 0 && <span className="opacity-60">${state.totalCostUsd.toFixed(state.totalCostUsd < 1 ? 3 : 2)}</span>}
+        {hasConversation && (
+          <>
+            <button
+              type="button"
+              onClick={() => void copyConversation()}
+              className={`${btn} h-6 w-6 bg-white dark:bg-[#27272A]`}
+              title={t("Copiar la conversación como Markdown (para pegarla en otra IA)")}
+              aria-label={t("Copiar conversación")}
+            >
+              <ClipboardCopy size={11} strokeWidth={2.5} />
+            </button>
+            {api?.saveTextAs && (
+              <button
+                type="button"
+                onClick={() => void saveConversation()}
+                className={`${btn} h-6 w-6 bg-white dark:bg-[#27272A]`}
+                title={t("Guardar la conversación como archivo .md")}
+                aria-label={t("Guardar conversación")}
+              >
+                <Download size={11} strokeWidth={2.5} />
+              </button>
+            )}
+          </>
+        )}
         {state.ended && (
           <button
             type="button"
             onClick={() => setRestartKey((k) => k + 1)}
             className={`${btn} h-6 px-1.5 bg-[#FFE500] text-black`}
-            title="Reanudar la sesión de Claude"
+            title={t("Reanudar la sesión de {0}", [agentName])}
           >
-            <RotateCcw size={11} strokeWidth={3} /> Reanudar
-          </button>
+            <RotateCcw size={11} strokeWidth={3} /> {' '}{t("Reanudar")}</button>
         )}
       </div>
 
-      {accountMenuOpen && (
+      {isClaude && accountMenuOpen && (
         <ClaudeAccountMenu
           currentId={accountId}
           onClose={() => setAccountMenuOpen(false)}
@@ -858,13 +975,16 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
         className="claude-chat-scroll flex-1 min-h-0 overflow-y-auto px-2.5 min-[640px]:px-4 py-3"
       >
         <div className="max-w-3xl mx-auto space-y-2.5">
-          {visible.length === 0 && (
+          {historyLoading && visible.length > 0 && <LoadingSkeleton label={t("Cargando historial del chat")} variant="line" />}
+          {visible.length === 0 && (starting || historyLoading) && (
+            <LoadingSkeleton label={historyLoading ? t("Cargando historial del chat") : t("Iniciando {0}", [agentName])} variant="chat" className="py-4" />
+          )}
+          {visible.length === 0 && !starting && !historyLoading && (
             <div className="pt-10 text-center space-y-2">
               <Sparkles size={28} strokeWidth={2} className="mx-auto text-[#D97757]" />
-              <div className="text-sm font-black">{starting ? 'Iniciando Claude Code…' : '¿En qué te ayudo?'}</div>
+              <div className="text-sm font-black">{t("¿En qué te ayudo?")}</div>
               <div className="text-[11px] opacity-60">
-                Trabaja en <span className="font-mono">{state.cwd || cwd || 'la carpeta de notas'}</span>. Escribe <span className="font-mono">/</span> para ver comandos.
-              </div>
+                {t("Trabaja en")}{' '}<span className="font-mono">{state.cwd || cwd || t("la carpeta de notas")}</span>{t(". Escribe")}{' '}<span className="font-mono">/</span> {' '}{t("para ver comandos.")}</div>
             </div>
           )}
 
@@ -876,7 +996,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                     <div className="max-w-[88%] px-2.5 py-1.5 rounded border-2 border-black bg-[#FFE500] text-black shadow-[2px_2px_0px_#000] text-[13px] whitespace-pre-wrap break-words">
                       {item.imageCount > 0 && (
                         <div className="text-[10px] font-black opacity-70 mb-0.5">
-                          🖼 {item.imageCount} {item.imageCount === 1 ? 'imagen' : 'imágenes'}
+                          🖼 {item.imageCount} {item.imageCount === 1 ? 'imagen' : t("imágenes")}
                         </div>
                       )}
                       {item.text}
@@ -892,7 +1012,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                       <button
                         type="button"
                         onClick={() => speech.play(markdownToSegments(item.text).map((text) => ({ text })))}
-                        title="Leer en voz alta"
+                        title={t("Leer en voz alta")}
                         className={`${btn} h-6 w-6 mt-1 bg-white dark:bg-[#27272A] opacity-50 hover:opacity-100`}
                       >
                         <Volume2 size={12} strokeWidth={2.5} />
@@ -904,7 +1024,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                 return item.text.trim() ? (
                   <details key={item.id} className="text-[12px] opacity-70" open={item.streaming}>
                     <summary className="cursor-pointer font-black flex items-center gap-1 select-none">
-                      <Brain size={12} strokeWidth={2.5} /> {item.streaming ? 'Pensando…' : 'Razonamiento'}
+                      <Brain size={12} strokeWidth={2.5} /> {item.streaming ? t('Pensando…') : t("Razonamiento")}
                     </summary>
                     <div className="mt-1 pl-3 border-l-2 border-black/20 dark:border-zinc-700 italic whitespace-pre-wrap">{item.text}</div>
                   </details>
@@ -912,7 +1032,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               case 'tool':
                 return <ToolCard key={item.id} item={item} all={state.items} running={state.running} />;
               case 'permission':
-                return <PermissionCard key={item.id} item={item} onDecide={decide} />;
+                return <PermissionCard key={item.id} item={item} onDecide={decide} agentName={agentName} />;
               case 'result':
                 return (
                   <div
@@ -946,19 +1066,17 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
           {state.authRequired && (
             <div className={`${card} p-3 space-y-2 bg-[#FFFBDA] dark:bg-[#26240F]`} role="alert">
               <div className="flex items-center gap-1.5 text-[13px] font-black">
-                <ShieldCheck size={15} strokeWidth={2.5} /> Inicia sesión en Claude
-              </div>
+                <ShieldCheck size={15} strokeWidth={2.5} /> {' '}{t("Inicia sesión en Claude")}</div>
               <p className="text-[12px] opacity-80">
-                El chat usa Claude Code con tu propia cuenta: tu suscripción de Claude o una API key de Anthropic. Se abrirá una terminal con el
-                inicio de sesión oficial de Claude Code, que continúa en tu navegador. yanote no ve tus credenciales.
-              </p>
+                {t("El chat usa Claude Code con tu propia cuenta: tu suscripción de Claude o una API key de Anthropic. Se abrirá una terminal con el inicio de sesión oficial de Claude Code, que continúa en tu navegador. yanote no ve tus credenciales.")}</p>
               <div className="flex flex-wrap gap-1.5">
                 <button type="button" onClick={() => onLogin?.({ id: accountId, name: accountName })} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
-                  Iniciar sesión{accountId !== 'default' ? ` (${accountName})` : ''}
+                  {t("Iniciar sesión")}{accountId !== 'default' ? ` (${accountName})` : ''}
                 </button>
-                <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}>
-                  <UserRound size={11} strokeWidth={3} /> Usar otra cuenta
-                </button>
+                {isClaude && (
+                  <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}>
+                    <UserRound size={11} strokeWidth={3} /> {' '}{t("Usar otra cuenta")}</button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -969,21 +1087,18 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                   }}
                   className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}
                 >
-                  <RotateCcw size={11} strokeWidth={3} /> Ya inicié sesión, reintentar
-                </button>
+                  <RotateCcw size={11} strokeWidth={3} /> {' '}{t("Ya inicié sesión, reintentar")}</button>
               </div>
             </div>
           )}
 
-          {state.rateLimited && !state.running && (
+          {isClaude && state.rateLimited && !state.running && (
             <div className={`${card} p-3 space-y-2 bg-[#FFFBDA] dark:bg-[#26240F]`} role="alert" data-testid="rate-limit-card">
               <div className="flex items-center gap-1.5 text-[13px] font-black">
-                <UserRound size={15} strokeWidth={2.5} /> {accountName} llegó a su límite de uso
-              </div>
-              <p className="text-[12px] opacity-80">Puedes esperar a que se reinicie o seguir esta misma conversación con otra de tus cuentas.</p>
+                <UserRound size={15} strokeWidth={2.5} /> {accountName} {' '}{t("llegó a su límite de uso")}</div>
+              <p className="text-[12px] opacity-80">{t("Puedes esperar a que se reinicie o seguir esta misma conversación con otra de tus cuentas.")}</p>
               <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
-                <UserRound size={11} strokeWidth={3} /> Cambiar de cuenta
-              </button>
+                <UserRound size={11} strokeWidth={3} /> {' '}{t("Cambiar de cuenta")}</button>
             </div>
           )}
 
@@ -991,10 +1106,10 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
             <div className="flex items-center gap-1.5 text-[11px] font-black opacity-60">
               <Loader2 size={12} strokeWidth={3} className="animate-spin" />
               {state.status === 'compacting'
-                ? 'Compactando conversación…'
+                ? t("Compactando conversación…")
                 : pendingPermissions(state.items).length > 0
-                ? 'Esperando tu respuesta…'
-                : 'Trabajando…'}
+                ? t("Esperando tu respuesta…")
+                : t("Trabajando…")}
             </div>
           )}
         </div>
@@ -1037,7 +1152,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                     <img src={img.url} alt="" className="h-12 w-12 object-cover rounded border-2 border-black" />
                     <button
                       type="button"
-                      aria-label="Quitar imagen"
+                      aria-label={t("Quitar imagen")}
                       onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
                       className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[#FF6B6B] border-2 border-black flex items-center justify-center cursor-pointer"
                     >
@@ -1048,6 +1163,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               </div>
             )}
             <textarea
+              spellCheck={true}
+              lang={getLanguage()}
+              data-chat-composer
               ref={inputRef}
               value={draft}
               rows={1}
@@ -1067,9 +1185,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                   void addFiles(files);
                 }
               }}
-              placeholder={state.ended ? 'Sesión terminada — pulsa Reanudar' : state.running ? 'Escribe para encolar otro mensaje…' : 'Pregúntale a Claude… ( / comandos )'}
+              placeholder={state.ended ? t("Sesión terminada — pulsa Reanudar") : state.running ? t("Escribe para encolar otro mensaje…") : t("Pregúntale a {0}… ( / comandos )", [agentName])}
               disabled={state.ended}
-              aria-label="Mensaje para Claude"
+              aria-label={t("Mensaje para {0}", [agentName])}
               className="w-full resize-none bg-transparent outline-none text-[13px] leading-snug px-1 py-0.5 placeholder:text-black/40 dark:placeholder:text-zinc-500"
             />
             <div className="flex items-end gap-1 mt-1">
@@ -1077,20 +1195,20 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               <div className="flex flex-1 min-w-0 flex-wrap items-center gap-1">
               <select
                 value={mode}
-                onChange={(e) => void changeMode(e.target.value as ClaudePermissionMode)}
-                title={MODES.find((m) => m.value === mode)?.hint}
-                aria-label="Modo de permisos"
+                onChange={(e) => void changeMode(e.target.value)}
+                title={modes.find((m) => m.value === mode)?.hint}
+                aria-label={t("Modo de permisos")}
                 className={`h-6 max-w-[9.5rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none ${
                   mode === 'bypassPermissions'
                     ? 'bg-[#FF6B6B] text-white'
                     : mode === 'plan'
                     ? 'bg-[#A3D8F4] text-black'
-                    : mode === 'acceptEdits' || mode === 'auto'
+                    : mode === 'acceptEdits' || mode === 'accept-edits' || mode === 'auto'
                     ? 'bg-[#78E08F] text-black'
                     : 'bg-white dark:bg-[#27272A]'
                 }`}
               >
-                {MODES.map((m) => (
+                {modes.map((m) => (
                   <option key={m.value} value={m.value}>
                     {m.label}
                   </option>
@@ -1100,11 +1218,11 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                 <select
                   value={selectedModel || modelInfo?.value || ''}
                   onChange={(e) => void changeModel(e.target.value)}
-                  aria-label="Modelo"
-                  title={modelInfo?.description || 'Modelo'}
+                  aria-label={t("Modelo")}
+                  title={modelInfo?.description || t("Modelo")}
                   className="h-6 max-w-[9.5rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none bg-white dark:bg-[#27272A]"
                 >
-                  {!modelInfo && <option value="">Modelo</option>}
+                  {!modelInfo && <option value="">{t("Modelo")}</option>}
                   {state.models.map((m) => (
                     <option key={m.value} value={m.value}>
                       {modelOptionLabel(m)}
@@ -1112,17 +1230,18 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                   ))}
                 </select>
               )}
+              {starting && state.models.length === 0 && <LoadingSkeleton label={t("Cargando modelos disponibles")} variant="line" className="max-w-24 py-1.5" />}
               {effortLevels.length > 0 && (
                 <select
                   value={shownEffort}
                   onChange={(e) => void changeEffort(e.target.value as ClaudeEffortLevel | '')}
-                  aria-label="Esfuerzo"
-                  title={`Esfuerzo de razonamiento para ${modelInfo?.displayName ?? 'este modelo'} (se recuerda por modelo)`}
+                  aria-label={t("Esfuerzo")}
+                  title={t("Esfuerzo de razonamiento para {0} (se recuerda por modelo)", [modelInfo?.displayName ?? t("este modelo")])}
                   className={`h-6 max-w-[7rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none ${
                     shownEffort === 'max' || shownEffort === 'xhigh' ? 'bg-[#C9A7F5] text-black' : 'bg-white dark:bg-[#27272A]'
                   }`}
                 >
-                  <option value="">{shownEffort ? 'Predeterminado' : 'Esfuerzo'}</option>
+                  <option value="">{shownEffort ? t("Predeterminado") : t("Esfuerzo")}</option>
                   {effortLevels.map((l) => (
                     <option key={l} value={l}>
                       {EFFORT_LABELS[l]}
@@ -1130,7 +1249,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                   ))}
                 </select>
               )}
-              <label title="Adjuntar imagen" className={`${btn} h-6 w-6 bg-white dark:bg-[#27272A]`}>
+              <label title={t("Adjuntar imagen")} className={`${btn} h-6 w-6 bg-white dark:bg-[#27272A]`}>
                 <ImagePlus size={12} strokeWidth={2.5} />
                 <input
                   type="file"
@@ -1145,16 +1264,16 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               </label>
               </div>
               {state.running && (
-                <button type="button" onClick={interrupt} title="Detener (Esc)" aria-label="Detener" className={`${btn} h-7 w-7 bg-[#FF6B6B] text-white`}>
+                <button type="button" onClick={interrupt} title={t("Detener (Esc)")} aria-label={t("Detener")} className={`${btn} h-7 w-7 bg-[#FF6B6B] text-white`}>
                   <Square size={11} strokeWidth={3} fill="currentColor" />
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => void send()}
-                disabled={state.ended || (!draft.trim() && images.length === 0)}
-                title="Enviar (Enter)"
-                aria-label="Enviar"
+                disabled={starting || !backend || state.ended || (!draft.trim() && images.length === 0)}
+                title={t("Enviar (Enter)")}
+                aria-label={t("Enviar")}
                 className={`${btn} h-7 w-7 bg-[#FFE500] text-black`}
               >
                 <ArrowUp size={14} strokeWidth={3} />

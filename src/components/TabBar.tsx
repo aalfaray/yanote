@@ -1,6 +1,7 @@
+import { t, useLanguage } from '../lib/i18n';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, FileText, Check, ChevronLeft, ChevronRight, ChevronDown, Pin, SquareTerminal, Terminal, FolderOpen, Sparkles } from 'lucide-react';
-import type { TabItem, TerminalShell } from '../types/electron';
+import { Plus, X, FileText, Check, ChevronLeft, ChevronRight, ChevronDown, Pin, SquareTerminal, Terminal, FolderOpen, Sparkles, Orbit } from 'lucide-react';
+import type { ChatProvider, TabItem, TerminalShell } from '../types/electron';
 import { TabContextMenu } from './ui/TabContextMenu';
 
 interface TabBarProps {
@@ -10,9 +11,11 @@ interface TabBarProps {
   onCloseTab: (id: string) => void;
   onNewTab: () => void;
   onNewTerminal?: (shell: TerminalShell) => void;
-  /** Opens a chat with Claude Code (structured session instead of the TUI) */
-  onNewClaude?: () => void;
+  /** Opens a chat with Claude Code, or Antigravity CLI (Gemini), as a structured session instead of the TUI */
+
+  onNewClaude?: (provider?: ChatProvider) => void;
   /** Browse the disk and open an existing .md file */
+
   onOpenFile?: () => void;
   onRenameTab: (id: string, newTitle: string) => void;
   onTogglePinTab?: (id: string) => void;
@@ -23,6 +26,9 @@ interface TabBarProps {
   onCopyRelativePath?: (tab: TabItem) => void;
   onCopyId?: (tab: TabItem) => void;
   onRevealInExplorer?: (tab: TabItem) => void;
+  /** Export a note tab to PDF */
+
+  onExportPdf?: (tab: TabItem) => void;
 }
 
 export const TabBar: React.FC<TabBarProps> = ({
@@ -43,7 +49,9 @@ export const TabBar: React.FC<TabBarProps> = ({
   onCopyRelativePath,
   onCopyId,
   onRevealInExplorer,
+  onExportPdf,
 }) => {
+  useLanguage();
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -184,7 +192,7 @@ export const TabBar: React.FC<TabBarProps> = ({
       {canScrollLeft && (
         <button
           onClick={handleScrollLeft}
-          title="Desplazar pestañas a la izquierda"
+          title={t("Desplazar pestañas a la izquierda")}
           className="h-6 w-5 flex items-center justify-center bg-white dark:bg-zinc-800 dark:text-zinc-200 border border-black dark:border-zinc-600 rounded shadow-[1px_1px_0px_#000] hover:bg-[#FFE500] dark:hover:bg-[#FFE500] dark:hover:text-black shrink-0 cursor-pointer z-10 mr-0.5"
         >
           <ChevronLeft size={13} strokeWidth={3} />
@@ -225,13 +233,15 @@ export const TabBar: React.FC<TabBarProps> = ({
               }`}
             >
               {tab.isPinned ? (
-                <span title="Pestaña fijada" className="shrink-0 flex items-center">
+                <span title={t("Pestaña fijada")} className="shrink-0 flex items-center">
                   <Pin
                     size={11}
                     strokeWidth={2.8}
                     className="text-[#FFB800] dark:text-[#FFE500]"
                   />
                 </span>
+              ) : tab.kind === 'claude' && tab.provider === 'antigravity' ? (
+                <Orbit size={12} strokeWidth={2.5} className="shrink-0 text-[#4285F4]" />
               ) : tab.kind === 'claude' ? (
                 <Sparkles size={12} strokeWidth={2.5} className="shrink-0 text-[#D97757]" />
               ) : tab.kind === 'terminal' ? (
@@ -268,7 +278,7 @@ export const TabBar: React.FC<TabBarProps> = ({
               ) : (
                 <span
                   className="truncate flex-1 min-w-0"
-                  title={`${tab.title}${tab.isPinned ? ' (Fijada)' : ''} (Doble clic para renombrar, clic derecho para opciones)`}
+                  title={t("{0}{1} (Doble clic para renombrar, clic derecho para opciones)", [tab.title, tab.isPinned ? t(" (Fijada)") : ''])}
                 >
                   {tab.title}
                 </span>
@@ -277,7 +287,7 @@ export const TabBar: React.FC<TabBarProps> = ({
               {/* Dirty indicator */}
               {tab.isDirty && !isEditing && (
                 <span
-                  title="Cambios sin guardar"
+                  title={t("Cambios sin guardar")}
                   className="w-2 h-2 rounded-full bg-[#FF6B6B] border border-black shrink-0"
                 />
               )}
@@ -290,7 +300,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                     onCloseTab(tab.id);
                   }}
                   className="w-4 h-4 rounded flex items-center justify-center opacity-40 group-hover:opacity-100 hover:bg-[#FF6B6B] hover:text-white transition-all shrink-0 cursor-pointer dark:text-zinc-300"
-                  title="Cerrar pestaña"
+                  title={t("Cerrar pestaña")}
                 >
                   <X size={10} strokeWidth={3} />
                 </button>
@@ -304,7 +314,7 @@ export const TabBar: React.FC<TabBarProps> = ({
       {canScrollRight && (
         <button
           onClick={handleScrollRight}
-          title="Desplazar pestañas a la derecha"
+          title={t("Desplazar pestañas a la derecha")}
           className="h-6 w-5 flex items-center justify-center bg-white dark:bg-zinc-800 dark:text-zinc-200 border border-black dark:border-zinc-600 rounded shadow-[1px_1px_0px_#000] hover:bg-[#FFE500] dark:hover:bg-[#FFE500] dark:hover:text-black shrink-0 cursor-pointer z-10 ml-0.5"
         >
           <ChevronRight size={13} strokeWidth={3} />
@@ -315,11 +325,11 @@ export const TabBar: React.FC<TabBarProps> = ({
       <div ref={newMenuRef} className="relative flex items-stretch h-7 ml-1 shrink-0 z-10">
         <button
           onClick={onNewTab}
-          title="Nueva nota Markdown (estilo Orca)"
+          title={t("Nueva nota Markdown (estilo Orca)")}
           className="px-2 flex items-center gap-1 bg-[#FFE500] hover:bg-[#FFD700] border-2 border-black rounded-l shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] text-xs font-black cursor-pointer transition-all"
         >
           <Plus size={14} strokeWidth={3} />
-          <span className="hidden sm:inline">NUEVA</span>
+          <span className="hidden sm:inline">{t("NUEVA")}</span>
         </button>
         <button
           onClick={() => {
@@ -329,7 +339,7 @@ export const TabBar: React.FC<TabBarProps> = ({
             }
             setIsNewMenuOpen((v) => !v);
           }}
-          title="Elegir tipo de pestaña nueva"
+          title={t("Elegir tipo de pestaña nueva")}
           aria-haspopup="menu"
           aria-expanded={isNewMenuOpen}
           className={`px-0.5 flex items-center border-2 border-l-0 border-black rounded-r shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer transition-all ${
@@ -346,15 +356,24 @@ export const TabBar: React.FC<TabBarProps> = ({
             className="fixed w-52 bg-white dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[3px_3px_0px_#000] py-1 z-50"
           >
             {[
-              { key: 'md', label: 'Nota Markdown', hint: '.md', icon: <FileText size={14} strokeWidth={2.5} />, action: () => onNewTab() },
+              { key: 'md', label: t("Nota Markdown"), hint: '.md', icon: <FileText size={14} strokeWidth={2.5} />, action: () => onNewTab() },
               ...(onOpenFile
-                ? [{ key: 'open', label: 'Abrir archivo…', hint: 'Ctrl+O', icon: <FolderOpen size={14} strokeWidth={2.5} />, action: () => onOpenFile() }]
+                ? [{ key: 'open', label: t("Abrir archivo…"), hint: 'Ctrl+O', icon: <FolderOpen size={14} strokeWidth={2.5} />, action: () => onOpenFile() }]
                 : []),
               ...(onNewClaude
-                ? [{ key: 'claude', label: 'Chat con Claude', hint: 'AI', icon: <Sparkles size={14} strokeWidth={2.5} className="text-[#D97757]" />, action: () => onNewClaude() }]
+                ? [
+                    { key: 'claude', label: t("Chat con Claude"), hint: 'AI', icon: <Sparkles size={14} strokeWidth={2.5} className="text-[#D97757]" />, action: () => onNewClaude('claude') },
+                    {
+                      key: 'antigravity',
+                      label: t("Chat con Antigravity"),
+                      hint: 'Gemini',
+                      icon: <Orbit size={14} strokeWidth={2.5} className="text-[#4285F4]" />,
+                      action: () => onNewClaude('antigravity'),
+                    },
+                  ]
                 : []),
               { key: 'ps', label: 'PowerShell', hint: 'PS', icon: <Terminal size={14} strokeWidth={2.5} />, action: () => onNewTerminal?.('powershell') },
-              { key: 'cmd', label: 'Terminal (CMD)', hint: 'cmd', icon: <SquareTerminal size={14} strokeWidth={2.5} />, action: () => onNewTerminal?.('cmd') },
+              { key: 'cmd', label: t("Terminal (CMD)"), hint: 'cmd', icon: <SquareTerminal size={14} strokeWidth={2.5} />, action: () => onNewTerminal?.('cmd') },
             ].map((item) => (
               <button
                 key={item.key}
@@ -393,6 +412,7 @@ export const TabBar: React.FC<TabBarProps> = ({
         onCopyPath={(targetTab) => handleCopyPath(targetTab)}
         onCopyRelativePath={(targetTab) => handleCopyRelativePath(targetTab)}
         onRevealInExplorer={(targetTab) => onRevealInExplorer?.(targetTab)}
+        onExportPdf={onExportPdf}
       />
     </div>
   );

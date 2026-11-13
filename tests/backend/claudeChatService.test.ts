@@ -177,6 +177,32 @@ describe('Backend: ClaudeChatService (Agent SDK sessions)', () => {
     expect(service.sendMessage('c1', { text: 'x' }).success).toBe(false);
   });
 
+  it('reports the model + effort Claude resolved, at start and after changing them', async () => {
+    const { service, events, emit, control } = setup();
+    let applied: any = { model: 'claude-opus-5-5', effort: 'medium' };
+    (control as any).getSettings = vi.fn(async () => ({ effective: {}, sources: [], applied }));
+    await service.start({ id: 'c1' }, emit);
+    await flush();
+    expect(events.filter((e) => e.type === 'applied_settings').pop()).toEqual({ id: 'c1', type: 'applied_settings', model: 'claude-opus-5-5', effort: 'medium' });
+
+    applied = { model: 'claude-opus-5-5', effort: 'max' };
+    await service.setEffort('c1', 'max');
+    await flush();
+    expect(events.filter((e) => e.type === 'applied_settings').pop()).toMatchObject({ effort: 'max' });
+
+    applied = { model: 'claude-haiku-4-5', effort: null };
+    await service.setModel('c1', 'haiku');
+    await flush();
+    expect(events.filter((e) => e.type === 'applied_settings').pop()).toMatchObject({ model: 'claude-haiku-4-5', effort: null });
+  });
+
+  it('skips the applied settings on CLIs without get_settings', async () => {
+    const { service, events, emit } = setup();
+    await service.start({ id: 'c1' }, emit);
+    await flush();
+    expect(events.some((e) => e.type === 'applied_settings')).toBe(false);
+  });
+
   it('reports a failure when the SDK cannot load', async () => {
     const service = createClaudeChatService({ loadSdk: async () => { throw new Error('sin sdk'); }, env: {}, readPath: () => '' });
     const res = await service.start({ id: 'c1' }, () => {});

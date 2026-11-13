@@ -6,6 +6,7 @@ export interface NoteFile {
 }
 
 export interface AppConfig {
+  language?: import('../lib/i18n').LanguagePreference;
   notesPath: string;
   alwaysOnTop: boolean;
   darkMode?: boolean;
@@ -23,18 +24,24 @@ export interface AppConfig {
   ideas?: SavedIdea[];
   /** Windows notification when a Claude chat finishes or waits for you (default on) */
   notifyClaude?: boolean;
-  /** The welcome note is shown only on the very first start */
-  welcomeSeen?: boolean;
   /** History of opened files, newest first */
   recentFiles?: RecentFile[];
 }
 
+export interface ExportResult {
+  success: boolean;
+  path?: string;
+  /** The user closed the "Save as" dialog */
+  canceled?: boolean;
+  error?: string;
+}
+
 /** A tab remembered for the next start (entries without `kind` are notes, the old format) */
 export type SavedTab =
-  | { kind?: 'note'; path: string; title: string; isPinned?: boolean }
+  | { kind?: 'note'; path: string; title: string; isPinned?: boolean; content?: string; isDirty?: boolean }
   | { kind: 'scratch'; title: string; content: string; isPinned?: boolean }
   | { kind: 'terminal'; title: string; shell: TerminalShell; cwd?: string }
-  | { kind: 'claude'; title: string; cwd?: string; sessionId?: string; accountId?: string; pins?: ChatPin[] };
+  | { kind: 'claude'; title: string; cwd?: string; sessionId?: string; accountId?: string; pins?: ChatPin[]; provider?: ChatProvider };
 
 /** A text saved with right-click > "Guardar idea" */
 export interface SavedIdea {
@@ -82,6 +89,8 @@ export interface TabItem {
   chatPins?: ChatPin[];
   /** Claude Code session of a chat tab, to resume it after a restart */
   sessionId?: string;
+  /** Agent behind a chat tab (kind === 'claude'); Claude when absent */
+  provider?: ChatProvider;
 }
 
 export type TabKind = 'markdown' | 'terminal' | 'claude';
@@ -99,6 +108,16 @@ export interface ClaudeSlashCommand {
   description: string;
   argumentHint?: string;
 }
+
+/** A permission mode the agent offers (Antigravity reports its own list) */
+export interface ChatModeInfo {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+/** Which agent a chat tab talks to */
+export type ChatProvider = 'claude' | 'antigravity';
 
 export type ClaudeEffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
@@ -127,7 +146,10 @@ export type ClaudeEvent =
   | { id: string; type: 'message'; message: Record<string, unknown> }
   | ({ id: string; type: 'permission' } & ClaudePermissionRequest)
   | { id: string; type: 'permission_cancelled'; requestId: string }
-  | { id: string; type: 'capabilities'; commands: ClaudeSlashCommand[]; models: ClaudeModelInfo[] }
+  | { id: string; type: 'capabilities'; commands: ClaudeSlashCommand[]; models: ClaudeModelInfo[]; modes?: ChatModeInfo[] }
+  /** A user message replayed while a resumed session loads (Antigravity) */
+  | { id: string; type: 'user_message'; text: string }
+  | { id: string; type: 'applied_settings'; model: string | null; effort: ClaudeEffortLevel | null }
   | { id: string; type: 'stderr'; data: string }
   | { id: string; type: 'error'; error: string }
   | { id: string; type: 'exit' };
@@ -148,6 +170,7 @@ export type TermEvent =
   | { id: string; type: 'exit'; exitCode: number };
 
 export interface ElectronAPI {
+  getLocaleInfo?: () => Promise<import('../lib/i18n').LocaleInfo>;
   // Window controls
   minimize: () => Promise<void>;
   maximize: () => Promise<boolean>;
@@ -171,6 +194,12 @@ export interface ElectronAPI {
   listNotes: () => Promise<{ success: boolean; notes: NoteFile[]; error?: string }>;
   readFile: (filePath: string) => Promise<{ success: boolean; content?: string; error?: string }>;
   writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error?: string }>;
+  /** Renders a full HTML document to a PDF chosen through "Save as" */
+  exportPdf?: (options: { html: string; defaultName: string; defaultDir?: string }) => Promise<ExportResult>;
+  /** Saves text through "Save as" (Markdown unless ext says otherwise) */
+  saveTextAs?: (options: { content: string; defaultName: string; ext?: string; filterName?: string; defaultDir?: string }) => Promise<ExportResult>;
+  /** Opens a file with the system's default app */
+  openPath?: (filePath: string) => Promise<string>;
   deleteFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
   renameFile: (oldPath: string, newPath: string) => Promise<{ success: boolean; error?: string }>;
   getAppConfig: () => Promise<AppConfig>;
@@ -204,6 +233,8 @@ export interface ElectronAPI {
   onFocusTab?: (callback: (tabId: string) => void) => () => void;
   /** Editing command for the app's right-click menu, run on the focused field / page selection */
   editCommand?: (command: import('../lib/contextMenu').EditCommand) => Promise<boolean>;
+  replaceMisspelling?: (requestId: number, suggestion: string) => Promise<boolean>;
+  onSpellingContext?: (callback: (context: { requestId: number; x: number; y: number; word: string; suggestions: string[] }) => void) => () => void;
   /** Writes an entry to the system log (yanote.log, shared with the main process) */
   log?: (entry: { level: 'error' | 'warn' | 'info'; scope: string; message: string; stack?: string; context?: Record<string, unknown> }) => Promise<boolean>;
   /** Shows yanote.log in Explorer */
@@ -234,6 +265,7 @@ export interface ElectronAPI {
   claudeAccounts?: {
     list: () => Promise<{ accounts: ClaudeAccount[]; activeId: string }>;
     status: (id: string) => Promise<ClaudeAccountStatus>;
+    usage?: (id: string, force?: boolean) => Promise<ClaudeUsage>;
     /** Claude Code's own `auth logout` for that account (the main one: on the whole PC) */
     logout: (id: string) => Promise<{ success: boolean; error?: string }>;
     add: (name?: string) => Promise<ClaudeAccount>;
@@ -246,6 +278,19 @@ export interface ElectronAPI {
     copySession: (sessionId: string, fromId: string, toId: string) => Promise<{ success: boolean; copied?: boolean; error?: string }>;
   };
   onClaudeEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
+
+  // Antigravity CLI (Gemini) chat over ACP — same events as Claude
+  agyStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: string; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
+  agySend?: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => ClaudeResult;
+  agyRespondPermission?: (id: string, requestId: string, decision: ClaudePermissionDecision) => Promise<boolean>;
+  agyInterrupt?: (id: string) => ClaudeResult;
+  agySetPermissionMode?: (id: string, mode: string) => ClaudeResult;
+  agySetModel?: (id: string, model: string | null) => ClaudeResult;
+  agySetEffort?: (id: string, level: ClaudeEffortLevel | null) => ClaudeResult;
+  agyStop?: (id: string) => Promise<boolean>;
+  /** Actual account quotas from Antigravity's built-in /usage command. */
+  agyUsage?: (id: string, force?: boolean) => Promise<AntigravityUsage>;
+  onAgyEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
   /** Saves the clipboard image as a temp PNG and returns its path; null when there is no image */
   saveClipboardImage?: () => Promise<string | null>;
 }
@@ -264,6 +309,12 @@ export interface ClaudeUsage {
   plan?: string | null;
   fiveHour?: ClaudeUsageWindow | null;
   weekly?: ClaudeUsageWindow | null;
+}
+
+export interface AntigravityUsage extends ClaudeUsage {
+  model?: string | null;
+  group?: string | null;
+  stale?: boolean;
 }
 
 export interface ClaudeAccount {
@@ -299,6 +350,7 @@ export type UpdateEvent =
   | { type: 'error'; error: string };
 
 export interface TtsSpeakRequest {
+  language?: import('../lib/i18n').Language;
   id: number;
   segments: string[];
   /** Absolute index of the first segment, echoed back in progress events. */

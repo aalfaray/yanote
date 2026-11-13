@@ -1,3 +1,4 @@
+import { t, useLanguage } from '../lib/i18n';
 import React, { useState } from 'react';
 import { Search, FileText, FolderOpen, X, Clock } from 'lucide-react';
 import { Modal } from './ui/Modal';
@@ -6,17 +7,21 @@ import { parentDir } from '../lib/paths';
 import { formatOpenedAgo } from '../lib/recentFiles';
 import { foldChar } from '../lib/domSearch';
 import type { RecentFile } from '../types/electron';
+import { LoadingSkeleton } from './ui/Skeleton';
 
 interface RecentFilesDrawerProps {
+  loading?: boolean;
   isOpen: boolean;
   onClose: () => void;
   recentFiles: RecentFile[];
   /** Paths currently open in a tab (shown with an "abierto" chip) */
+
   openPaths: string[];
   onOpenRecent: (file: RecentFile) => void;
   onRemoveRecent: (filePath: string) => void;
   onClearRecent: () => void;
   /** Native picker to open any file */
+
   onBrowse: () => void;
 }
 
@@ -24,6 +29,7 @@ const fold = (s: string) => Array.from(s).map(foldChar).join('');
 const samePath = (a: string, b: string) => a.replace(/\//g, '\\').toLowerCase() === b.replace(/\//g, '\\').toLowerCase();
 
 /** History of opened files (newest first), replaces the old notes-folder explorer. */
+
 export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
   isOpen,
   onClose,
@@ -33,21 +39,24 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
   onRemoveRecent,
   onClearRecent,
   onBrowse,
+  loading = false,
 }) => {
+  useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const term = fold(searchTerm.trim());
   // Search by file name or folder, ignoring case and accents
   const filtered = term ? recentFiles.filter((f) => fold(f.name).includes(term) || fold(f.path).includes(term)) : recentFiles;
+  if (loading) return <Modal isOpen={isOpen} onClose={onClose} title={t("Archivos recientes")}><LoadingSkeleton label={t("Cargando archivos recientes")} className="py-3" /></Modal>;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Archivos recientes" badge={`${recentFiles.length}`}>
+    <Modal isOpen={isOpen} onClose={onClose} title={t("Archivos recientes")} badge={`${recentFiles.length}`}>
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <div className="relative flex-1 min-w-0">
             <Search size={14} className="absolute left-2.5 top-2.5 text-neutral-400 dark:text-zinc-400" />
             <input
               type="text"
-              placeholder="Buscar por nombre o carpeta..."
+              placeholder={t("Buscar por nombre o carpeta...")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-8 pr-3 py-1.5 text-xs font-bold bg-white dark:bg-zinc-800 dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[2px_2px_0px_#000] focus:outline-none focus:ring-1 focus:ring-[#FFE500]"
@@ -60,10 +69,10 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
               onClose();
               onBrowse();
             }}
-            title="Buscar un archivo en el disco (Ctrl+O)"
+            title={t("Buscar un archivo en el disco (Ctrl+O)")}
           >
             <FolderOpen size={14} strokeWidth={2.5} />
-            <span className="hidden min-[400px]:inline">Abrir…</span>
+            <span className="hidden min-[400px]:inline">{t("Abrir…")}</span>
           </Button>
         </div>
 
@@ -71,8 +80,8 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
           {filtered.length === 0 ? (
             <div className="p-6 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded text-center text-xs font-medium text-neutral-500 dark:text-zinc-400">
               {recentFiles.length === 0
-                ? 'Todavía no abriste archivos. Los que abras aparecerán aquí.'
-                : 'Ningún archivo reciente coincide con la búsqueda.'}
+                ? t("Todavía no abriste archivos. Los que abras aparecerán aquí.")
+                : t("Ningún archivo reciente coincide con la búsqueda.")}
             </div>
           ) : (
             filtered.map((file) => {
@@ -105,8 +114,7 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
                         <span className="font-bold text-xs text-black dark:text-zinc-100 truncate">{file.name}</span>
                         {isOpenNow && (
                           <span className="shrink-0 px-1 text-[9px] font-black uppercase rounded border border-black bg-[#78E08F] text-black">
-                            abierto
-                          </span>
+                            {t("abierto")}</span>
                         )}
                       </span>
                       <span className="text-[10px] text-neutral-500 dark:text-zinc-400 font-medium truncate" dir="rtl">
@@ -126,8 +134,8 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
                       onRemoveRecent(file.path);
                     }}
                     className="shrink-0 opacity-60 group-hover:opacity-100 p-1 hover:bg-[#FF6B6B] hover:text-white rounded border border-transparent hover:border-black transition-all text-neutral-600 dark:text-zinc-300"
-                    title="Quitar del historial (no borra el archivo)"
-                    aria-label={`Quitar ${file.name} del historial`}
+                    title={t("Quitar del historial (no borra el archivo)")}
+                    aria-label={t("Quitar {0} del historial", [file.name])}
                   >
                     <X size={13} strokeWidth={2.5} />
                   </button>
@@ -142,8 +150,7 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
             onClick={onClearRecent}
             className="self-end text-[10px] font-bold underline text-neutral-500 dark:text-zinc-400 hover:text-black dark:hover:text-white cursor-pointer"
           >
-            Limpiar historial
-          </button>
+            {t("Limpiar historial")}</button>
         )}
       </div>
     </Modal>
