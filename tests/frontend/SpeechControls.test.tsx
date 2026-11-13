@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { useSpeech, pickVoice } from '../../src/hooks/useSpeech';
+import { render, screen, fireEvent, act, waitFor, renderHook } from '@testing-library/react';
+import { useSpeech, pickVoice, loadSpeechRate } from '../../src/hooks/useSpeech';
 import { SpeechPlayerBar, SpeechToolbarButton } from '../../src/components/SpeechControls';
 import { SpeechContext, type SpeechActions } from '../../src/components/speechContext';
 
@@ -61,6 +61,7 @@ function Harness({ actions }: { actions?: Partial<SpeechActions> }) {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   spoken.length = 0;
   synth.paused = false;
   vi.clearAllMocks();
@@ -189,5 +190,38 @@ describe('Text to speech controls', () => {
     openMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: /Leer todo/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('No hay voces');
+  });
+
+  it('remembers the reading speed for the next time', async () => {
+    const first = render(<Harness />);
+    openMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Leer todo/ }));
+    await waitFor(() => expect(spoken).toHaveLength(1));
+    // 1x -> 1.25x -> 1.5x -> 2x
+    for (let i = 0; i < 3; i++) fireEvent.click(screen.getByLabelText('Cambiar velocidad'));
+    await waitFor(() => expect(lastUtterance().rate).toBe(2));
+    expect(loadSpeechRate()).toBe(2);
+    first.unmount();
+
+    spoken.length = 0;
+    render(<Harness />);
+    openMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Leer todo/ }));
+    await waitFor(() => expect(spoken).toHaveLength(1));
+    expect(lastUtterance().rate).toBe(2);
+    expect(screen.getByLabelText('Cambiar velocidad')).toHaveTextContent('2x');
+
+    localStorage.setItem('yanote.speech.rate', '7');
+    expect(loadSpeechRate()).toBe(1);
+  });
+
+  it('a reader that was already open uses the speed picked in another one', async () => {
+    const note = renderHook(() => useSpeech());
+    const chat = renderHook(() => useSpeech());
+    act(() => note.result.current.setRate(1.5));
+    expect(chat.result.current.state.rate).toBe(1); // mounted before the change
+    act(() => chat.result.current.play([{ text: 'Hola' }]));
+    await waitFor(() => expect(lastUtterance().rate).toBe(1.5));
+    expect(chat.result.current.state.rate).toBe(1.5);
   });
 });

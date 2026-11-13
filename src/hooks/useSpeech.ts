@@ -44,6 +44,26 @@ export function pickVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice 
   return spanish.find((v) => v.localService) ?? spanish[0] ?? voices.find((v) => v.default) ?? voices[0] ?? null;
 }
 
+const RATE_STORAGE_KEY = 'yanote.speech.rate';
+
+/** Reading speed picked last time (shared by notes, chats and terminals). */
+export function loadSpeechRate(): number {
+  try {
+    const saved = Number(localStorage.getItem(RATE_STORAGE_KEY));
+    return (SPEECH_RATES as readonly number[]).includes(saved) ? saved : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function saveSpeechRate(rate: number) {
+  try {
+    localStorage.setItem(RATE_STORAGE_KEY, String(rate));
+  } catch {
+    // storage unavailable: it just won't be remembered
+  }
+}
+
 function clearHighlight() {
   document.querySelectorAll(`[${HIGHLIGHT_ATTR}]`).forEach((el) => el.removeAttribute(HIGHLIGHT_ATTR));
 }
@@ -53,14 +73,14 @@ export function useSpeech() {
     status: 'idle',
     index: 0,
     total: 0,
-    rate: 1,
+    rate: loadSpeechRate(),
     engine: null,
     error: null,
   });
 
   const segmentsRef = useRef<SpeechSegment[]>([]);
   const indexRef = useRef(0);
-  const rateRef = useRef(1);
+  const rateRef = useRef(state.rate);
   const runRef = useRef(0); // bumping it invalidates callbacks from older runs
   const engineRef = useRef<SpeechEngine | null>(null);
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
@@ -170,6 +190,10 @@ export function useSpeech() {
   const play = useCallback(
     (segments: SpeechSegment[], startIndex = 0) => {
       segmentsRef.current = segments.filter((s) => s.text.trim().length > 0);
+      // Another reader (note, chat, terminal) may have changed the speed since this one mounted
+      const rate = loadSpeechRate();
+      rateRef.current = rate;
+      setState((s) => (s.rate === rate ? s : { ...s, rate }));
       void startAt(startIndex);
     },
     [startAt]
@@ -207,6 +231,7 @@ export function useSpeech() {
   const setRate = useCallback(
     (rate: number) => {
       rateRef.current = rate;
+      saveSpeechRate(rate);
       setState((s) => ({ ...s, rate }));
       // Rate only applies to new utterances: restart the current paragraph.
       if (state.status === 'speaking') void startAt(indexRef.current);
