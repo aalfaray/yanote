@@ -905,8 +905,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                           🖼 {item.imageCount} {item.imageCount === 1 ? 'imagen' : 'imágenes'}
                         </div>
                       )}
-                      <span className="min-w-0 flex-1 break-words">{item.text}</span>
-                    <DismissButton onClick={() => dispatch({ type: 'dismiss', id: item.id })} />
+                      {item.text}
                     </div>
                   </div>
                 );
@@ -961,7 +960,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                         : 'border-black/20 dark:border-zinc-700 opacity-70'
                     }`}
                   >
-                    {item.text}
+                    <span className="min-w-0 flex-1 break-words">{item.text}</span>
+                    <DismissButton onClick={() => dispatch({ type: 'dismiss', id: item.id })} />
                   </div>
                 );
               default:

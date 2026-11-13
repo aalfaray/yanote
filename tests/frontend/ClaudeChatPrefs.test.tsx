@@ -62,6 +62,23 @@ describe('ClaudeChatView remembers the selectors for new chats', () => {
     expect(await screen.findByText(/ya no está disponible/)).toBeInTheDocument();
   });
 
+  it('only notices get an x; the messages you send never do', async () => {
+    api.claudeSend = vi.fn(async () => ({ success: true }));
+    await open('c5');
+    const box = screen.getByLabelText('Mensaje para Claude');
+    fireEvent.change(box, { target: { value: 'continúa con el roadmap' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    const bubble = await screen.findByText('continúa con el roadmap');
+    expect(bubble.closest('div')!.querySelector('[aria-label="Cerrar aviso"]')).toBeNull();
+    expect(screen.queryByLabelText('Cerrar aviso')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Modelo'), { target: { value: 'opus' } });
+    const notice = await screen.findByText(/^Modelo: Opus 5.5/);
+    fireEvent.click(screen.getByLabelText('Cerrar aviso'));
+    expect(notice).not.toBeInTheDocument();
+    expect(screen.getByText('continúa con el roadmap')).toBeInTheDocument();
+  });
+
   it('a chat opened with sent-over text has it in the box, waiting for the user to send it', async () => {
     api.claudeSend = vi.fn(async () => ({ success: true }));
     render(<ClaudeChatView tabId="c4" isActive initialDraft="Revisa este párrafo" />);
