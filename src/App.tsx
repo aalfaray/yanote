@@ -49,6 +49,8 @@ export const App: React.FC = () => {
   const sessionReadyRef = useRef(false);
   // Settings > "Avisarme cuando Claude termine" (on by default)
   const notifyClaudeRef = useRef(true);
+  // Claude account new chats start with (Settings > accounts / the chat's account menu)
+  const activeAccountRef = useRef('default');
 
   // App & Window State
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
@@ -108,6 +110,7 @@ export const App: React.FC = () => {
           }
           setIsAlwaysOnTop(config.alwaysOnTop || false);
           notifyClaudeRef.current = config.notifyClaude !== false;
+          if (typeof config.activeClaudeAccount === 'string') activeAccountRef.current = config.activeClaudeAccount;
           if (typeof config.opacity === 'number') setWindowOpacity(config.opacity);
           const dark = Boolean(config.darkMode);
           setIsDarkMode(dark);
@@ -283,16 +286,33 @@ export const App: React.FC = () => {
       const count = prev.filter((t) => t.kind === 'claude').length + 1;
       return [
         ...prev,
-        { id: newId, title: count > 1 ? `Claude ${count}` : 'Claude', path: null, content: '', isDirty: false, kind: 'claude', cwd },
+        {
+          id: newId,
+          title: count > 1 ? `Claude ${count}` : 'Claude',
+          path: null,
+          content: '',
+          isDirty: false,
+          kind: 'claude',
+          cwd,
+          // New chats use the account picked last
+          accountId: activeAccountRef.current,
+        },
       ];
     });
     setActiveTabId(newId);
   };
 
   /** Sign-in runs Claude Code's own `auth login` in a terminal tab: yanote never sees the credentials */
-  const handleClaudeLogin = (executable?: string) => {
-    const exe = executable && executable !== 'sdk-bundled' ? `& '${executable.replace(/'/g, "''")}'` : 'claude';
-    handleNewTerminal('powershell', { title: 'Iniciar sesión en Claude', initialCommand: `${exe} auth login` });
+  const handleClaudeLogin = async (account: { id: string; name: string }) => {
+    const command = (await window.electronAPI?.claudeAccounts?.loginCommand(account.id)) || 'claude auth login';
+    const title = account.id === 'default' ? 'Iniciar sesión en Claude' : `Iniciar sesión: ${account.name}`;
+    handleNewTerminal('powershell', { title, initialCommand: command });
+  };
+
+  // A chat moved to another account: remember it on the tab and for the next chats
+  const handleChatAccountChange = (tabId: string, accountId: string) => {
+    activeAccountRef.current = accountId;
+    setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, accountId } : t)));
   };
 
   const handleSelectTab = (id: string) => {
@@ -829,7 +849,15 @@ export const App: React.FC = () => {
         {tabs
           .filter((t) => t.kind === 'claude')
           .map((t) => (
-            <ClaudeChatView key={t.id} tabId={t.id} cwd={t.cwd} isActive={t.id === activeTab?.id} onLogin={handleClaudeLogin} />
+            <ClaudeChatView
+              key={t.id}
+              tabId={t.id}
+              cwd={t.cwd}
+              isActive={t.id === activeTab?.id}
+              onLogin={(a) => void handleClaudeLogin(a)}
+              accountId={t.accountId}
+              onAccountChange={(accountId) => handleChatAccountChange(t.id, accountId)}
+            />
           ))}
 
         {isTerminalActive ? null : activeTab ? (

@@ -51,6 +51,8 @@ export interface ChatState {
   currentMsg?: string;
   /** Claude Code answered "Not logged in": the user has to sign in (Anthropic's own flow) */
   authRequired: boolean;
+  /** The account hit its usage limit: offer another account */
+  rateLimited: boolean;
 }
 
 export const initialChatState = (): ChatState => ({
@@ -63,6 +65,7 @@ export const initialChatState = (): ChatState => ({
   contextTokens: 0,
   stream: {},
   authRequired: false,
+  rateLimited: false,
 });
 
 type Json = Record<string, unknown>;
@@ -216,10 +219,11 @@ function onAssistant(state: ChatState, msg: Json): ChatState {
   const err = msg.error;
   if (!parent) {
     if (err === 'authentication_failed') return { ...next, authRequired: true };
+    if (err === 'rate_limit') next = { ...next, rateLimited: true };
     if (err) {
       next = push(next, { kind: 'notice', id: localId('err'), text: `Error de la API: ${typeof err === 'string' ? err : JSON.stringify(err)}`, tone: 'error' });
-    } else if (next.authRequired && content.length > 0) {
-      next = { ...next, authRequired: false };
+    } else if ((next.authRequired || next.rateLimited) && content.length > 0) {
+      next = { ...next, authRequired: false, rateLimited: false };
     }
   }
   return next;
@@ -354,7 +358,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'local_permission_mode':
       return { ...state, permissionMode: action.mode };
     case 'auth_retry':
-      return { ...state, authRequired: false, running: false, ended: false };
+      return { ...state, authRequired: false, rateLimited: false, running: false, ended: false };
     case 'permission_resolved':
       return updateItem(state, action.requestId, (i) => (i.kind === 'permission' ? { ...i, status: action.allowed ? 'allowed' : 'denied' } : i));
     case 'event': {

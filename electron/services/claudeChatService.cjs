@@ -131,7 +131,7 @@ function createClaudeChatService({
   const sessions = new Map();
   let nextRequest = 1;
 
-  async function start({ id, cwd, fallbackCwd, resume, permissionMode, model, effort } = {}, emit) {
+  async function start({ id, cwd, fallbackCwd, resume, permissionMode, model, effort, configDir } = {}, emit) {
     if (!id) return { success: false, error: 'Falta el identificador del chat' };
     if (sessions.has(id)) return { success: true, reused: true };
 
@@ -149,6 +149,8 @@ function createClaudeChatService({
       const childEnv = withFreshPath({ ...env }, platform, readPath);
       // The renderer is the UI, not a terminal: keep the CLI from thinking it runs nested in Claude Code
       delete childEnv.CLAUDECODE;
+      // Another Claude account = another Claude Code config folder (its own sign-in)
+      if (typeof configDir === 'string' && configDir) childEnv.CLAUDE_CONFIG_DIR = configDir;
       // The user's own install wins (it keeps itself updated); the bundled copy is the fallback
       const userExecutable = findExecutable(childEnv, platform);
       const executable = userExecutable || findBundled(platform);

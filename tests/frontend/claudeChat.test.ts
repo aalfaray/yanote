@@ -154,4 +154,12 @@ describe('Frontend: Claude sign-in detection', () => {
     expect(after.items.map((i) => i.kind)).toEqual(['user']);
     expect(chatReducer(after, { type: 'dismiss', id: 'no-existe' }).items).toHaveLength(1);
   });
+
+  it('flags a usage limit so the chat can offer another account, and clears it on the next reply', () => {
+    const limited = run([msg({ type: 'assistant', error: 'rate_limit', message: { id: 'm', content: [{ type: 'text', text: "You've hit your 5-hour limit" }] } })]);
+    expect(limited.rateLimited).toBe(true);
+    expect(chatReducer(limited, { type: 'auth_retry' }).rateLimited).toBe(false);
+    const after = chatReducer(limited, msg({ type: 'assistant', message: { id: 'm2', content: [{ type: 'text', text: 'Hola de nuevo' }] } }));
+    expect(after.rateLimited).toBe(false);
+  });
 });

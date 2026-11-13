@@ -17,6 +17,8 @@ import {
   CircleAlert,
   ListTodo,
   Sparkles,
+  UserRound,
+  ChevronDown,
 } from 'lucide-react';
 import type { ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionMode, ClaudePermissionRequest } from '../types/electron';
 import {
@@ -37,6 +39,7 @@ import { markdownToSegments } from '../lib/speechText';
 import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
 import { DismissButton } from './ui/DismissButton';
+import { ClaudeAccountMenu } from './ClaudeAccountMenu';
 
 interface ClaudeChatViewProps {
   tabId: string;
@@ -45,8 +48,12 @@ interface ClaudeChatViewProps {
   /** Called once Claude reports its session id (used to resume after a restart) */
   onSessionId?: (sessionId: string) => void;
   resumeSessionId?: string;
-  /** Opens Claude Code's own sign-in (`claude auth login`) with the executable this chat runs */
-  onLogin?: (executable?: string) => void;
+  /** Opens Claude Code's own sign-in (`claude auth login`) for that account */
+  onLogin?: (account: { id: string; name: string }) => void;
+  /** Claude account this chat uses (see ClaudeAccountMenu); the main one when missing */
+  accountId?: string;
+  /** The user moved this chat to another account */
+  onAccountChange?: (accountId: string) => void;
 }
 
 const MODES: { value: ClaudePermissionMode; label: string; hint: string }[] = [
@@ -440,7 +447,16 @@ function readImage(file: File): Promise<ClaudeImageInput & { url: string }> {
   });
 }
 
-export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isActive, onSessionId, resumeSessionId, onLogin }) => {
+export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
+  tabId,
+  cwd,
+  isActive,
+  onSessionId,
+  resumeSessionId,
+  onLogin,
+  accountId: initialAccountId,
+  onAccountChange,
+}) => {
   const [state, dispatch] = useReducer(chatReducer, undefined, initialChatState);
   const [draft, setDraft] = useState('');
   const [images, setImages] = useState<(ClaudeImageInput & { url: string })[]>([]);
@@ -456,6 +472,11 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const stickRef = useRef(true);
   const sessionIdRef = useRef<string | undefined>(resumeSessionId);
   const executableRef = useRef<string | undefined>(undefined);
+  const [accountId, setAccountId] = useState(initialAccountId || 'default');
+  const accountRef = useRef(accountId);
+  accountRef.current = accountId;
+  const [accountName, setAccountName] = useState('Principal');
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const speech = useSpeech();
   const api = window.electronAPI;
 
@@ -472,7 +493,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
     let cancelled = false;
     setStarting(true);
     api
-      .claudeStart({ id: tabId, cwd, permissionMode: mode, resume: sessionIdRef.current })
+      .claudeStart({ id: tabId, cwd, permissionMode: mode, resume: sessionIdRef.current, accountId: accountRef.current })
       .then((res) => {
         if (cancelled) return;
         setStarting(false);
@@ -525,8 +546,49 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
   const suggestions = useMemo(() => matchCommands(state.commands, draft), [state.commands, draft]);
   useEffect(() => setCmdIndex(0), [suggestions.length]);
 
+  // Name of the account in use, for the header chip
+  useEffect(() => {
+    let cancelled = false;
+    void api?.claudeAccounts?.list().then(({ accounts }) => {
+      if (!cancelled) setAccountName(accounts.find((a) => a.id === accountId)?.name || 'Principal');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, accountId, accountMenuOpen]);
+
+  /** Continue this conversation with another account: copy it there, then resume it with that sign-in. */
+  const switchAccount = async (account: { id: string; name: string }) => {
+    setAccountMenuOpen(false);
+    if (account.id === accountRef.current) return;
+    if (state.running) await api?.claudeInterrupt?.(tabId);
+    const sid = sessionIdRef.current;
+    if (sid) {
+      const res = await api?.claudeAccounts?.copySession(sid, accountRef.current, account.id);
+      if (res && !res.success) {
+        // Nothing to carry over: the other account starts a fresh conversation
+        sessionIdRef.current = undefined;
+        dispatch({ type: 'notice', text: `No se pudo pasar la conversación a ${account.name}: empieza una nueva.`, tone: 'error' });
+      }
+    }
+    accountRef.current = account.id;
+    setAccountId(account.id);
+    setAccountName(account.name);
+    void api?.claudeAccounts?.setActive(account.id);
+    onAccountChange?.(account.id);
+    dispatch({ type: 'auth_retry' });
+    dispatch({ type: 'notice', text: `Ahora usas la cuenta ${account.name}`, tone: 'info' });
+    setRestartKey((k) => k + 1);
+  };
+
   const send = useCallback(async () => {
     const text = draft.trim();
+    // The CLI's /login and /logout don't work inside an app: open the account switcher instead
+    if (/^\/(login|logout|cuenta|account)\s*$/i.test(text)) {
+      setDraft('');
+      setAccountMenuOpen(true);
+      return;
+    }
     if ((!text && images.length === 0) || !api?.claudeSend || state.ended) return;
     const payload = { text, images: images.map(({ data, mediaType }) => ({ data, mediaType })) };
     dispatch({ type: 'send', text, imageCount: images.length });
@@ -664,6 +726,18 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
         </span>
         {state.model && <span className="hidden min-[420px]:inline opacity-60 truncate">· {state.model}</span>}
         <span className="flex-1" />
+        <button
+          type="button"
+          onClick={() => setAccountMenuOpen((o) => !o)}
+          title={`Cuenta de Claude: ${accountName} (clic para cambiar)`}
+          aria-label={`Cuenta de Claude: ${accountName}`}
+          aria-expanded={accountMenuOpen}
+          className={`${btn} h-6 px-1.5 max-w-[9rem] shrink-0 bg-white dark:bg-[#27272A] ${accountMenuOpen ? 'bg-[#FFE500] text-black' : ''}`}
+        >
+          <UserRound size={11} strokeWidth={3} className="shrink-0" />
+          <span className="truncate hidden min-[400px]:inline">{accountName}</span>
+          <ChevronDown size={10} strokeWidth={3} className="shrink-0" />
+        </button>
         {state.contextTokens > 0 && (
           <span className="hidden min-[480px]:inline opacity-60" title="Tokens de contexto de la última llamada">
             {formatTokens(state.contextTokens)} ctx
@@ -681,6 +755,18 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
           </button>
         )}
       </div>
+
+      {accountMenuOpen && (
+        <ClaudeAccountMenu
+          currentId={accountId}
+          onClose={() => setAccountMenuOpen(false)}
+          onSwitch={(a) => void switchAccount(a)}
+          onLogin={(a) => {
+            setAccountMenuOpen(false);
+            onLogin?.(a);
+          }}
+        />
+      )}
 
       {/* Transcript */}
       <div
@@ -787,8 +873,11 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                 inicio de sesión oficial de Claude Code, que continúa en tu navegador. yanote no ve tus credenciales.
               </p>
               <div className="flex flex-wrap gap-1.5">
-                <button type="button" onClick={() => onLogin?.(executableRef.current)} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
-                  Iniciar sesión
+                <button type="button" onClick={() => onLogin?.({ id: accountId, name: accountName })} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
+                  Iniciar sesión{accountId !== 'default' ? ` (${accountName})` : ''}
+                </button>
+                <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}>
+                  <UserRound size={11} strokeWidth={3} /> Usar otra cuenta
                 </button>
                 <button
                   type="button"
@@ -803,6 +892,18 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({ tabId, cwd, isAc
                   <RotateCcw size={11} strokeWidth={3} /> Ya inicié sesión, reintentar
                 </button>
               </div>
+            </div>
+          )}
+
+          {state.rateLimited && !state.running && (
+            <div className={`${card} p-3 space-y-2 bg-[#FFFBDA] dark:bg-[#26240F]`} role="alert" data-testid="rate-limit-card">
+              <div className="flex items-center gap-1.5 text-[13px] font-black">
+                <UserRound size={15} strokeWidth={2.5} /> {accountName} llegó a su límite de uso
+              </div>
+              <p className="text-[12px] opacity-80">Puedes esperar a que se reinicie o seguir esta misma conversación con otra de tus cuentas.</p>
+              <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
+                <UserRound size={11} strokeWidth={3} /> Cambiar de cuenta
+              </button>
             </div>
           )}
 

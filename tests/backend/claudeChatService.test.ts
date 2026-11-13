@@ -220,4 +220,14 @@ describe('Backend: ClaudeChatService (Agent SDK sessions)', () => {
     expect((await service.usage('c2')).success).toBe(false);
     service.stop('c2');
   });
+
+  it('runs the chat as another account through its config folder', async () => {
+    const { service, emit, calls } = setup();
+    await service.start({ id: 'acc', configDir: 'C:\\datos\\claude-accounts\\b' }, emit);
+    expect(calls[0].env.CLAUDE_CONFIG_DIR).toBe('C:\\datos\\claude-accounts\\b');
+    service.stop('acc');
+    await service.start({ id: 'main' }, emit);
+    expect(calls[1].env.CLAUDE_CONFIG_DIR).toBeUndefined();
+    service.stop('main');
+  });
 });

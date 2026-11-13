@@ -7,7 +7,9 @@ const fileService = require('./services/fileService.cjs');
 const { createSpeechService } = require('./services/speechService.cjs');
 const { createTerminalService } = require('./services/terminalService.cjs');
 const { savePastedImage } = require('./services/clipboardImageService.cjs');
-const { createClaudeChatService } = require('./services/claudeChatService.cjs');
+const { createClaudeChatService, findClaudeExecutable, findBundledExecutable } = require('./services/claudeChatService.cjs');
+const { createClaudeAccountService } = require('./services/claudeAccountService.cjs');
+const { withFreshPath } = require('./services/terminalService.cjs');
 const { createUpdateService } = require('./services/updateService.cjs');
 const { parseOpenTarget } = require('./services/openTargetService.cjs');
 
@@ -49,6 +51,14 @@ function updateConfig(newConfig) {
   appConfig = saveConfig(configFilePath, appConfig, newConfig);
   return appConfig;
 }
+
+// Several Claude accounts, each one a Claude Code config folder under the app's data
+const claudeAccountService = createClaudeAccountService({
+  getConfig: () => appConfig,
+  saveConfig: (partial) => updateConfig(partial),
+  accountsRoot: path.join(dataDir, 'claude-accounts'),
+  getExecutable: () => findClaudeExecutable(withFreshPath({ ...process.env })) || findBundledExecutable(),
+});
 
 function createWindow() {
   fileService.ensureNotesDir(appConfig.notesPath);
@@ -389,7 +399,8 @@ ipcMain.handle('term:kill', (_, id) => {
 // IPC - Claude chat (structured Claude Code session through the Agent SDK)
 ipcMain.handle('claude:start', (event, options) => {
   const sender = event.sender;
-  return claudeChatService.start({ ...options, fallbackCwd: appConfig.notesPath }, (chatEvent) => {
+  const configDir = claudeAccountService.configDirFor(options && options.accountId);
+  return claudeChatService.start({ ...options, configDir, fallbackCwd: appConfig.notesPath }, (chatEvent) => {
     if (!sender.isDestroyed()) sender.send('claude:event', chatEvent);
   });
 });
@@ -404,6 +415,16 @@ ipcMain.handle('claude:setModel', (_, id, model) => claudeChatService.setModel(i
 ipcMain.handle('claude:setEffort', (_, id, level) => claudeChatService.setEffort(id, level));
 ipcMain.handle('claude:stop', (_, id) => claudeChatService.stop(id));
 ipcMain.handle('claude:usage', (_, id) => claudeChatService.usage(id));
+
+// IPC - Claude accounts
+ipcMain.handle('claudeAccounts:list', () => claudeAccountService.list());
+ipcMain.handle('claudeAccounts:status', (_, id) => claudeAccountService.status(id));
+ipcMain.handle('claudeAccounts:add', (_, name) => claudeAccountService.add(name));
+ipcMain.handle('claudeAccounts:rename', (_, id, name) => claudeAccountService.rename(id, name));
+ipcMain.handle('claudeAccounts:remove', (_, id) => claudeAccountService.remove(id));
+ipcMain.handle('claudeAccounts:setActive', (_, id) => claudeAccountService.setActive(id));
+ipcMain.handle('claudeAccounts:loginCommand', (_, id) => claudeAccountService.loginCommand(id));
+ipcMain.handle('claudeAccounts:copySession', (_, sessionId, fromId, toId) => claudeAccountService.copySession(sessionId, fromId, toId));
 
 // IPC - Windows notifications (e.g. a Claude chat finished); clicking one brings that tab back
 const liveNotifications = new Set(); // keep references: a collected notification loses its click handler

@@ -14,6 +14,9 @@ export interface AppConfig {
   /** Notes left open last time; they reopen on the next start */
   openTabs?: SavedTab[];
   activeTabPath?: string | null;
+  /** Extra Claude accounts and the one new chats use */
+  claudeAccounts?: { id: string; name: string; configDir: string }[];
+  activeClaudeAccount?: string;
   /** Windows notification when a Claude chat finishes or waits for you (default on) */
   notifyClaude?: boolean;
   /** The welcome note is shown only on the very first start */
@@ -50,6 +53,8 @@ export interface TabItem {
   cwd?: string;
   /** Command typed into a new terminal right after it starts (e.g. Claude sign-in) */
   initialCommand?: string;
+  /** Claude account a chat tab uses (kind === 'claude') */
+  accountId?: string;
 }
 
 export type TabKind = 'markdown' | 'terminal' | 'claude';
@@ -177,7 +182,7 @@ export interface ElectronAPI {
   onOpenTarget?: (callback: (target: OpenTarget) => void) => () => void;
 
   // Claude chat sessions (Agent SDK)
-  claudeStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: ClaudePermissionMode; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
+  claudeStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: ClaudePermissionMode; model?: string; accountId?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
   claudeSend?: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => ClaudeResult;
   claudeRespondPermission?: (id: string, requestId: string, decision: ClaudePermissionDecision) => Promise<boolean>;
   claudeInterrupt?: (id: string) => ClaudeResult;
@@ -188,6 +193,19 @@ export interface ElectronAPI {
   claudeStop?: (id: string) => Promise<boolean>;
   /** Plan usage (5-hour / weekly windows, like /usage) through a live chat session */
   claudeUsage?: (id?: string) => Promise<ClaudeUsage>;
+  /** Several Claude accounts (each one its own Claude Code sign-in) */
+  claudeAccounts?: {
+    list: () => Promise<{ accounts: ClaudeAccount[]; activeId: string }>;
+    status: (id: string) => Promise<ClaudeAccountStatus>;
+    add: (name?: string) => Promise<ClaudeAccount>;
+    rename: (id: string, name: string) => Promise<boolean>;
+    remove: (id: string) => Promise<boolean>;
+    setActive: (id: string) => Promise<boolean>;
+    /** PowerShell line running Claude Code's own `auth login` for that account */
+    loginCommand: (id: string) => Promise<string | null>;
+    /** Copies a conversation so another account can resume it */
+    copySession: (sessionId: string, fromId: string, toId: string) => Promise<{ success: boolean; copied?: boolean; error?: string }>;
+  };
   onClaudeEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
   /** Saves the clipboard image as a temp PNG and returns its path; null when there is no image */
   saveClipboardImage?: () => Promise<string | null>;
@@ -207,6 +225,23 @@ export interface ClaudeUsage {
   plan?: string | null;
   fiveHour?: ClaudeUsageWindow | null;
   weekly?: ClaudeUsageWindow | null;
+}
+
+export interface ClaudeAccount {
+  id: string;
+  name: string;
+  /** null = Claude Code's normal folder */
+  configDir: string | null;
+  isDefault: boolean;
+}
+
+export interface ClaudeAccountStatus {
+  success: boolean;
+  error?: string;
+  loggedIn?: boolean;
+  email?: string | null;
+  plan?: string | null;
+  method?: string | null;
 }
 
 export type UpdateMode = 'auto' | 'portable' | 'disabled';

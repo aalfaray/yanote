@@ -93,6 +93,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   claudeSetEffort: (id, level) => ipcRenderer.invoke('claude:setEffort', id, level),
   claudeStop: (id) => ipcRenderer.invoke('claude:stop', id),
   claudeUsage: (id) => ipcRenderer.invoke('claude:usage', id),
+  claudeAccounts: {
+    list: () => ipcRenderer.invoke('claudeAccounts:list'),
+    status: (id) => ipcRenderer.invoke('claudeAccounts:status', id),
+    add: (name) => ipcRenderer.invoke('claudeAccounts:add', name),
+    rename: (id, name) => ipcRenderer.invoke('claudeAccounts:rename', id, name),
+    remove: (id) => ipcRenderer.invoke('claudeAccounts:remove', id),
+    setActive: (id) => ipcRenderer.invoke('claudeAccounts:setActive', id),
+    loginCommand: (id) => ipcRenderer.invoke('claudeAccounts:loginCommand', id),
+    copySession: (sessionId, fromId, toId) => ipcRenderer.invoke('claudeAccounts:copySession', sessionId, fromId, toId),
+  },
   onClaudeEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('claude:event', listener);
