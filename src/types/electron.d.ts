@@ -202,12 +202,8 @@ export interface ElectronAPI {
   /** `skipIfFocused`: don't show it if the yanote window has focus (you're already looking at that chat) */
   notify?: (payload: { title: string; body?: string; tabId?: string; skipIfFocused?: boolean }) => Promise<boolean>;
   onFocusTab?: (callback: (tabId: string) => void) => () => void;
-  /** Right-click > "Enviar a un chat nuevo de Claude" on a selection */
-  onSendToNewChat?: (callback: (text: string) => void) => () => void;
-  /** Right-click > "Guardar idea" (chatTabId: the chat it was selected in, if any) */
-  onSaveIdea?: (callback: (payload: { text: string; chatTabId: string | null }) => void) => () => void;
-  /** Right-click > "Fijar en este chat" */
-  onPinInChat?: (callback: (payload: { text: string; tabId: string }) => void) => () => void;
+  /** Editing command for the app's right-click menu, run on the focused field / page selection */
+  editCommand?: (command: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll') => Promise<boolean>;
   /** Disk path of a dropped File, or null when it has none */
   getPathForFile?: (file: File) => string | null;
   // "Abrir con yanote" (Explorer context menu / command line)

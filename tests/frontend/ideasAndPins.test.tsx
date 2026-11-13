@@ -1,22 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { addIdea, removeIdea, formatIdeaDate, MAX_IDEAS } from '../../src/lib/ideas';
 import { IdeasDrawer } from '../../src/components/IdeasDrawer';
 import { PinnedStrip } from '../../src/components/ChatPinnedStrip';
 
-vi.mock('../../src/components/Editor', () => ({ Editor: () => <div data-testid="editor" /> }));
-vi.mock('../../src/components/ClaudeChatView', () => ({
-  ClaudeChatView: ({ tabId, pins, onUnpin, initialDraft, cwd }: any) => (
-    <div data-testid={`chat-${tabId}`} data-chat-tab={tabId} data-draft={initialDraft ?? ''} data-cwd={cwd ?? ''}>
-      {(pins || []).map((p: any) => (
-        <button key={p.id} data-testid="pin" onClick={() => onUnpin(p.id)}>
-          {p.text}
-        </button>
-      ))}
-    </div>
-  ),
-}));
-import { App } from '../../src/App';
 
 describe('ideas list helpers', () => {
   it('adds newest first, trims, ignores empty text and moves a repeated idea to the top', () => {
@@ -87,68 +74,5 @@ describe('PinnedStrip', () => {
     fireEvent.click(screen.getByRole('button', { name: /Fijados \(1\)/ }));
     fireEvent.click(screen.getByLabelText('Quitar fijado'));
     expect(onUnpin).toHaveBeenCalledWith('p1');
-  });
-});
-
-describe('App: right-click "Guardar idea" and "Fijar en este chat"', () => {
-  let saveIdea: (p: any) => void;
-  let pinInChat: (p: any) => void;
-  beforeEach(() => {
-    window.electronAPI = {
-      getAppConfig: vi.fn().mockResolvedValue({ notesPath: '/n', alwaysOnTop: false, welcomeSeen: true, ideas: [] }),
-      saveAppConfig: vi.fn().mockResolvedValue({}),
-      getNotesPath: vi.fn().mockResolvedValue('/n'),
-      readFile: vi.fn(),
-      onSaveIdea: vi.fn((cb) => {
-        saveIdea = cb;
-        return () => {};
-      }),
-      onPinInChat: vi.fn((cb) => {
-        pinInChat = cb;
-        return () => {};
-      }),
-    } as any;
-  });
-
-  const openChat = async () => {
-    render(<App />);
-    await waitFor(() => expect(window.electronAPI!.getAppConfig).toHaveBeenCalled());
-    act(() => screen.getByTitle(/Elegir tipo de pestaña nueva/).click());
-    act(() => screen.getByRole('menuitem', { name: /Chat con Claude/ }).click());
-    const chat = await screen.findByTestId(/^chat-claude-/);
-    return chat.dataset.chatTab!;
-  };
-
-  it('saves an idea with where it came from, and it persists', async () => {
-    const id = await openChat();
-    act(() => saveIdea({ text: 'Empiezo por el núcleo: el módulo punto_venta', chatTabId: id }));
-    expect(await screen.findByText('💡 Idea guardada')).toBeInTheDocument();
-    expect(window.electronAPI!.saveAppConfig).toHaveBeenCalledWith({
-      ideas: [expect.objectContaining({ text: 'Empiezo por el núcleo: el módulo punto_venta', source: 'Claude' })],
-    });
-    // the lightbulb shows the count; the list offers it back
-    fireEvent.click(screen.getByLabelText('Ideas guardadas'));
-    expect(screen.getByText('Empiezo por el núcleo: el módulo punto_venta')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Chat nuevo/ }));
-    await waitFor(() => expect(screen.getAllByTestId(/^chat-claude-/)).toHaveLength(2));
-    expect(screen.getAllByTestId(/^chat-claude-/)[1].dataset.draft).toBe('Empiezo por el núcleo: el módulo punto_venta');
-  });
-
-  it('pins a paragraph on top of its chat, once, and unpins it', async () => {
-    const id = await openChat();
-    act(() => pinInChat({ text: ' Ya tengo el diseño completo ', tabId: id }));
-    act(() => pinInChat({ text: 'Ya tengo el diseño completo', tabId: id }));
-    expect(screen.getAllByTestId('pin')).toHaveLength(1);
-    expect(screen.getByTestId('pin')).toHaveTextContent('Ya tengo el diseño completo');
-    fireEvent.click(screen.getByTestId('pin'));
-    expect(screen.queryByTestId('pin')).not.toBeInTheDocument();
-  });
-
-  it('tells the menu which chat was right-clicked (not its message box)', async () => {
-    const id = await openChat();
-    fireEvent.contextMenu(screen.getByTestId(`chat-${id}`));
-    expect((window as any).__yanoteContextTarget).toEqual({ chatTabId: id });
-    fireEvent.contextMenu(document.body);
-    expect((window as any).__yanoteContextTarget).toEqual({ chatTabId: null });
   });
 });

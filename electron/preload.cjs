@@ -41,24 +41,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('app:focusTab', listener);
   },
 
-  // Context menu "Enviar a un chat nuevo de Claude" with the selected text
-  onSendToNewChat: (callback) => {
-    const listener = (_event, text) => callback(text);
-    ipcRenderer.on('app:sendToNewChat', listener);
-    return () => ipcRenderer.removeListener('app:sendToNewChat', listener);
-  },
-
-  // Context menu "Guardar idea" / "Fijar en este chat"
-  onSaveIdea: (callback) => {
-    const listener = (_event, payload) => callback(payload);
-    ipcRenderer.on('app:saveIdea', listener);
-    return () => ipcRenderer.removeListener('app:saveIdea', listener);
-  },
-  onPinInChat: (callback) => {
-    const listener = (_event, payload) => callback(payload);
-    ipcRenderer.on('app:pinInChat', listener);
-    return () => ipcRenderer.removeListener('app:pinInChat', listener);
-  },
+  // Undo/redo/cut/copy/paste/select all for the app's right-click menu
+  editCommand: (command) => ipcRenderer.invoke('app:editCommand', command),
 
   // "Abrir con yanote" from Explorer: the launch target, then any later ones
   takeOpenTarget: () => ipcRenderer.invoke('app:takeOpenTarget'),

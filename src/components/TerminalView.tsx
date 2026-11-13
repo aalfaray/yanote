@@ -5,6 +5,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import type { TerminalShell } from '../types/electron';
 import { pasteFromClipboard } from '../lib/terminalPaste';
+import { registerTerminal } from '../lib/terminalRegistry';
 import { extractLastResponse } from '../lib/terminalSpeech';
 import { plainTextToSegments } from '../lib/speechText';
 import { useSpeech } from '../hooks/useSpeech';
@@ -172,6 +173,16 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       return true;
     });
 
+    // The app's right-click menu copies/pastes here too
+    const unregister = registerTerminal(tabId, {
+      getSelection: () => term.getSelection(),
+      paste: () => {
+        term.focus();
+        pasteFromClipboard(term, api);
+      },
+      selectAll: () => term.selectAll(),
+    });
+
     const observer = new ResizeObserver(() => {
       if (container.offsetWidth > 0 && container.offsetHeight > 0) {
         try {
@@ -184,6 +195,7 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
     observer.observe(container);
 
     return () => {
+      unregister();
       observer.disconnect();
       offEvent?.();
       inputSub.dispose();
@@ -221,6 +233,7 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       className={`absolute inset-0 p-2 bg-[#FAF8F5] dark:bg-[#121212] ${isActive ? '' : 'invisible pointer-events-none'}`}
       aria-hidden={!isActive}
       data-testid={`terminal-${tabId}`}
+      data-term-tab={tabId}
     >
       <div ref={containerRef} className="w-full h-full" />
 

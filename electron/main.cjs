@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Menu, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, clipboard, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -101,50 +101,6 @@ function createWindow() {
     if (url !== mainWindow.webContents.getURL()) event.preventDefault();
   });
 
-  // Electron has no default right-click menu: offer copy/paste on selections and editable fields
-  mainWindow.webContents.on('context-menu', async (_event, params) => {
-    const hasSelection = Boolean(params.selectionText && params.selectionText.trim());
-    if (!hasSelection && !params.isEditable) return;
-    const flags = params.editFlags || {};
-    const wc = mainWindow.webContents;
-    // The page notes which Claude chat (if any) was right-clicked, before this event arrives
-    const target = hasSelection ? await wc.executeJavaScript('window.__yanoteContextTarget || null', true).catch(() => null) : null;
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    const text = params.selectionText;
-    const chatTabId = target && typeof target.chatTabId === 'string' ? target.chatTabId : null;
-    // Selected text: new chat with it (typed, not sent), save it as an idea, pin it on top of its chat
-    const selectionItems = hasSelection
-      ? [
-          { type: 'separator' },
-          { label: 'Enviar a un chat nuevo de Claude', click: () => wc.send('app:sendToNewChat', text) },
-          { label: 'Guardar idea', click: () => wc.send('app:saveIdea', { text, chatTabId }) },
-          ...(chatTabId && !params.isEditable
-            ? [{ label: 'Fijar en este chat', click: () => wc.send('app:pinInChat', { text, tabId: chatTabId }) }]
-            : []),
-        ]
-      : [];
-    const toChat = selectionItems;
-    const template = params.isEditable
-      ? [
-          { label: 'Deshacer', role: 'undo', enabled: flags.canUndo },
-          { label: 'Rehacer', role: 'redo', enabled: flags.canRedo },
-          { type: 'separator' },
-          { label: 'Cortar', role: 'cut', enabled: flags.canCut },
-          { label: 'Copiar', role: 'copy', enabled: flags.canCopy },
-          { label: 'Pegar', role: 'paste', enabled: flags.canPaste },
-          { type: 'separator' },
-          { label: 'Seleccionar todo', role: 'selectAll' },
-          ...toChat,
-        ]
-      : [
-          { label: 'Copiar', role: 'copy' },
-          { type: 'separator' },
-          { label: 'Seleccionar todo', role: 'selectAll' },
-          ...toChat,
-        ];
-    Menu.buildFromTemplate(template).popup({ window: mainWindow });
-  });
-
   mainWindow.on('closed', () => {
     speechService.stop();
     terminalService.killAll();
@@ -204,6 +160,14 @@ app.on('second-instance', (_event, argv, workingDirectory) => {
   mainWindow.focus();
   const target = applyOpenTarget(parseOpenTarget(argv, { skip: ARG_SKIP, cwd: workingDirectory }));
   if (target) mainWindow.webContents.send('app:openTarget', target);
+});
+
+// Editing commands for the app's own right-click menu (the page has no native menu)
+const EDIT_COMMANDS = new Set(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll']);
+ipcMain.handle('app:editCommand', (event, command) => {
+  if (!EDIT_COMMANDS.has(command)) return false;
+  event.sender[command]();
+  return true;
 });
 
 ipcMain.handle('app:takeOpenTarget', () => {

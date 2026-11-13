@@ -18,6 +18,9 @@ import { DismissButton } from './components/ui/DismissButton';
 import { IdeasDrawer } from './components/IdeasDrawer';
 import { addIdea, removeIdea } from './lib/ideas';
 import { toSavedTabs, restoreTab } from './lib/session';
+import { buildMenu, type MenuAction, type MenuContext, type MenuEntry } from './lib/contextMenu';
+import { terminalActions } from './lib/terminalRegistry';
+import { AppContextMenu } from './components/ui/AppContextMenu';
 
 const DEFAULT_WELCOME_MARKDOWN = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
 
@@ -717,17 +720,6 @@ export const App: React.FC = () => {
       }),
     []
   );
-  // Right-click a selection > "Enviar a un chat nuevo de Claude": new chat in the same folder, text ready to send
-  const newClaudeRef = useRef(handleNewClaude);
-  newClaudeRef.current = handleNewClaude;
-  useEffect(
-    () =>
-      window.electronAPI?.onSendToNewChat?.((text) => {
-        if (typeof text === 'string' && text.trim()) newClaudeRef.current(undefined, text.trim());
-      }),
-    []
-  );
-
   // --- Ideas & pins from the right-click menu ---
   const updateIdeas = (next: SavedIdea[]) => {
     ideasRef.current = next;
@@ -742,40 +734,79 @@ export const App: React.FC = () => {
     updateIdeas(addIdea(ideasRef.current, { text, source: from?.title, cwd: cwd || undefined }));
     setNotification({ type: 'success', text: '💡 Idea guardada' });
   };
-  useEffect(() => window.electronAPI?.onSaveIdea?.((p) => saveIdeaRef.current(p)), []);
-  useEffect(
-    () =>
-      window.electronAPI?.onPinInChat?.(({ text, tabId }) => {
-        const clean = text.trim();
-        if (!clean) return;
-        setTabs((prev) =>
-          prev.map((t) =>
-            t.id === tabId && !(t.chatPins || []).some((p) => p.text === clean)
-              ? { ...t, chatPins: [...(t.chatPins || []), { id: `pin-${Date.now().toString(36)}`, text: clean }] }
-              : t
-          )
-        );
-      }),
-    []
-  );
+  const pinInChat = (text: string, tabId: string) => {
+    const clean = text.trim();
+    if (!clean) return;
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.id === tabId && !(t.chatPins || []).some((p) => p.text === clean)
+          ? { ...t, chatPins: [...(t.chatPins || []), { id: `pin-${Date.now().toString(36)}`, text: clean }] }
+          : t
+      )
+    );
+  };
   // A chat's Claude Code session, kept so the chat comes back after a restart
   const handleChatSessionId = useCallback((tabId: string, sessionId: string) => {
     setTabs((prev) => prev.map((t) => (t.id === tabId && t.sessionId !== sessionId ? { ...t, sessionId } : t)));
   }, []);
   const handleUnpin = (tabId: string, pinId: string) =>
     setTabs((prev) => prev.map((t) => (t.id === tabId ? { ...t, chatPins: (t.chatPins || []).filter((p) => p.id !== pinId) } : t)));
-  // The menu asks the page which chat was right-clicked (pins only make sense there)
+  // --- Right-click menu in yanote's own style (replaces the native one everywhere) ---
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; ctx: MenuContext; termTabId: string | null; entries: MenuEntry[] } | null>(null);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
   useEffect(() => {
     const onContext = (e: MouseEvent) => {
+      // Menus of their own (e.g. a tab's) already handled it
+      if (e.defaultPrevented) return;
       const el = e.target instanceof Element ? e.target : null;
-      const chat = el?.closest<HTMLElement>('[data-chat-tab]');
-      (window as unknown as { __yanoteContextTarget?: unknown }).__yanoteContextTarget = {
-        chatTabId: chat && !el?.closest('textarea, input, [contenteditable="true"]') ? chat.dataset.chatTab : null,
-      };
+      const termTabId = el?.closest<HTMLElement>('[data-term-tab]')?.dataset.termTab ?? null;
+      const field = el?.closest<HTMLElement>('textarea, input, [contenteditable="true"]') ?? null;
+      const chatEl = el?.closest<HTMLElement>('[data-chat-tab]');
+      let ctx: MenuContext;
+      if (termTabId) {
+        ctx = { kind: 'terminal', selection: terminalActions(termTabId)?.getSelection() ?? '', chatTabId: null };
+      } else if (field) {
+        const input = field as HTMLInputElement | HTMLTextAreaElement;
+        const typed = typeof input.selectionStart === 'number' && 'value' in input;
+        const selection = typed ? input.value.slice(input.selectionStart ?? 0, input.selectionEnd ?? 0) : window.getSelection()?.toString() ?? '';
+        ctx = { kind: 'editable', selection, chatTabId: null };
+      } else {
+        ctx = { kind: 'page', selection: window.getSelection()?.toString() ?? '', chatTabId: chatEl?.dataset.chatTab ?? null };
+      }
+      const entries = buildMenu(ctx);
+      e.preventDefault();
+      setContextMenu(entries ? { x: e.clientX, y: e.clientY, ctx, termTabId, entries } : null);
     };
-    window.addEventListener('contextmenu', onContext, true);
-    return () => window.removeEventListener('contextmenu', onContext, true);
+    window.addEventListener('contextmenu', onContext);
+    return () => window.removeEventListener('contextmenu', onContext);
   }, []);
+  const runMenuAction = (action: MenuAction) => {
+    const menu = contextMenu;
+    setContextMenu(null);
+    if (!menu) return;
+    const { ctx, termTabId } = menu;
+    const text = ctx.selection;
+    const term = terminalActions(termTabId);
+    switch (action) {
+      case 'sendToChat':
+        handleNewClaude(undefined, text.trim());
+        return;
+      case 'saveIdea':
+        saveIdeaRef.current({ text, chatTabId: ctx.chatTabId });
+        return;
+      case 'pin':
+        if (ctx.chatTabId) pinInChat(text, ctx.chatTabId);
+        return;
+    }
+    if (term) {
+      if (action === 'copy') void navigator.clipboard?.writeText(text);
+      else if (action === 'paste') term.paste();
+      else if (action === 'selectAll') term.selectAll();
+      return;
+    }
+    // undo / redo / cut / copy / paste / selectAll on the focused field or the page selection
+    void window.electronAPI?.editCommand?.(action);
+  };
 
   // Clicking the notification brings that chat to the front
   useEffect(
@@ -1050,6 +1081,10 @@ export const App: React.FC = () => {
         onConfigChanged={refreshNotes}
         onSaved={() => setNotification({ type: 'success', text: '¡Ajustes guardados correctamente!' })}
       />
+
+      {contextMenu && (
+        <AppContextMenu x={contextMenu.x} y={contextMenu.y} entries={contextMenu.entries} onAction={runMenuAction} onClose={closeContextMenu} />
+      )}
 
       <IdeasDrawer
         isOpen={isIdeasOpen}
