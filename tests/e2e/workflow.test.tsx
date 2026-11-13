@@ -18,6 +18,9 @@ vi.mock('../../src/components/Editor', () => ({
           }
         }}
       />
+      {/* What MDXEditor does right after loading a note: reformat it (onChange with the normalization flag) */}
+      <button data-testid="mock-normalize" onClick={() => onChange(`${markdown}
+`, true)} />
     </div>
   ),
 }));
@@ -674,5 +677,22 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       dropOn(window, [new File(['x'], 'nota.md')]);
       expect(await screen.findByText(/No se pudo abrir: nota\.md/)).toBeInTheDocument();
     });
+  });
+
+  it('opening a note never marks it unsaved, even when the editor reformats it; typing does', async () => {
+    window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
+      notesPath: '/notes',
+      alwaysOnTop: false,
+      welcomeSeen: true,
+      openTabs: [{ path: '/notes/AGENTS.md', title: 'AGENTS.md' }],
+    });
+    render(<App />);
+    await waitFor(() => expect(screen.getAllByText('AGENTS.md').length).toBeGreaterThanOrEqual(1));
+    fireEvent.click(screen.getByTestId('mock-normalize'));
+    expect(screen.queryByTitle('Cambios sin guardar')).not.toBeInTheDocument();
+    expect(screen.queryByText(/sin guardar/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('mock-markdown-textarea'), { target: { value: '# Editado' } });
+    expect(screen.getAllByTitle('Cambios sin guardar').length).toBeGreaterThan(0);
   });
 });

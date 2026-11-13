@@ -494,9 +494,10 @@ export const App: React.FC = () => {
     );
   };
 
-  const handleContentChange = (content: string) => {
+  const handleContentChange = (content: string, isNormalization = false) => {
+    // Opening a note makes the rich editor reformat it: keep that text, but it isn't an unsaved edit
     setTabs((prev) =>
-      prev.map((t) => (t.id === activeTabId ? { ...t, content, isDirty: true } : t))
+      prev.map((t) => (t.id === activeTabId ? { ...t, content, isDirty: isNormalization ? t.isDirty : true } : t))
     );
   };
 

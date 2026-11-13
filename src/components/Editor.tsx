@@ -57,7 +57,11 @@ const CODE_BLOCK_LANGUAGES: Record<string, string> = {
 interface EditorProps {
   tabId: string;
   markdown: string;
-  onChange: (content: string) => void;
+  /**
+   * `isNormalization` is true when the rich editor rewrote the markdown it was given on load
+   * (spacing, bullet symbols…): not a user edit, so the note must not be marked unsaved.
+   */
+  onChange: (content: string, isNormalization?: boolean) => void;
   onSave?: () => void;
   isDarkMode?: boolean;
   viewMode?: 'rich-text' | 'source';
