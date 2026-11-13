@@ -17,6 +17,8 @@ export interface ContextMenuHandlers {
   sendToChat: (text: string) => void;
   saveIdea: (text: string, chatTabId: string | null) => void;
   pin: (text: string, chatTabId: string) => void;
+  /** Read the selection aloud in the chat/terminal it came from (null: the tab on screen) */
+  readAloud: (text: string, from: { chatTabId: string | null; termTabId: string | null }) => void;
 }
 
 /** Copy / paste / select all inside a terminal tab (xterm keeps its own selection). */
@@ -94,6 +96,9 @@ export function useAppContextMenu(handlers: ContextMenuHandlers) {
             return;
           case 'pin':
             if (ctx.chatTabId) h.pin(text, ctx.chatTabId);
+            return;
+          case 'readAloud':
+            h.readAloud(text, { chatTabId: ctx.chatTabId, termTabId });
             return;
         }
         void (async () => {

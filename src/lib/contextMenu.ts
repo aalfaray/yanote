@@ -10,7 +10,7 @@ export interface MenuContext {
   chatTabId: string | null;
 }
 
-export type MenuAction = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll' | 'sendToChat' | 'saveIdea' | 'pin';
+export type MenuAction = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll' | 'readAloud' | 'sendToChat' | 'saveIdea' | 'pin';
 
 /** Actions run by the browser on the focused field / page selection (through the main process). */
 const EDIT_COMMANDS = ['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'] as const;
@@ -50,7 +50,12 @@ export function buildMenu(ctx: MenuContext): MenuEntry[] | null {
       entries = [{ action: 'copy', label: 'Copiar', shortcut: 'Ctrl+C' }, 'separator', { action: 'selectAll', label: 'Seleccionar todo', shortcut: 'Ctrl+A' }];
     }
     if (has) {
-      entries.push('separator', { action: 'sendToChat', label: 'Enviar a un chat nuevo de Claude' }, { action: 'saveIdea', label: 'Guardar idea' });
+      entries.push(
+        'separator',
+        { action: 'readAloud', label: 'Leer en voz alta' },
+        { action: 'sendToChat', label: 'Enviar a un chat nuevo de Claude' },
+        { action: 'saveIdea', label: 'Guardar idea' }
+      );
       if (ctx.kind === 'page' && ctx.chatTabId) entries.push({ action: 'pin', label: 'Fijar en este chat' });
     }
     return entries;

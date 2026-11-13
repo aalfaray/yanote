@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Undo2, Redo2, Scissors, Copy, ClipboardPaste, TextSelect, Send, Lightbulb, Pin } from 'lucide-react';
+import { Undo2, Redo2, Scissors, Copy, ClipboardPaste, TextSelect, Send, Lightbulb, Pin, Volume2 } from 'lucide-react';
 import type { MenuAction, MenuEntry } from '../../lib/contextMenu';
 
 const ICONS: Record<MenuAction, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>> = {
@@ -12,6 +12,7 @@ const ICONS: Record<MenuAction, React.ComponentType<{ size?: number; strokeWidth
   sendToChat: Send,
   saveIdea: Lightbulb,
   pin: Pin,
+  readAloud: Volume2,
 };
 
 interface AppContextMenuProps {

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent, renderHook } from '@testing-library/react';
 import { buildMenu } from '../../src/lib/contextMenu';
 import { registerTerminal } from '../../src/lib/terminalRegistry';
+import { READ_ALOUD_EVENT, requestReadAloud } from '../../src/lib/readAloud';
+import { useReadAloudRequests } from '../../src/hooks/useReadAloudRequests';
 
 vi.mock('../../src/components/Editor', () => ({ Editor: () => <textarea data-testid="editor" defaultValue="hola mundo" /> }));
 vi.mock('../../src/components/ClaudeChatView', () => ({
@@ -37,10 +39,10 @@ describe('buildMenu', () => {
     expect(field.find((e) => e !== 'separator' && e.action === 'copy')).toMatchObject({ disabled: true });
 
     const term = buildMenu({ kind: 'terminal', selection: 'ls', chatTabId: null })!;
-    expect(term.filter((e) => e !== 'separator').map((e) => (e as any).action)).toEqual(['copy', 'paste', 'selectAll', 'sendToChat', 'saveIdea']);
+    expect(term.filter((e) => e !== 'separator').map((e) => (e as any).action)).toEqual(['copy', 'paste', 'selectAll', 'readAloud', 'sendToChat', 'saveIdea']);
 
     const chat = buildMenu({ kind: 'page', selection: 'texto', chatTabId: 'c1' })!;
-    expect(chat.filter((e) => e !== 'separator').map((e) => (e as any).action)).toEqual(['copy', 'selectAll', 'sendToChat', 'saveIdea', 'pin']);
+    expect(chat.filter((e) => e !== 'separator').map((e) => (e as any).action)).toEqual(['copy', 'selectAll', 'readAloud', 'sendToChat', 'saveIdea', 'pin']);
     expect(buildMenu({ kind: 'page', selection: '  ', chatTabId: 'c1' })).toBeNull();
   });
 });
@@ -78,7 +80,7 @@ describe('App: yanote right-click menu', () => {
     });
     expect(event.defaultPrevented).toBe(true); // no native menu
     expect(screen.getByTestId('app-context-menu')).toBeInTheDocument();
-    expect(labels()).toEqual(['Copiar', 'Seleccionar todo', 'Enviar a un chat nuevo de Claude', 'Guardar idea', 'Fijar en este chat']);
+    expect(labels()).toEqual(['Copiar', 'Seleccionar todo', 'Leer en voz alta', 'Enviar a un chat nuevo de Claude', 'Guardar idea', 'Fijar en este chat']);
 
     fireEvent.click(screen.getByRole('menuitem', { name: /Copiar/ }));
     expect(window.electronAPI!.editCommand).toHaveBeenCalledWith('copy');
@@ -126,7 +128,7 @@ describe('App: yanote right-click menu', () => {
     const editor = (await screen.findByTestId('editor')) as HTMLTextAreaElement;
     editor.setSelectionRange(0, 4);
     fireEvent.contextMenu(editor, { clientX: 5, clientY: 5 });
-    expect(labels()).toEqual(['Deshacer', 'Rehacer', 'Cortar', 'Copiar', 'Pegar', 'Seleccionar todo', 'Enviar a un chat nuevo de Claude', 'Guardar idea']);
+    expect(labels()).toEqual(['Deshacer', 'Rehacer', 'Cortar', 'Copiar', 'Pegar', 'Seleccionar todo', 'Leer en voz alta', 'Enviar a un chat nuevo de Claude', 'Guardar idea']);
     fireEvent.click(screen.getByRole('menuitem', { name: /Pegar/ }));
     expect(window.electronAPI!.editCommand).toHaveBeenCalledWith('paste');
   });
@@ -171,5 +173,61 @@ describe('App: yanote right-click menu', () => {
     fireEvent.contextMenu(screen.getAllByText('scratch-1.md')[0], { clientX: 5, clientY: 5 });
     expect(screen.getByTestId('tab-context-menu')).toBeInTheDocument();
     expect(screen.queryByTestId('app-context-menu')).not.toBeInTheDocument();
+  });
+});
+
+describe('Right-click > "Leer en voz alta"', () => {
+  beforeEach(() => {
+    window.electronAPI = {
+      getAppConfig: vi.fn().mockResolvedValue({ notesPath: '/n', alwaysOnTop: false, welcomeSeen: true, ideas: [] }),
+      saveAppConfig: vi.fn().mockResolvedValue({}),
+      getNotesPath: vi.fn().mockResolvedValue('/n'),
+      readFile: vi.fn(),
+      editCommand: vi.fn().mockResolvedValue(true),
+    } as any;
+  });
+
+  it('asks the chat the selection came from to read it', async () => {
+    const heard: any[] = [];
+    const listen = (e: Event) => heard.push((e as CustomEvent).detail);
+    window.addEventListener(READ_ALOUD_EVENT, listen);
+    render(<App />);
+    await waitFor(() => expect(window.electronAPI!.getAppConfig).toHaveBeenCalled());
+    act(() => screen.getByTitle(/Elegir tipo de pestaña nueva/).click());
+    act(() => screen.getByRole('menuitem', { name: /Chat con Claude/ }).click());
+    const chat = await screen.findByTestId(/^chat-claude-/);
+    rightClickSelecting(screen.getByTestId(`reply-${chat.dataset.chatTab}`));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Leer en voz alta' }));
+    expect(heard).toEqual([{ targetId: chat.dataset.chatTab, text: 'Ya tengo el diseño completo del paso 1' }]);
+    window.removeEventListener(READ_ALOUD_EVENT, listen);
+  });
+
+  it('in a note, the note on screen reads it', async () => {
+    const heard: any[] = [];
+    const listen = (e: Event) => heard.push((e as CustomEvent).detail);
+    window.addEventListener(READ_ALOUD_EVENT, listen);
+    render(<App />);
+    const editor = (await screen.findByTestId('editor')) as HTMLTextAreaElement;
+    editor.setSelectionRange(0, 4);
+    fireEvent.contextMenu(editor, { clientX: 5, clientY: 5 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Leer en voz alta' }));
+    expect(heard).toHaveLength(1);
+    expect(heard[0].text).toBe('hola');
+    expect(heard[0].targetId).toMatch(/^tab-/);
+    window.removeEventListener(READ_ALOUD_EVENT, listen);
+  });
+});
+
+describe('useReadAloudRequests', () => {
+  it('plays only the requests addressed to its tab, split in paragraphs', () => {
+    const playA = vi.fn();
+    const playB = vi.fn();
+    renderHook(() => useReadAloudRequests('a', playA));
+    renderHook(() => useReadAloudRequests('b', playB));
+    act(() => requestReadAloud('a', 'Primer párrafo.\n\nSegundo párrafo.'));
+    expect(playA).toHaveBeenCalledWith([{ text: 'Primer párrafo.' }, { text: 'Segundo párrafo.' }]);
+    expect(playB).not.toHaveBeenCalled();
+    act(() => requestReadAloud('a', '   '));
+    expect(playA).toHaveBeenCalledTimes(1);
   });
 });

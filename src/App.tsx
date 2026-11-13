@@ -20,6 +20,7 @@ import { IdeasDrawer } from './components/IdeasDrawer';
 import { addIdea, removeIdea } from './lib/ideas';
 import { toSavedTabs, restoreTab } from './lib/session';
 import { useAppContextMenu } from './hooks/useAppContextMenu';
+import { readAloudTarget, requestReadAloud } from './lib/readAloud';
 import { logError } from './lib/logger';
 import { AppContextMenu } from './components/ui/AppContextMenu';
 
@@ -745,6 +746,10 @@ export const App: React.FC = () => {
     sendToChat: (text) => handleNewClaude(undefined, text),
     saveIdea: (text, chatTabId) => saveIdeaRef.current({ text, chatTabId }),
     pin: pinInChat,
+    readAloud: (text, from) => {
+      const target = readAloudTarget(from.chatTabId, from.termTabId, activeTabIdRef.current);
+      if (target) requestReadAloud(target, text);
+    },
   });
 
   // Clicking the notification brings that chat to the front

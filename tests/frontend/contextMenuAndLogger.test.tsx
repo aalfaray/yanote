@@ -42,7 +42,7 @@ describe('contextMenu', () => {
   it('builds the menu for each kind of place', () => {
     expect(buildMenu({ kind: 'page', selection: '', chatTabId: null })).toBeNull();
     const chat = buildMenu({ kind: 'page', selection: 'hola', chatTabId: 'c1' })!;
-    expect(chat.filter((e) => e !== 'separator').map((e) => (e as any).action)).toEqual(['copy', 'selectAll', 'sendToChat', 'saveIdea', 'pin']);
+    expect(chat.filter((e) => e !== 'separator').map((e) => (e as any).action)).toEqual(['copy', 'selectAll', 'readAloud', 'sendToChat', 'saveIdea', 'pin']);
     const field = buildMenu({ kind: 'editable', selection: '', chatTabId: null })!;
     expect(field.find((e) => e !== 'separator' && e.action === 'cut')).toMatchObject({ disabled: true });
     expect(isEditCommand('paste')).toBe(true);

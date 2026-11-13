@@ -42,6 +42,7 @@ import {
   type ChatItem,
 } from '../lib/claudeChat';
 import { markdownToSegments } from '../lib/speechText';
+import { useReadAloudRequests } from '../hooks/useReadAloudRequests';
 import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
 import { DismissButton } from './ui/DismissButton';
@@ -479,6 +480,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [claudeDefaults, setClaudeDefaults] = useState<ClaudeDefaults | null>(null);
   const speech = useSpeech();
+  // Right-click > "Leer en voz alta" on a selection of this tab
+  useReadAloudRequests(tabId, speech.play);
   const api = window.electronAPI;
 
   // Start (or resume) the Claude Code process for this tab

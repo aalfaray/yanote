@@ -10,6 +10,7 @@ import { logError, logWarn } from '../lib/logger';
 import { copyText } from '../lib/clipboard';
 import { extractLastResponse } from '../lib/terminalSpeech';
 import { plainTextToSegments } from '../lib/speechText';
+import { useReadAloudRequests } from '../hooks/useReadAloudRequests';
 import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
 import { DismissButton } from './ui/DismissButton';
@@ -68,6 +69,8 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const speech = useSpeech();
+  // Right-click > "Leer en voz alta" on a selection of this tab
+  useReadAloudRequests(tabId, speech.play);
   const [notice, setNotice] = useState<string | null>(null);
 
   // Selected text if any, otherwise the latest answer (Claude Code reply or last command output)

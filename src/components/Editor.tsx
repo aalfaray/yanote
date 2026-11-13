@@ -24,6 +24,7 @@ import {
   DiffSourceToggleWrapper,
 } from '@mdxeditor/editor';
 import type { MDXEditorMethods } from '@mdxeditor/editor';
+import { useReadAloudRequests } from '../hooks/useReadAloudRequests';
 import { useSpeech } from '../hooks/useSpeech';
 import { translateEditor } from '../lib/editorTranslation';
 import {
@@ -121,6 +122,8 @@ export const Editor: React.FC<EditorProps> = ({
   const speech = useSpeech();
   const { play, stop: stopSpeech, pause: pauseSpeech, resume: resumeSpeech } = speech;
   const speechStatus = speech.state.status;
+  // Right-click > "Leer en voz alta" on a selection of this note
+  useReadAloudRequests(tabId, play);
 
   // Move the caret into a freshly created tab so the user can type immediately
   useEffect(() => {
