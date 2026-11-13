@@ -93,6 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   claudeSetEffort: (id, level) => ipcRenderer.invoke('claude:setEffort', id, level),
   claudeStop: (id) => ipcRenderer.invoke('claude:stop', id),
   claudeUsage: (id) => ipcRenderer.invoke('claude:usage', id),
+  claudeDefaults: (accountId, cwd) => ipcRenderer.invoke('claude:defaults', accountId, cwd),
   claudeAccounts: {
     list: () => ipcRenderer.invoke('claudeAccounts:list'),
     status: (id) => ipcRenderer.invoke('claudeAccounts:status', id),

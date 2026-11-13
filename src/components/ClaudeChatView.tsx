@@ -31,6 +31,9 @@ import {
   matchCommands,
   formatTokens,
   activeModelInfo,
+  inheritedEffort,
+  modelOptionLabel,
+  type ClaudeDefaults,
   effortLevelsFor,
   EFFORT_LABELS,
   type ChatItem,
@@ -477,6 +480,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   accountRef.current = accountId;
   const [accountName, setAccountName] = useState('Principal');
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [claudeDefaults, setClaudeDefaults] = useState<ClaudeDefaults | null>(null);
   const speech = useSpeech();
   const api = window.electronAPI;
 
@@ -545,6 +549,17 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   const suggestions = useMemo(() => matchCommands(state.commands, draft), [state.commands, draft]);
   useEffect(() => setCmdIndex(0), [suggestions.length]);
+
+  // What Claude Code will start with (its settings), shown before the first reply
+  useEffect(() => {
+    let cancelled = false;
+    void api?.claudeDefaults?.(accountId, cwd).then((d) => {
+      if (!cancelled) setClaudeDefaults(d);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, accountId, cwd]);
 
   // Name of the account in use, for the header chip
   useEffect(() => {
@@ -618,11 +633,13 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     if (res && !res.success) dispatch({ type: 'notice', text: `No se pudo cambiar el modo: ${res.error}`, tone: 'error' });
   };
 
-  const modelInfo = activeModelInfo(state.models, selectedModel, state.model);
+  const modelInfo = activeModelInfo(state.models, selectedModel, state.model || claudeDefaults?.model || undefined);
   // Keyed by the real model so aliases (default / opus → same id) share one choice
   const modelKey = modelInfo?.resolvedModel ?? modelInfo?.value ?? 'default';
   const effortLevels = effortLevelsFor(modelInfo);
   const effort: ClaudeEffortLevel | '' = effortLevels.includes(effortByModel[modelKey]) ? effortByModel[modelKey] : '';
+  // Without a yanote choice, Claude Code uses the effort from its settings: show that one
+  const shownEffort: ClaudeEffortLevel | '' = effort || inheritedEffort(claudeDefaults, modelInfo);
 
   /** Sends the effort remembered for `key` (or the default) to the running session. */
   const applyEffort = useCallback(
@@ -1018,31 +1035,31 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               </select>
               {state.models.length > 0 && (
                 <select
-                  value={selectedModel}
+                  value={selectedModel || modelInfo?.value || ''}
                   onChange={(e) => void changeModel(e.target.value)}
                   aria-label="Modelo"
                   title={modelInfo?.description || 'Modelo'}
                   className="h-6 max-w-[9.5rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none bg-white dark:bg-[#27272A]"
                 >
-                  <option value="">{selectedModel ? 'Predeterminado' : 'Modelo'}</option>
+                  {!modelInfo && <option value="">Modelo</option>}
                   {state.models.map((m) => (
                     <option key={m.value} value={m.value}>
-                      {m.displayName}
+                      {modelOptionLabel(m)}
                     </option>
                   ))}
                 </select>
               )}
               {effortLevels.length > 0 && (
                 <select
-                  value={effort}
+                  value={shownEffort}
                   onChange={(e) => void changeEffort(e.target.value as ClaudeEffortLevel | '')}
                   aria-label="Esfuerzo"
                   title={`Esfuerzo de razonamiento para ${modelInfo?.displayName ?? 'este modelo'} (se recuerda por modelo)`}
                   className={`h-6 max-w-[7rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none ${
-                    effort === 'max' || effort === 'xhigh' ? 'bg-[#C9A7F5] text-black' : 'bg-white dark:bg-[#27272A]'
+                    shownEffort === 'max' || shownEffort === 'xhigh' ? 'bg-[#C9A7F5] text-black' : 'bg-white dark:bg-[#27272A]'
                   }`}
                 >
-                  <option value="">Esfuerzo</option>
+                  <option value="">{shownEffort ? 'Predeterminado' : 'Esfuerzo'}</option>
                   {effortLevels.map((l) => (
                     <option key={l} value={l}>
                       {EFFORT_LABELS[l]}

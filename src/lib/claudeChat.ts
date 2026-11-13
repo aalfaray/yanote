@@ -473,10 +473,40 @@ export function activeModelInfo(models: ClaudeModelInfo[], selected: string, rep
     if (picked) return picked;
   }
   if (reported) {
-    const match = models.find((m) => m.resolvedModel === reported || m.value === reported);
+    // An alias ("opus") or the real id ("claude-opus-5-5"); prefer the named row over "default"
+    const match =
+      models.find((m) => m.value === reported) ||
+      models.find((m) => m.value !== 'default' && m.resolvedModel === reported) ||
+      models.find((m) => m.resolvedModel === reported);
     if (match) return match;
   }
   return models.find((m) => m.value === 'default');
+}
+
+/** Model and effort from Claude Code's own settings (read before the chat's first reply). */
+export interface ClaudeDefaults {
+  model: string | null;
+  effortLevel: ClaudeEffortLevel | null;
+  /** Per-model effort, keyed by real model id (settings.json "modelSettings") */
+  modelEfforts: Record<string, ClaudeEffortLevel>;
+  /** CLAUDE_CODE_EFFORT_LEVEL, which wins over everything */
+  effortFromEnv: ClaudeEffortLevel | null;
+}
+
+/** The effort Claude Code uses for `model` when yanote doesn't set one ('' = the model's own default). */
+export function inheritedEffort(defaults: ClaudeDefaults | null | undefined, model: ClaudeModelInfo | undefined): ClaudeEffortLevel | '' {
+  if (!defaults || !model) return '';
+  const levels = effortLevelsFor(model);
+  const key = model.resolvedModel ?? model.value;
+  const level = defaults.effortFromEnv || defaults.modelEfforts?.[key] || defaults.effortLevel;
+  return level && levels.includes(level) ? level : '';
+}
+
+/** Option text for a model row: the "default" row says which model it is. */
+export function modelOptionLabel(model: ClaudeModelInfo): string {
+  if (model.value !== 'default') return model.displayName;
+  const which = (model.description || '').split('·')[0].trim();
+  return which ? `Predeterminado · ${which}` : 'Predeterminado';
 }
 
 /** Effort levels the model accepts ([] when it has no effort control). */

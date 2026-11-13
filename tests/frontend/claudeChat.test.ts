@@ -9,6 +9,8 @@ import {
   matchCommands,
   activeModelInfo,
   effortLevelsFor,
+  inheritedEffort,
+  modelOptionLabel,
   type ChatState,
   type ChatAction,
 } from '../../src/lib/claudeChat';
@@ -161,5 +163,26 @@ describe('Frontend: Claude sign-in detection', () => {
     expect(chatReducer(limited, { type: 'auth_retry' }).rateLimited).toBe(false);
     const after = chatReducer(limited, msg({ type: 'assistant', message: { id: 'm2', content: [{ type: 'text', text: 'Hola de nuevo' }] } }));
     expect(after.rateLimited).toBe(false);
+  });
+
+  it('shows the model and effort from Claude Code settings before the first reply', () => {
+    const rows = [
+      { value: 'default', displayName: 'Default (recommended)', description: 'Opus 5.5 · Best for everyday tasks', resolvedModel: 'claude-opus-5-5', supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] as any },
+      { value: 'opus', displayName: 'Opus 5.5', description: 'Complex work', resolvedModel: 'claude-opus-5-5', supportedEffortLevels: ['low', 'medium', 'high', 'xhigh', 'max'] as any },
+      { value: 'sonnet', displayName: 'Sonnet 5.5', description: '', resolvedModel: 'claude-sonnet-5-5', supportedEffortLevels: ['low', 'high'] as any },
+    ];
+    // settings say "opus"; later Claude reports the real id: the same row either way
+    expect(activeModelInfo(rows, '', 'opus')?.value).toBe('opus');
+    expect(activeModelInfo(rows, '', 'claude-opus-5-5')?.value).toBe('opus');
+    expect(activeModelInfo(rows, '', undefined)?.value).toBe('default');
+    expect(modelOptionLabel(rows[0])).toBe('Predeterminado · Opus 5.5');
+    expect(modelOptionLabel(rows[1])).toBe('Opus 5.5');
+
+    const defaults = { model: 'opus', effortLevel: 'xhigh' as const, modelEfforts: { 'claude-opus-5-5': 'medium' as const }, effortFromEnv: null };
+    expect(inheritedEffort(defaults, rows[1])).toBe('medium'); // per-model setting wins
+    expect(inheritedEffort(defaults, rows[2])).toBe(''); // xhigh isn't offered by this model
+    expect(inheritedEffort({ ...defaults, modelEfforts: {} }, rows[1])).toBe('xhigh');
+    expect(inheritedEffort({ ...defaults, effortFromEnv: 'low' }, rows[2])).toBe('low');
+    expect(inheritedEffort(null, rows[1])).toBe('');
   });
 });

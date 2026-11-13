@@ -10,6 +10,7 @@ const { savePastedImage } = require('./services/clipboardImageService.cjs');
 const { createClaudeChatService, findClaudeExecutable, findBundledExecutable } = require('./services/claudeChatService.cjs');
 const { createClaudeAccountService } = require('./services/claudeAccountService.cjs');
 const { withFreshPath } = require('./services/terminalService.cjs');
+const { readClaudeDefaults } = require('./services/claudeSettings.cjs');
 const { createUpdateService } = require('./services/updateService.cjs');
 const { parseOpenTarget } = require('./services/openTargetService.cjs');
 
@@ -415,6 +416,10 @@ ipcMain.handle('claude:setModel', (_, id, model) => claudeChatService.setModel(i
 ipcMain.handle('claude:setEffort', (_, id, level) => claudeChatService.setEffort(id, level));
 ipcMain.handle('claude:stop', (_, id) => claudeChatService.stop(id));
 ipcMain.handle('claude:usage', (_, id) => claudeChatService.usage(id));
+// Model / effort Claude Code will use, so the chat can show them before the first reply
+ipcMain.handle('claude:defaults', (_, accountId, cwd) =>
+  readClaudeDefaults({ configDir: claudeAccountService.configDirFor(accountId), cwd: cwd || appConfig.notesPath })
+);
 
 // IPC - Claude accounts
 ipcMain.handle('claudeAccounts:list', () => claudeAccountService.list());

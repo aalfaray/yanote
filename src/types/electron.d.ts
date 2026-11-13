@@ -193,6 +193,8 @@ export interface ElectronAPI {
   claudeStop?: (id: string) => Promise<boolean>;
   /** Plan usage (5-hour / weekly windows, like /usage) through a live chat session */
   claudeUsage?: (id?: string) => Promise<ClaudeUsage>;
+  /** Model and effort from Claude Code's settings for that account/folder */
+  claudeDefaults?: (accountId?: string, cwd?: string) => Promise<import('../lib/claudeChat').ClaudeDefaults>;
   /** Several Claude accounts (each one its own Claude Code sign-in) */
   claudeAccounts?: {
     list: () => Promise<{ accounts: ClaudeAccount[]; activeId: string }>;
