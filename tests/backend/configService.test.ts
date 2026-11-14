@@ -36,6 +36,15 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
   });
 
   // --- 20% HAPPY PATH TESTS ---
+  it('restores the browsed folder and explorer layout without changing where notes are saved', () => {
+    const current = loadConfig(configPath, notesPath);
+    saveConfig(configPath, current, { explorerOpen: true, explorerWidth: 310, explorerFolder: 'D:\\projects' });
+    const reloaded = loadConfig(configPath, notesPath);
+    expect(reloaded).toMatchObject({ notesPath, explorerOpen: true, explorerWidth: 310, explorerFolder: 'D:\\projects' });
+    saveConfig(configPath, reloaded, { explorerFolder: null });
+    expect(loadConfig(configPath, notesPath).explorerFolder).toBeNull();
+  });
+
   it('keeps Antigravity as the provider when saving and reopening chat tabs', () => {
     const tab = { kind: 'claude', title: 'Antigravity', sessionId: 'agy-session', provider: 'antigravity' };
     saveConfig(configPath, {}, { openTabs: [tab] });

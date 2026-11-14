@@ -330,8 +330,8 @@ export const Editor: React.FC<EditorProps> = ({
         markdown={markdown}
         onChange={onChange}
         onError={handleParseError}
-        className={`w-full h-full flex flex-col font-sans ${isDarkMode ? 'dark-theme' : ''}`}
-        contentEditableClassName="mdxeditor-content outline-none min-h-full flex-1"
+        className={`mdxeditor-full-height w-full h-full flex flex-col font-sans ${isDarkMode ? 'dark-theme' : ''}`}
+        contentEditableClassName="mdxeditor-content outline-none"
         plugins={[
           headingsPlugin(),
           listsPlugin(),

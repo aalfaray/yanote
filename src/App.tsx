@@ -27,6 +27,7 @@ import { useAppContextMenu } from './hooks/useAppContextMenu';
 import { readAloudTarget, requestReadAloud } from './lib/readAloud';
 import { logError } from './lib/logger';
 import { AppContextMenu } from './components/ui/AppContextMenu';
+import { FileExplorer, MIN_EXPLORER_WIDTH, MAX_EXPLORER_WIDTH } from './components/FileExplorer';
 
 const STARTUP_TAB_ID = 'tab-startup';
 
@@ -60,6 +61,12 @@ export const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFilesDrawerOpen, setIsFilesDrawerOpen] = useState(false);
   const [isIdeasOpen, setIsIdeasOpen] = useState(false);
+  // Orca-style file explorer on the left (Ctrl+Shift+E); open state and width are remembered
+  const [isExplorerOpen, setIsExplorerOpen] = useState(false);
+  const [explorerWidth, setExplorerWidth] = useState(240);
+  const [explorerFolder, setExplorerFolder] = useState<string | null>(null);
+  const explorerFolderChanged = useRef(false);
+  const explorerChanged = useRef(false);
   const [ideas, setIdeas] = useState<SavedIdea[]>([]);
   const ideasRef = useRef<SavedIdea[]>([]);
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
@@ -125,6 +132,13 @@ export const App: React.FC = () => {
           notifyClaudeRef.current = config.notifyClaude !== false;
           if (typeof config.activeClaudeAccount === 'string') activeAccountRef.current = config.activeClaudeAccount;
           if (!appearanceChanged.current.opacity && typeof config.opacity === 'number') setWindowOpacity(config.opacity);
+          if (!explorerChanged.current) {
+            setIsExplorerOpen(config.explorerOpen === true);
+            if (typeof config.explorerWidth === 'number') setExplorerWidth(Math.max(MIN_EXPLORER_WIDTH, Math.min(MAX_EXPLORER_WIDTH, config.explorerWidth)));
+          }
+          if (!explorerFolderChanged.current && typeof config.explorerFolder === 'string' && config.explorerFolder) {
+            setExplorerFolder(config.explorerFolder);
+          }
           const dark = Boolean(config.darkMode);
           if (!appearanceChanged.current.dark) setIsDarkMode(dark);
           if (!appearanceChanged.current.dark && dark) {
@@ -269,11 +283,11 @@ export const App: React.FC = () => {
     setFocusTabId(newId);
   };
 
-  const handleNewTerminal = (shell: TerminalShell, options: { title?: string; initialCommand?: string } = {}) => {
+  const handleNewTerminal = (shell: TerminalShell, options: { title?: string; initialCommand?: string; cwd?: string } = {}) => {
     const newId = `term-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     // Open where the user is: the folder of the active note, else (main process) the notes folder
     const current = tabs.find((t) => t.id === activeTabId);
-    const cwd = current?.kind === 'terminal' || current?.kind === 'claude' ? current.cwd : parentDir(current?.path ?? null) ?? undefined;
+    const cwd = options.cwd ?? (current?.kind === 'terminal' || current?.kind === 'claude' ? current.cwd : parentDir(current?.path ?? null) ?? undefined);
     setTabs((prev) => {
       const baseName = shell === 'powershell' ? 'PowerShell' : 'CMD';
       const count = prev.filter((t) => t.kind === 'terminal' && t.shell === shell).length + 1;
@@ -478,12 +492,33 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Global keyboard shortcuts (Ctrl+Shift+D to toggle dark mode, Ctrl+W, Ctrl+Alt+W, Ctrl+O)
+  const handleToggleExplorer = useCallback(() => {
+    explorerChanged.current = true;
+    setIsExplorerOpen((prev) => {
+      const next = !prev;
+      window.electronAPI?.saveAppConfig({ explorerOpen: next }).catch((err) => logError('App.saveExplorerOpen', err));
+      return next;
+    });
+  }, []);
+
+  // Width is saved once the drag settles
+  useEffect(() => {
+    if (!explorerChanged.current || !window.electronAPI) return;
+    const timer = setTimeout(() => {
+      window.electronAPI?.saveAppConfig({ explorerWidth }).catch((err) => logError('App.saveExplorerWidth', err));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [explorerWidth]);
+
+  // Global keyboard shortcuts (Ctrl+Shift+D to toggle dark mode, Ctrl+Shift+E explorer, Ctrl+W, Ctrl+Alt+W, Ctrl+O)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
         e.preventDefault();
         openFileRef.current?.();
+      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        handleToggleExplorer();
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         handleToggleDarkMode();
@@ -499,7 +534,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [handleToggleDarkMode, handleCloseAll, handleCloseTab]);
+  }, [handleToggleDarkMode, handleToggleExplorer, handleCloseAll, handleCloseTab]);
 
   const handleRenameTab = async (id: string, newTitle: string) => {
     const tab = tabs.find((t) => t.id === id);
@@ -870,6 +905,9 @@ export const App: React.FC = () => {
   const antigravityUsage = useAntigravityUsage(isAntigravityActive ? activeTab.id : undefined);
   const isClaudeActive = activeTab?.kind === 'claude';
   const isTerminalActive = activeTab?.kind === 'terminal' || isClaudeActive;
+  // Follow the active tab until the user chooses a folder to browse independently.
+  const explorerRoot =
+    explorerFolder || (activeTab?.kind === 'terminal' || activeTab?.kind === 'claude' ? activeTab.cwd : parentDir(activeTab?.path ?? null)) || notesDir || undefined;
 
   return (
     <div className="w-screen h-screen flex flex-col bg-[#FAF8F5] dark:bg-[#121212] overflow-hidden border-2 border-black dark:border-zinc-700 transition-colors">
@@ -882,6 +920,8 @@ export const App: React.FC = () => {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenFiles={() => setIsFilesDrawerOpen(true)}
         onOpenIdeas={() => setIsIdeasOpen(true)}
+        isExplorerOpen={isExplorerOpen}
+        onToggleExplorer={handleToggleExplorer}
         ideasCount={ideas.length}
         onRequestClose={() => setIsQuitConfirmOpen(true)}
         opacity={windowOpacity}
@@ -910,8 +950,34 @@ export const App: React.FC = () => {
         onExportPdf={(tab) => void handleExportPdf(tab)}
       />
 
+      <div className="flex-1 min-h-0 w-full relative overflow-hidden flex flex-row">
+      {isExplorerOpen && (
+        <FileExplorer
+          root={explorerRoot}
+          followsActiveTab={!explorerFolder}
+          onNavigateFolder={(folder) => {
+            explorerFolderChanged.current = true;
+            setExplorerFolder(folder);
+            window.electronAPI?.saveAppConfig({ explorerFolder: folder }).catch((err) => logError('App.saveExplorerFolder', err));
+          }}
+          tabTitles={Object.fromEntries(tabs.map((t) => [t.id, t.title]))}
+          activeTabId={activeTab?.id}
+          openPaths={tabs.filter((t) => t.path).map((t) => t.path as string)}
+          width={explorerWidth}
+          onResize={(w) => {
+            explorerChanged.current = true;
+            setExplorerWidth(w);
+          }}
+          onClose={handleToggleExplorer}
+          onOpenNote={(path, name) => void handleOpenRecent({ path, name, openedAt: Date.now() })}
+          onFocusTab={setActiveTabId}
+          onNewChat={(folder) => handleNewClaude(folder)}
+          onNewTerminal={(folder) => handleNewTerminal('powershell', { cwd: folder })}
+          onNotify={(text, type) => setNotification({ text, type })}
+        />
+      )}
       {/* 3. Main Editor (@mdxeditor/editor with Boldkit Neubrutalism) */}
-      <div className="flex-1 w-full h-full relative overflow-hidden flex flex-col">
+      <div className="flex-1 min-w-0 h-full relative overflow-hidden flex flex-col">
         {/* Terminal tabs stay mounted (hidden when inactive) so their sessions survive tab switches */}
         {tabs
           .filter((t) => t.kind === 'terminal')
@@ -1001,6 +1067,7 @@ export const App: React.FC = () => {
             <DismissButton onClick={() => setNotification(null)} />
           </div>
         )}
+      </div>
       </div>
 
       {/* 4. Bottom Neubrutalist Status Bar */}

@@ -19,7 +19,7 @@ export interface ChatBackend {
   /** Command that signs in, typed into a terminal tab */
 
   loginCommand: string;
-  start: (options: { id: string; cwd?: string; resume?: string; permissionMode?: string; model?: string; accountId?: string }) => Promise<{ success: boolean; error?: string; executable?: string }>;
+  start: (options: { id: string; cwd?: string; resume?: string; permissionMode?: string; model?: string; accountId?: string }) => Promise<{ success: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
   send: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => Result;
   respondPermission: (id: string, requestId: string, decision: ClaudePermissionDecision) => Promise<boolean> | undefined;
   interrupt: (id: string) => Result | undefined;

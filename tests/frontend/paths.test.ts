@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parentDir, baseName, isMarkdownFile } from '../../src/lib/paths';
+import { parentDir, parentFolder, baseName, isMarkdownFile, pathCrumbs } from '../../src/lib/paths';
 
 describe('parentDir', () => {
   it('returns the folder of Windows and POSIX paths', () => {
@@ -32,5 +32,44 @@ describe('baseName / isMarkdownFile (drag & drop)', () => {
     expect(isMarkdownFile('doc.mdx')).toBe(true);
     expect(isMarkdownFile('foto.png')).toBe(false);
     expect(isMarkdownFile('md')).toBe(false);
+  });
+});
+
+describe('parentFolder', () => {
+  it.each([
+    ['C:\\work\\project\\', 'C:\\work'],
+    ['C:/work/project/', 'C:/work'],
+    ['C:\\work', 'C:\\'],
+    ['/home/me/', '/home'],
+    ['/home', '/'],
+    ['\\\\server\\share\\project', '\\\\server\\share'],
+    ['C:\\', null],
+    ['C:/', null],
+    ['/', null],
+    ['\\\\server\\share\\', null],
+    ['//server/share/', null],
+  ])('finds the parent of %s without leaving filesystem roots', (folder, parent) => {
+    expect(parentFolder(folder!)).toBe(parent);
+  });
+});
+
+describe('pathCrumbs', () => {
+  it('splits Windows, POSIX and network paths into jumpable folders', () => {
+    expect(pathCrumbs(String.raw`C:\Users\me\ `.trim())).toEqual([
+      { name: 'C:', path: String.raw`C:\ `.trim() },
+      { name: 'Users', path: String.raw`C:\Users` },
+      { name: 'me', path: String.raw`C:\Users\me` },
+    ]);
+    expect(pathCrumbs(String.raw`C:\ `.trim())).toEqual([{ name: 'C:', path: String.raw`C:\ `.trim() }]);
+    expect(pathCrumbs('/home/me')).toEqual([
+      { name: '/', path: '/' },
+      { name: 'home', path: '/home' },
+      { name: 'me', path: '/home/me' },
+    ]);
+    expect(pathCrumbs(String.raw`\\srv\share\x`)).toEqual([
+      { name: String.raw`\\srv\share`, path: String.raw`\\srv\share` },
+      { name: 'x', path: String.raw`\\srv\share\x` },
+    ]);
+    expect(pathCrumbs('')).toEqual([]);
   });
 });

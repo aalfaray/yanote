@@ -19,6 +19,7 @@ const { createUpdateService } = require('./services/updateService.cjs');
 const { parseOpenTarget } = require('./services/openTargetService.cjs');
 const { configureSharedLog } = require('./services/logService.cjs');
 const { createSafeIpc } = require('./services/safeIpc.cjs');
+const fileTreeService = require('./services/fileTreeService.cjs');
 const { createEditCommandService } = require('./services/editCommandService.cjs');
 const { createSpellcheckService } = require('./services/spellcheckService.cjs');
 const { createLanguageService } = require('./services/languageService.cjs');
@@ -49,6 +50,7 @@ const terminalService = createTerminalService();
 const claudeChatService = createClaudeChatService({ requireInstalledCli: app.isPackaged });
 const agyChatService = createAntigravityChatService();
 const agyUsageService = createAntigravityUsageService();
+const fileTreeWatcher = fileTreeService.createFileTreeWatcher();
 let updateService = null;
 
 let mainWindow = null;
@@ -135,6 +137,7 @@ function createWindow() {
     claudeChatService.stopAll();
     accountUsageService.stopAll();
     agyChatService.stopAll();
+    fileTreeWatcher.unwatchAll();
     mainWindow = null;
   });
 }
@@ -366,6 +369,32 @@ ipc.handle('app:revealInExplorer', async (_, filePath) => {
     return { success: false, error: err.message };
   }
 });
+
+// IPC - File explorer (side panel): one folder level at a time, live changes, git colors
+ipc.handle('tree:selectFolder', async (_, currentFolder) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: languageService.t('Elegir carpeta'),
+    defaultPath: typeof currentFolder === 'string' && currentFolder ? currentFolder : appConfig.notesPath,
+  });
+  return !result.canceled && result.filePaths.length > 0 ? result.filePaths[0] : null;
+});
+ipc.handle('tree:list', (_, dir) => fileTreeService.listDir(dir));
+ipc.handle('tree:gitStatus', (_, dir) => fileTreeService.gitStatus(dir));
+ipc.handle('tree:watch', (event, root) => {
+  const sender = event.sender;
+  return fileTreeWatcher.watch(sender.id, root, (change) => {
+    if (!sender.isDestroyed()) sender.send('tree:changed', change);
+  });
+});
+ipc.handle('tree:unwatch', (event) => fileTreeWatcher.unwatch(event.sender.id));
+// Which Claude Code yanote runs (the user's install wins over the bundled one) and its version
+ipc.handle('claude:installInfo', () =>
+  fileTreeService.claudeInstallInfo({
+    findUser: () => findClaudeExecutable(withFreshPath({ ...process.env })),
+    findBundled: () => findBundledExecutable(),
+  })
+);
 
 // IPC - Text to speech (native System.Speech fallback)
 ipc.handle('tts:speak', (event, request) => {

@@ -1,7 +1,7 @@
 import { t, useLanguage } from '../lib/i18n';
 import React, { useEffect, useRef, useState } from 'react';
 import type { ClaudeUsage, ClaudeUsageWindow } from '../types/electron';
-import { describeWindow, formatPercent, usageTone } from '../lib/claudeUsage';
+import { describeWindow, formatCountdown, formatPercent, isExhausted, usageTone } from '../lib/claudeUsage';
 import { logWarn } from '../lib/logger';
 import { LoadingSkeleton } from './ui/Skeleton';
 
@@ -73,15 +73,45 @@ const TONE: Record<ReturnType<typeof usageTone>, string> = {
   high: 'bg-[#FF6B6B]',
 };
 
-export const UsageWindowMeter: React.FC<{ label: string; win: ClaudeUsageWindow; testId: string }> = ({ label, win, testId }) => { useLanguage(); return (
-  <span data-testid={testId} className="flex items-center gap-1 leading-none">
-    <span className="text-black/60 dark:text-zinc-400">{label}</span>
-    <span className="relative h-2 w-6 min-[400px]:w-9 rounded-sm border border-black dark:border-zinc-500 bg-white dark:bg-zinc-800 overflow-hidden" aria-hidden="true">
-      <span className={`absolute inset-y-0 left-0 ${TONE[usageTone(win.percent)]}`} style={{ width: `${Math.max(0, Math.min(100, win.percent))}%` }} />
+const TICK_MS = 30 * 1000;
+
+/** Re-renders every 30 s while `active`, so a countdown stays current between usage polls. */
+
+function useNow(active: boolean): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!active) return;
+    setNow(new Date());
+    const id = setInterval(() => {
+      try {
+        setNow(new Date());
+      } catch (err) {
+        logWarn('ClaudeUsageMeter.useNow', `tick failed: ${(err as Error)?.message ?? err}`);
+      }
+    }, TICK_MS);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
+
+/** One window: bar + percent, or — once it's used up — the time left until it resets. */
+
+export const UsageWindowMeter: React.FC<{ label: string; win: ClaudeUsageWindow; testId: string }> = ({ label, win, testId }) => {
+  useLanguage();
+  const now = useNow(win.percent >= 100 && Boolean(win.resetsAt));
+  const countdown = isExhausted(win, now) ? formatCountdown(win.resetsAt, now) : '';
+  return (
+    <span data-testid={testId} className="flex items-center gap-1 leading-none">
+      <span className="text-black/60 dark:text-zinc-400">{label}</span>
+      <span className="relative h-2 w-6 min-[400px]:w-9 rounded-sm border border-black dark:border-zinc-500 bg-white dark:bg-zinc-800 overflow-hidden" aria-hidden="true">
+        <span className={`absolute inset-y-0 left-0 ${TONE[usageTone(win.percent)]}`} style={{ width: `${Math.max(0, Math.min(100, win.percent))}%` }} />
+      </span>
+      {countdown
+        ? <span data-testid={`${testId}-countdown`} title={t("Vuelve a estar disponible en {0}", [countdown])} className="font-black tabular-nums text-[#D63031] dark:text-[#FF6B6B]">⏳ {countdown}</span>
+        : <span className="font-black tabular-nums">{formatPercent(win.percent)}</span>}
     </span>
-    <span className="font-black tabular-nums">{formatPercent(win.percent)}</span>
-  </span>
-); };
+  );
+};
 
 /** Compact "5h ▮▯ 16% · Sem ▮▯ 41%" for the status bar; hover for reset times. */
 

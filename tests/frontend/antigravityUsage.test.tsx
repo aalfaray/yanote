@@ -12,6 +12,7 @@ describe('Antigravity usage bar', () => {
   let off: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-14T11:51:58Z')); // 1 h before the Gemini weekly reset
     off = vi.fn();
     window.electronAPI = {
       agyUsage: vi.fn().mockResolvedValue(gemini),
@@ -24,7 +25,7 @@ describe('Antigravity usage bar', () => {
   it('shows actual used quota and reset times, without disabled windows or Claude Code labels', async () => {
     render(<Probe id="gemini-tab" />);
     await advance();
-    expect(screen.getByTestId('agy-usage-week')).toHaveTextContent('Sem100%');
+    expect(screen.getByTestId('agy-usage-week')).toHaveTextContent('Sem⏳ 1h'); // used up → time left, not 100%
     expect(screen.queryByTestId('agy-usage-5h')).not.toBeInTheDocument();
     expect(screen.getByTestId('antigravity-usage').title).toContain('Uso de Antigravity · Gemini Models');
     expect(screen.getByTestId('antigravity-usage').title).toContain('se reinicia');
@@ -82,7 +83,7 @@ describe('Antigravity usage bar', () => {
     vi.mocked(window.electronAPI!.agyUsage!).mockResolvedValueOnce({ success: false, error: 'offline' });
     act(() => emit({ id: 'a1', type: 'message', message: { type: 'result' } }));
     await advance();
-    expect(screen.getByTestId('agy-usage-week')).toHaveTextContent('100%');
+    expect(screen.getByTestId('agy-usage-week')).toHaveTextContent('⏳ 1h');
     expect(screen.getByTestId('antigravity-usage').title).toContain('Última lectura disponible');
   });
 });

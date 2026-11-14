@@ -131,6 +131,9 @@ function loadConfig(configFilePath, defaultNotesPath) {
         activeTabPath: typeof parsed.activeTabPath === 'string' ? parsed.activeTabPath : null,
         activeTabIndex: Number.isInteger(parsed.activeTabIndex) && parsed.activeTabIndex >= 0 ? parsed.activeTabIndex : null,
         recentFiles: sanitizeRecentFiles(parsed.recentFiles),
+        explorerOpen: parsed.explorerOpen === true,
+        explorerWidth: typeof parsed.explorerWidth === 'number' && Number.isFinite(parsed.explorerWidth) ? parsed.explorerWidth : 240,
+        explorerFolder: typeof parsed.explorerFolder === 'string' && parsed.explorerFolder.trim() ? parsed.explorerFolder : null,
       };
     }
   } catch (err) {
@@ -152,6 +155,9 @@ function loadConfig(configFilePath, defaultNotesPath) {
     activeTabPath: null,
     activeTabIndex: null,
     recentFiles: [],
+    explorerOpen: false,
+    explorerWidth: 240,
+    explorerFolder: null,
   };
 }
 

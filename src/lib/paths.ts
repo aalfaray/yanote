@@ -10,6 +10,36 @@ export function parentDir(filePath: string | null): string | null {
   return filePath.slice(0, idx);
 }
 
+/** Parent for folder navigation; drive, POSIX and network share roots have no parent. */
+export function parentFolder(folder: string): string | null {
+  const trimmed = folder.replace(/[\\/]+$/, '');
+  if (!trimmed || /^[a-z]:$/i.test(trimmed) || /^[\\/]{2}[^\\/]+[\\/][^\\/]+$/.test(trimmed)) return null;
+  return parentDir(trimmed);
+}
+
+/**
+ * Breadcrumb segments of a folder, each with the full path to jump to:
+ * "C:\Users\me" -> [C:\, Users, me]; "/home/me" -> [/, home, me]; "\\srv\share\x" -> [\\srv\share, x].
+ */
+export function pathCrumbs(folder: string | null | undefined): { name: string; path: string }[] {
+  try {
+    if (!folder) return [];
+    const crumbs: { name: string; path: string }[] = [];
+    let current: string | null = folder.replace(/[\\/]+$/, '') || folder;
+    while (current) {
+      const up = parentFolder(current);
+      const name = up ? baseName(current) : current.replace(/[\\/]+$/, '') || current;
+      crumbs.unshift({ name, path: /^[a-z]:$/i.test(current) ? `${current}\\` : current });
+      if (!up || up === current) break;
+      current = up;
+    }
+    return crumbs;
+  } catch (err) {
+    logError('paths.pathCrumbs', err, { folder });
+    return folder ? [{ name: folder, path: folder }] : [];
+  }
+}
+
 const MARKDOWN_EXTENSIONS = ['.md', '.markdown', '.mdx'];
 
 /** Files yanote opens as notes when dropped on the window (by name: Windows gives .md no MIME type). */

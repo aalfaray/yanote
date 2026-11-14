@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { toSavedTabs, restoreTab } from '../../src/lib/session';
 import { historyItems } from '../../src/lib/claudeChat';
 import type { TabItem } from '../../src/types/electron';
@@ -128,5 +128,29 @@ describe('App: opens with the tabs of last time', () => {
     expect(screen.getByTestId('editor')).toHaveValue('# Plan');
     expect(screen.getByText(/Sin guardar/i)).toBeInTheDocument();
     expect(window.electronAPI!.readFile).not.toHaveBeenCalledWith('C:\\p\\plan.md');
+  });
+
+  it('keeps the browsed folder across tab switches and reopening, and starts Claude there', async () => {
+    window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
+      language: 'es', explorerOpen: true, explorerFolder: 'D:\\work',
+      openTabs: [{ kind: 'note', path: 'C:\\p\\plan.md', title: 'plan.md', content: 'pending', isDirty: true }],
+    });
+    window.electronAPI!.treeList = vi.fn(async (folder) => ({ success: true, entries: folder === 'D:\\work' ? [{ name: 'project', path: 'D:\\work\\project', isDir: true }] : [] }));
+    render(<App />);
+    fireEvent.doubleClick(await screen.findByText('project'));
+    await waitFor(() => expect(screen.getByTestId('explorer-location')).toHaveAttribute('title', 'D:\\work\\project'));
+    expect(window.electronAPI!.saveAppConfig).toHaveBeenCalledWith({ explorerFolder: 'D:\\work\\project' });
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir Claude aquí' }));
+    const chat = await screen.findByTestId(/^chat-claude-/);
+    expect(chat).toHaveAttribute('data-cwd', 'D:\\work\\project');
+    fireEvent.click(screen.getAllByText('plan.md')[0]);
+    expect(screen.getByTestId('editor')).toHaveValue('pending');
+    expect(screen.getByTestId('explorer-location')).toHaveAttribute('title', 'D:\\work\\project');
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar explorador' }));
+    fireEvent.keyDown(window, { key: 'E', ctrlKey: true, shiftKey: true });
+    expect(await screen.findByTestId('explorer-location')).toHaveAttribute('title', 'D:\\work\\project');
+    fireEvent.click(screen.getByRole('button', { name: 'Seguir la carpeta de la pestaña activa' }));
+    await waitFor(() => expect(screen.getByTestId('explorer-location')).toHaveAttribute('title', 'C:\\p'));
+    expect(window.electronAPI!.saveAppConfig).toHaveBeenCalledWith({ explorerFolder: null });
   });
 });

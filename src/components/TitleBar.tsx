@@ -1,7 +1,7 @@
 import { t, useLanguage } from '../lib/i18n';
 import React from 'react';
 import { TransparencyControl } from './TransparencyControl';
-import { Pin, Minus, Square, X, Settings, History, Moon, Sun, Lightbulb } from 'lucide-react';
+import { Pin, Minus, Square, X, Settings, History, Moon, Sun, Lightbulb, FolderTree } from 'lucide-react';
 
 interface TitleBarProps {
   isAlwaysOnTop: boolean;
@@ -10,6 +10,9 @@ interface TitleBarProps {
   onToggleDarkMode?: () => void;
   onOpenSettings: () => void;
   onOpenFiles: () => void;
+  /** File explorer side panel; the button shows when provided */
+  onToggleExplorer?: () => void;
+  isExplorerOpen?: boolean;
   /** Saved ideas (right-click > "Guardar idea"); the button shows when provided */
 
   onOpenIdeas?: () => void;
@@ -42,6 +45,8 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   onToggleDarkMode,
   onOpenSettings,
   onOpenFiles,
+  onToggleExplorer,
+  isExplorerOpen = false,
   onOpenIdeas,
   ideasCount = 0,
   onRequestClose,
@@ -73,6 +78,19 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           <span>⚡</span>
           <span className="hidden min-[480px]:inline"> YANOTE</span>
         </div>
+
+        {/* File explorer (left panel) */}
+        {onToggleExplorer && (
+          <button
+            onClick={onToggleExplorer}
+            title={isExplorerOpen ? t("Ocultar explorador de archivos (Ctrl+Shift+E)") : t("Explorador de archivos (Ctrl+Shift+E)")}
+            aria-label={t("Explorador de archivos")}
+            aria-pressed={isExplorerOpen}
+            className={`${ICON} ${isExplorerOpen ? ACTIVE : NEUTRAL}`}
+          >
+            <FolderTree {...ICON_PROPS} />
+          </button>
+        )}
 
         {/* Superposición (Always on Top) Toggle */}
         <button

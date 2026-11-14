@@ -77,7 +77,7 @@ describe('ClaudeAccountMenu', () => {
       weekly: { percent: id === 'default' ? 20 : 34, resetsAt: null },
     }));
     const props = renderMenu('acc-b');
-    expect(await screen.findByTestId('account-5h-default')).toHaveTextContent('100%');
+    expect(await screen.findByTestId('account-5h-default-countdown')).toHaveTextContent('⏳');
     expect(await screen.findByTestId('account-5h-acc-b')).toHaveTextContent('12%');
     expect(screen.getByTestId('account-week-acc-b')).toHaveTextContent('34%');
     expect(screen.getByTitle('Cuenta sin cuota disponible')).toBeDisabled();

@@ -55,6 +55,8 @@ import { DismissButton } from './ui/DismissButton';
 import { ClaudeAccountMenu } from './ClaudeAccountMenu';
 import { LoadingSkeleton } from './ui/Skeleton';
 import { PinnedStrip } from './ChatPinnedStrip';
+import { reportAgent, deriveFileActivity } from '../lib/agentActivity';
+import { useDraftHistory } from '../hooks/useDraftHistory';
 
 interface ClaudeChatViewProps {
   tabId: string;
@@ -475,7 +477,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   useLanguage();
   const [state, dispatch] = useReducer(chatReducer, undefined, initialChatState);
   // A sent-over text gets an empty line below it, ready for the user to add their own words
-  const [draft, setDraft] = useState(initialDraft ? `${initialDraft}
+  const { draft, setDraft, resetDraft, inputRef, onDraftChange } = useDraftHistory(initialDraft ? `${initialDraft}
 
 ` : '');
   const [images, setImages] = useState<(ClaudeImageInput & { url: string })[]>([]);
@@ -493,10 +495,11 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const [effortByModel, setEffortByModel] = useState<Record<string, ClaudeEffortLevel>>(loadEffortByModel);
   const appliedEffortRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const stickRef = useRef(true);
   const sessionIdRef = useRef<string | undefined>(resumeSessionId);
   const executableRef = useRef<string | undefined>(undefined);
+  // Which executable this chat runs, for the file explorer's agent list
+  const [launch, setLaunch] = useState<{ executable?: string; source?: 'user' | 'bundled' | 'sdk' }>({});
   const [accountId, setAccountId] = useState(initialAccountId || 'default');
   const accountRef = useRef(accountId);
   accountRef.current = accountId;
@@ -543,6 +546,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
         if (cancelled) return;
         setStarting(false);
         executableRef.current = res.executable;
+        setLaunch({ executable: res.executable, source: res.source });
         if (!res.success) {
           dispatch({ type: 'event', event: { id: tabId, type: 'error', error: t("No se pudo iniciar {0}: {1}", [agentName, res.error]) } });
         } else {
@@ -562,6 +566,25 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     // One process per tab (and per manual restart); mode changes go through setPermissionMode
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId, restartKey]);
+
+  // Tell the file explorer what this chat is doing (running, waiting, files it reads / edits)
+  const reportCwd = state.cwd || cwd;
+  useEffect(() => {
+    const files = deriveFileActivity(state.items, reportCwd, state.running);
+    reportAgent(tabId, {
+      tabId,
+      provider,
+      cwd: reportCwd,
+      starting,
+      running: state.running,
+      ended: state.ended,
+      waiting: pendingPermissions(state.items).length > 0,
+      executable: launch.executable,
+      source: launch.source,
+      ...files,
+    });
+  }, [tabId, provider, reportCwd, starting, state.items, state.running, state.ended, launch]);
+  useEffect(() => () => reportAgent(tabId, null), [tabId]);
 
   useEffect(() => {
     if (state.sessionId && state.sessionId !== sessionIdRef.current) {
@@ -592,7 +615,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       el.scrollTop = el.scrollHeight;
     });
     return () => cancelAnimationFrame(id);
-  }, [isActive]);
+  }, [isActive, inputRef]);
 
   // Grow the composer with its content (up to ~8 lines)
   useLayoutEffect(() => {
@@ -600,7 +623,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-  }, [draft]);
+  }, [draft, inputRef]);
 
   const suggestions = useMemo(() => matchCommands(state.commands, draft), [state.commands, draft]);
   useEffect(() => setCmdIndex(0), [suggestions.length]);
@@ -650,7 +673,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     };
     window.addEventListener('yanote:append-draft', onAppend);
     return () => window.removeEventListener('yanote:append-draft', onAppend);
-  }, [tabId]);
+  }, [tabId, setDraft, inputRef]);
 
   // Name of the account in use, for the header chip
   useEffect(() => {
@@ -693,14 +716,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     const text = draft.trim();
     // The CLI's /login and /logout don't work inside an app: open the account switcher instead
     if (isClaude && /^\/(login|logout|cuenta|account)\s*$/i.test(text)) {
-      setDraft('');
+      resetDraft('');
       setAccountMenuOpen(true);
       return;
     }
     if ((!text && images.length === 0) || !backend || starting || state.ended) return;
     const payload = { text, images: images.map(({ data, mediaType }) => ({ data, mediaType })) };
     dispatch({ type: 'send', text, imageCount: images.length });
-    setDraft('');
+    resetDraft('');
     setImages([]);
     stickRef.current = true;
     try {
@@ -711,7 +734,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       setDraft((current) => current || text);
       setImages((current) => current.length ? current : images);
     }
-  }, [draft, images, backend, tabId, starting, state.ended]);
+  }, [draft, images, backend, tabId, starting, state.ended, isClaude, setDraft, resetDraft]);
 
   const interrupt = useCallback(() => {
     backend?.interrupt(tabId);
@@ -842,7 +865,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const visible = topLevelItems(state.items);
   const lastTextId = [...visible].reverse().find((i) => i.kind === 'text')?.id;
   const streamingSomething = state.items.some((i) => (i.kind === 'text' || i.kind === 'thinking') && i.streaming);
-  const cwdName = (state.cwd || cwd || '').split(/[\\/]/).filter(Boolean).pop();
+  const cwdPath = (state.cwd || cwd || '').trim();
   // What Claude will really use next turn (its resolved settings), falling back to what it last reported
   const shownModelId = state.appliedModel || state.model;
   // Claude ids read better formatted; other agents (Antigravity) report their own display names
@@ -881,8 +904,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       {/* Session strip */}
       <div className="h-8 shrink-0 flex items-center gap-1.5 px-2 border-b-2 border-black dark:border-zinc-700 text-[10.5px] font-black overflow-hidden whitespace-nowrap">
         <Sparkles size={13} strokeWidth={2.5} className="shrink-0 text-[#D97757]" />
-        <span className="truncate min-w-0" title={state.cwd || cwd}>
-          {cwdName || agentName}
+        {/* Full working folder; when it doesn't fit it trims from the left so the folder name stays visible */}
+        <span className="truncate min-w-0 [direction:rtl] text-left" title={cwdPath || agentName} data-testid="claude-cwd">
+          <bdi dir="ltr">{cwdPath || agentName}</bdi>
         </span>
         {shownModel && (
           <span
@@ -1169,7 +1193,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               ref={inputRef}
               value={draft}
               rows={1}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={onDraftChange}
               onKeyDown={onKeyDown}
               onPaste={(e) => {
                 const files = Array.from(e.clipboardData.files);

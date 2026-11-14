@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import { ClaudeUsageMeter, useClaudeUsage } from '../../src/components/ClaudeUsageMeter';
-import { formatReset, formatPercent, usageTone, describeWindow } from '../../src/lib/claudeUsage';
+import { formatReset, formatPercent, usageTone, describeWindow, formatCountdown, isExhausted } from '../../src/lib/claudeUsage';
 
 describe('claudeUsage formatting', () => {
   const now = new Date(2026, 10, 13, 3, 0); // Fri 13 Nov 2026, 03:00 local
@@ -14,6 +14,18 @@ describe('claudeUsage formatting', () => {
     expect(formatReset(new Date(2026, 10, 13, 2, 0).toISOString(), now)).toBe('ahora');
     expect(formatReset(null, now)).toBe('');
     expect(formatReset('no es fecha', now)).toBe('');
+  });
+
+  it('formats a compact countdown and detects used-up windows', () => {
+    expect(formatCountdown(new Date(2026, 10, 13, 3, 45).toISOString(), now)).toBe('45m');
+    expect(formatCountdown(new Date(2026, 10, 13, 5, 15).toISOString(), now)).toBe('2h 15m');
+    expect(formatCountdown(new Date(2026, 10, 13, 5, 0).toISOString(), now)).toBe('2h');
+    expect(formatCountdown(new Date(2026, 10, 16, 7, 0).toISOString(), now)).toBe('3d 4h');
+    expect(formatCountdown(new Date(2026, 10, 13, 2, 0).toISOString(), now)).toBe('');
+    expect(formatCountdown(null, now)).toBe('');
+    expect(isExhausted({ percent: 100, resetsAt: new Date(2026, 10, 13, 5, 0).toISOString() }, now)).toBe(true);
+    expect(isExhausted({ percent: 100, resetsAt: new Date(2026, 10, 13, 2, 0).toISOString() }, now)).toBe(false);
+    expect(isExhausted({ percent: 99, resetsAt: null }, now)).toBe(false);
   });
 
   it('rounds percents and picks a colour step', () => {
@@ -34,6 +46,19 @@ describe('ClaudeUsageMeter (status bar)', () => {
     expect(screen.getByTestId('usage-5h')).toHaveTextContent('5h16%');
     expect(screen.getByTestId('usage-week')).toHaveTextContent('Sem41%');
     expect(screen.getByTestId('claude-usage').getAttribute('title')).toContain('Últimas 5 horas: 16% usado');
+  });
+
+  it('shows the time left instead of the percent once a window is used up', () => {
+    const soon = new Date(Date.now() + (2 * 60 + 15) * 60000 - 1000).toISOString();
+    const later = new Date(Date.now() + (3 * 24 + 4) * 3600000 - 1000).toISOString();
+    render(
+      <ClaudeUsageMeter
+        usage={{ success: true, available: true, fiveHour: { percent: 100, resetsAt: soon }, weekly: { percent: 100, resetsAt: later } }}
+      />
+    );
+    expect(screen.getByTestId('usage-5h-countdown')).toHaveTextContent('2h 15m');
+    expect(screen.getByTestId('usage-week-countdown')).toHaveTextContent('3d 4h');
+    expect(screen.getByTestId('usage-5h')).not.toHaveTextContent('100%');
   });
 
   it('shows a skeleton before the first reading, then hides when the provider has no plan limits', () => {

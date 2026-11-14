@@ -80,6 +80,15 @@ describe('ClaudeChatView remembers the selectors for new chats', () => {
     expect(screen.getByText('continúa con el roadmap')).toBeInTheDocument();
   });
 
+  it('shows the full folder the chat is working in, not just its name', async () => {
+    const folder = String.raw`C:\Users\me\proyectos\apps`;
+    render(<ClaudeChatView tabId="c5" isActive cwd={folder} />);
+    await waitFor(() => expect(api.claudeStart).toHaveBeenCalled());
+    const where = screen.getByTestId('claude-cwd');
+    expect(where).toHaveTextContent(folder);
+    expect(where).toHaveAttribute('title', folder);
+  });
+
   it('a chat opened with sent-over text has it in the box, waiting for the user to send it', async () => {
     api.claudeSend = vi.fn(async () => ({ success: true }));
     render(<ClaudeChatView tabId="c4" isActive initialDraft="Revisa este párrafo" />);

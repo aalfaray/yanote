@@ -71,6 +71,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
 
+  // File explorer side panel
+  treeSelectFolder: (currentFolder) => ipcRenderer.invoke('tree:selectFolder', currentFolder),
+  treeList: (dir) => ipcRenderer.invoke('tree:list', dir),
+  treeGitStatus: (dir) => ipcRenderer.invoke('tree:gitStatus', dir),
+  treeWatch: (root) => ipcRenderer.invoke('tree:watch', root),
+  treeUnwatch: () => ipcRenderer.invoke('tree:unwatch'),
+  onTreeChanged: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('tree:changed', listener);
+    return () => ipcRenderer.removeListener('tree:changed', listener);
+  },
+  claudeInstallInfo: () => ipcRenderer.invoke('claude:installInfo'),
+
   // Text to speech (native fallback)
   ttsSpeak: (request) => ipcRenderer.invoke('tts:speak', request),
   ttsStop: () => ipcRenderer.invoke('tts:stop'),

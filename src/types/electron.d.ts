@@ -26,6 +26,11 @@ export interface AppConfig {
   notifyClaude?: boolean;
   /** History of opened files, newest first */
   recentFiles?: RecentFile[];
+  /** File explorer side panel: shown, and its width in px */
+  explorerOpen?: boolean;
+  explorerWidth?: number;
+  /** Explicitly browsed folder; null follows the active tab. */
+  explorerFolder?: string | null;
 }
 
 export interface ExportResult {
@@ -169,6 +174,34 @@ export type TermEvent =
   | { id: string; type: 'data'; data: string }
   | { id: string; type: 'exit'; exitCode: number };
 
+export interface TreeEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+}
+
+/** M modified · A added · D deleted · R renamed · ? untracked · U conflict */
+export type GitFileCode = 'M' | 'A' | 'D' | 'R' | '?' | 'U';
+
+export interface GitTreeStatus {
+  success: boolean;
+  repo: boolean;
+  root?: string;
+  branch?: string | null;
+  status: Record<string, GitFileCode>;
+}
+
+export interface ClaudeInstallInfo {
+  /** Executable chats start with */
+  used: string | null;
+  source: 'user' | 'bundled' | null;
+  /** Found on PATH (the user's own install) */
+  user: string | null;
+  /** Copy shipped with yanote (Agent SDK) */
+  bundled: string | null;
+  version: string | null;
+}
+
 export interface ElectronAPI {
   getLocaleInfo?: () => Promise<import('../lib/i18n').LocaleInfo>;
   // Window controls
@@ -206,6 +239,18 @@ export interface ElectronAPI {
   saveAppConfig: (config: Partial<AppConfig>) => Promise<AppConfig>;
   revealInExplorer: (filePath?: string) => Promise<{ success: boolean; error?: string }>;
 
+
+  // File explorer side panel
+  /** Picks a browsing folder without changing the notes save location. */
+  treeSelectFolder?: (currentFolder?: string) => Promise<string | null>;
+  treeList?: (dir: string) => Promise<{ success: boolean; entries: TreeEntry[]; error?: string }>;
+  treeGitStatus?: (dir: string) => Promise<GitTreeStatus>;
+  /** Watches `root` recursively (replaces the previous root); changes arrive through onTreeChanged */
+  treeWatch?: (root: string) => Promise<{ success: boolean; error?: string }>;
+  treeUnwatch?: () => Promise<boolean>;
+  onTreeChanged?: (callback: (change: { root: string; dirs: string[]; git: boolean }) => void) => () => void;
+  /** Claude Code executable yanote uses, where it is and its version */
+  claudeInstallInfo?: () => Promise<ClaudeInstallInfo>;
 
   // Text to speech (native fallback)
   ttsSpeak?: (request: TtsSpeakRequest) => Promise<{ success: boolean; error?: string }>;
