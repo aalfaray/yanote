@@ -24,6 +24,12 @@ const { createEditCommandService } = require('./services/editCommandService.cjs'
 const { createSpellcheckService } = require('./services/spellcheckService.cjs');
 const { createLanguageService } = require('./services/languageService.cjs');
 
+// E2E tests (Playwright) run on a throwaway data folder so they never touch the user's notes or settings
+if (process.env.YANOTE_USER_DATA) {
+  app.setPath('userData', process.env.YANOTE_USER_DATA);
+  app.setPath('logs', path.join(process.env.YANOTE_USER_DATA, 'logs'));
+}
+
 // System log (%APPDATA%/yanote/logs/yanote.log): every layer reports its failures here
 const logService = configureSharedLog({ dir: app.getPath('logs') });
 const mainLog = logService.scoped('main');
@@ -116,7 +122,8 @@ function createWindow() {
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    // E2E tests serve the renderer on their own port so they don't depend on (or clash with) `npm run dev`
+    mainWindow.loadURL(process.env.YANOTE_RENDERER_URL || 'http://localhost:5173');
     if (process.env.OPEN_DEVTOOLS) {
       mainWindow.webContents.openDevTools({ mode: 'detach' });
     }

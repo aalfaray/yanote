@@ -12,6 +12,8 @@ dist
 dist-ssr
 dist-electron
 .yanote-data
+test-results
+playwright-report
 *.local
 
 # Editor directories and files
