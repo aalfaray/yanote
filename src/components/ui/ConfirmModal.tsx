@@ -33,31 +33,31 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 min-[480px]:p-3 bg-black/60 backdrop-blur-[2px] animate-in fade-in duration-100">
-      <div className="w-full max-w-sm bg-[#FAF8F5] dark:bg-[#18181B] border-3 border-black dark:border-zinc-700 rounded-lg shadow-[6px_6px_0px_#000] overflow-hidden flex flex-col transition-colors">
+      <div className="w-full max-w-sm bg-background text-foreground border border-border rounded-xl shadow-lg overflow-hidden flex flex-col transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 bg-[#FF6B6B] border-b-2 border-black text-white">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
-            <AlertTriangle size={16} strokeWidth={3} className="text-white" />
-            <span className="font-black text-xs tracking-wider uppercase">
+            <AlertTriangle size={16} strokeWidth={1.75} className="text-destructive" />
+            <span className="font-semibold text-sm">
               {title}
             </span>
           </div>
           <button
             onClick={onCancel}
-            className="p-1 hover:bg-black/20 rounded cursor-pointer transition-all"
+            className="p-1 hover:bg-black/20 rounded-md cursor-pointer transition-all"
             title={t("Cerrar modal")}
           >
-            <X size={15} strokeWidth={3} />
+            <X size={15} strokeWidth={1.75} />
           </button>
         </div>
 
         {/* Content */}
         <div className="p-4 flex flex-col gap-2">
-          <p className="font-black text-sm text-black dark:text-zinc-100 leading-snug">
+          <p className="font-semibold text-sm text-foreground leading-snug">
             {message}
           </p>
           {subMessage && (
-            <p className="text-xs text-neutral-600 dark:text-zinc-400 font-medium leading-relaxed">
+            <p className="text-xs text-muted-foreground font-medium leading-relaxed">
               {subMessage}
             </p>
           )}
@@ -69,7 +69,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 variant="primary"
                 size="sm"
                 onClick={onSaveAndConfirm}
-                className="w-full py-2 bg-[#FFE500] hover:bg-[#FFD700] text-black font-black"
+                className="w-full py-2"
               >
                 💾 {saveAndCloseText}
               </Button>
@@ -80,7 +80,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 variant="secondary"
                 size="sm"
                 onClick={onCancel}
-                className="flex-1 py-1.5 font-bold"
+                className="flex-1 py-1.5 font-medium"
               >
                 {cancelText}
               </Button>
@@ -88,7 +88,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                 variant="danger"
                 size="sm"
                 onClick={onConfirm}
-                className="flex-1 py-1.5 font-black bg-[#FF6B6B] hover:bg-[#FF5252] text-white shadow-[2px_2px_0px_#000]"
+                className="flex-1 py-1.5"
               >
                 {confirmText}
               </Button>

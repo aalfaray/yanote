@@ -54,12 +54,12 @@ type Row = { entry: TreeEntry; depth: number };
 type MenuState = { x: number; y: number; entry: TreeEntry } | null;
 
 const GIT_COLORS: Record<GitFileCode, string> = {
-  M: 'text-[#B7791F] dark:text-[#F6C344]',
-  A: 'text-[#2F855A] dark:text-[#78E08F]',
-  '?': 'text-[#2F855A] dark:text-[#78E08F]',
-  R: 'text-[#2B6CB0] dark:text-[#7CC4FA]',
-  D: 'text-[#C53030] dark:text-[#FF8A8A] line-through',
-  U: 'text-[#C53030] dark:text-[#FF8A8A]',
+  M: 'text-warning',
+  A: 'text-success',
+  '?': 'text-success',
+  R: 'text-info',
+  D: 'text-destructive line-through',
+  U: 'text-destructive',
 };
 const GIT_LABELS: Record<GitFileCode, string> = { M: 'M', A: 'A', '?': 'U', R: 'R', D: 'D', U: '!' };
 
@@ -67,11 +67,11 @@ export const MIN_EXPLORER_WIDTH = 180;
 export const MAX_EXPLORER_WIDTH = 520;
 
 function agentState(a: AgentActivity): { label: string; dot: string } {
-  if (a.starting) return { label: t("Iniciando…"), dot: 'bg-[#7CC4FA] animate-pulse' };
-  if (a.waiting) return { label: t("Esperando tu respuesta"), dot: 'bg-[#FF6B6B] animate-pulse' };
-  if (a.running) return { label: a.currentTool ? `${a.currentTool.name}${a.currentTool.target ? ` · ${baseName(a.currentTool.target)}` : ''}` : t("Pensando…"), dot: 'bg-[#FFE500] animate-pulse' };
+  if (a.starting) return { label: t("Iniciando…"), dot: 'bg-info animate-pulse' };
+  if (a.waiting) return { label: t("Esperando tu respuesta"), dot: 'bg-destructive animate-pulse' };
+  if (a.running) return { label: a.currentTool ? `${a.currentTool.name}${a.currentTool.target ? ` · ${baseName(a.currentTool.target)}` : ''}` : t("Pensando…"), dot: 'bg-primary animate-pulse' };
   if (a.ended) return { label: t("Sesión cerrada"), dot: 'bg-neutral-400' };
-  return { label: t("Listo"), dot: 'bg-[#78E08F]' };
+  return { label: t("Listo"), dot: 'bg-success' };
 }
 
 function sourceLabel(source?: string | null) {
@@ -326,14 +326,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         onClick={() => onFocusTab(a.tabId)}
         data-testid={`explorer-agent-${a.tabId}`}
         title={[a.cwd && t("Carpeta: {0}", [a.cwd]), a.executable && t("Ejecutable: {0}", [a.executable])].filter(Boolean).join('\n')}
-        className={`w-full text-left px-1.5 py-1 rounded border-2 flex flex-col gap-0.5 cursor-pointer transition-colors ${
-          a.tabId === activeTabId ? 'border-black dark:border-zinc-400 bg-[#FFE500]/40 dark:bg-[#FFE500]/10' : 'border-transparent hover:border-black/40 dark:hover:border-zinc-600'
+        className={`w-full text-left px-1.5 py-1 rounded-md border flex flex-col gap-0.5 cursor-pointer transition-colors ${
+          a.tabId === activeTabId ? 'border-border bg-accent/40 dark:bg-accent/10' : 'border-transparent hover:border-border/40 dark:hover:border-border'
         }`}
       >
         <span className="flex items-center gap-1.5 min-w-0">
-          <span className={`w-2 h-2 rounded-full border border-black shrink-0 ${st.dot}`} aria-hidden="true" />
-          <Sparkles size={11} strokeWidth={2.5} className="shrink-0 text-[#D97757]" />
-          <span className="font-black truncate">{title}</span>
+          <span className={`w-2 h-2 rounded-full border border-border shrink-0 ${st.dot}`} aria-hidden="true" />
+          <Sparkles size={11} strokeWidth={1.75} className="shrink-0 text-[#D97757]" />
+          <span className="font-semibold truncate">{title}</span>
           <span className="opacity-60 truncate min-w-0">· {st.label}</span>
         </span>
         {a.cwd && <span className="font-mono text-[9.5px] opacity-60 truncate pl-3.5">{a.cwd}</span>}
@@ -346,39 +346,39 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
       data-testid="file-explorer"
       aria-label={t("Explorador de archivos")}
       style={{ width }}
-      className="absolute min-[640px]:relative inset-y-0 left-0 z-30 shrink-0 h-full flex flex-col bg-[#FAF8F5] dark:bg-[#18181B] text-black dark:text-zinc-100 border-r-2 border-black dark:border-zinc-700 text-[11px] font-bold select-none shadow-[3px_0px_0px_#000] min-[640px]:shadow-none"
+      className="absolute min-[640px]:relative inset-y-0 left-0 z-30 shrink-0 h-full flex flex-col bg-background text-foreground border-r border-border text-[11px] font-medium select-none shadow-sm min-[640px]:shadow-none"
       onContextMenu={(e) => {
         // The tree has its own menu; keep the app's text menu out of here
         e.preventDefault();
       }}
     >
       {/* Header */}
-      <div className="h-8 shrink-0 flex items-center gap-1 px-1.5 border-b-2 border-black dark:border-zinc-700">
-        <FolderOpen size={13} strokeWidth={2.5} className="shrink-0" />
-        <span className="font-black truncate min-w-0 flex-1" title={root}>
+      <div className="h-8 shrink-0 flex items-center gap-1 px-1.5 border-b border-border">
+        <FolderOpen size={13} strokeWidth={1.75} className="shrink-0" />
+        <span className="font-semibold truncate min-w-0 flex-1" title={root}>
           {root ? baseName(root) : t("Sin carpeta")}
         </span>
         {git?.repo && git.branch && (
           <span className="flex items-center gap-0.5 opacity-60 truncate max-w-[6rem]" title={t("Rama de git: {0}", [git.branch])}>
-            <GitBranch size={10} strokeWidth={2.5} className="shrink-0" />
+            <GitBranch size={10} strokeWidth={1.75} className="shrink-0" />
             <span className="truncate">{git.branch}</span>
           </span>
         )}
-        <button type="button" onClick={() => root && void Promise.all([...Object.keys(dirs).map(loadDir), loadGit()])} title={t("Actualizar")} aria-label={t("Actualizar")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded hover:bg-[#FFE500] hover:text-black cursor-pointer">
-          <RefreshCw size={12} strokeWidth={2.5} />
+        <button type="button" onClick={() => root && void Promise.all([...Object.keys(dirs).map(loadDir), loadGit()])} title={t("Actualizar")} aria-label={t("Actualizar")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded-md hover:bg-accent hover:text-foreground cursor-pointer">
+          <RefreshCw size={12} strokeWidth={1.75} />
         </button>
-        <button type="button" onClick={() => setExpanded(new Set())} title={t("Contraer todo")} aria-label={t("Contraer todo")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded hover:bg-[#FFE500] hover:text-black cursor-pointer">
-          <ChevronsDownUp size={12} strokeWidth={2.5} />
+        <button type="button" onClick={() => setExpanded(new Set())} title={t("Contraer todo")} aria-label={t("Contraer todo")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded-md hover:bg-accent hover:text-foreground cursor-pointer">
+          <ChevronsDownUp size={12} strokeWidth={1.75} />
         </button>
-        <button type="button" onClick={onClose} title={t("Cerrar explorador (Ctrl+Shift+E)")} aria-label={t("Cerrar explorador")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded hover:bg-[#FF6B6B] hover:text-white cursor-pointer">
-          <X size={12} strokeWidth={3} />
+        <button type="button" onClick={onClose} title={t("Cerrar explorador (Ctrl+Shift+E)")} aria-label={t("Cerrar explorador")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded-md hover:bg-destructive hover:text-destructive-foreground cursor-pointer">
+          <X size={12} strokeWidth={1.75} />
         </button>
       </div>
 
-      <div className="shrink-0 border-b-2 border-black dark:border-zinc-700 px-1.5 py-1.5 flex flex-col gap-1">
+      <div className="shrink-0 border-b border-border px-1.5 py-1.5 flex flex-col gap-1">
         <div className="flex items-center gap-1">
-          <button type="button" disabled={!parent} onClick={() => parent && onNavigateFolder(parent)} title={t("Subir a la carpeta superior")} aria-label={t("Subir a la carpeta superior")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded hover:bg-[#FFE500] hover:text-black cursor-pointer disabled:opacity-30 disabled:cursor-default">
-            <ArrowUp size={13} strokeWidth={2.5} />
+          <button type="button" disabled={!parent} onClick={() => parent && onNavigateFolder(parent)} title={t("Subir a la carpeta superior")} aria-label={t("Subir a la carpeta superior")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded-md hover:bg-accent hover:text-foreground cursor-pointer disabled:opacity-30 disabled:cursor-default">
+            <ArrowUp size={13} strokeWidth={1.75} />
           </button>
           {/* Breadcrumb: every folder of the path is a jump target; scrolled so the current one shows */}
           <nav ref={crumbsRef} aria-label={t("Ruta actual")} data-testid="explorer-location" title={root} className="min-w-0 flex-1 flex items-center overflow-x-auto font-mono text-[9.5px] [scrollbar-width:none]">
@@ -387,13 +387,13 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               const last = i === crumbs.length - 1;
               return (
                 <React.Fragment key={c.path}>
-                  {i > 0 && <ChevronRight size={9} strokeWidth={3} className="shrink-0 opacity-40" aria-hidden="true" />}
+                  {i > 0 && <ChevronRight size={9} strokeWidth={1.75} className="shrink-0 opacity-40" aria-hidden="true" />}
                   <button
                     type="button"
                     onClick={() => !last && onNavigateFolder(c.path)}
                     aria-current={last ? 'location' : undefined}
                     title={c.path}
-                    className={`shrink-0 px-1 py-1 rounded whitespace-nowrap ${last ? 'font-black cursor-default' : 'opacity-70 hover:opacity-100 hover:bg-[#FFE500] hover:text-black cursor-pointer'}`}
+                    className={`shrink-0 px-1 py-1 rounded-md whitespace-nowrap ${last ? 'font-semibold cursor-default' : 'opacity-70 hover:opacity-100 hover:bg-accent hover:text-foreground cursor-pointer'}`}
                   >
                     {c.name}
                   </button>
@@ -401,36 +401,36 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               );
             })}
           </nav>
-          <button type="button" onClick={() => void chooseFolder()} title={t("Elegir carpeta")} aria-label={t("Elegir carpeta")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded hover:bg-[#FFE500] hover:text-black cursor-pointer">
-            <FolderSearch size={13} strokeWidth={2.5} />
+          <button type="button" onClick={() => void chooseFolder()} title={t("Elegir carpeta")} aria-label={t("Elegir carpeta")} className="w-6 h-6 shrink-0 flex items-center justify-center rounded-md hover:bg-accent hover:text-foreground cursor-pointer">
+            <FolderSearch size={13} strokeWidth={1.75} />
           </button>
-          <button type="button" onClick={() => onNavigateFolder(null)} aria-pressed={followsActiveTab} title={t("Seguir la carpeta de la pestaña activa")} aria-label={t("Seguir la carpeta de la pestaña activa")} className={`w-6 h-6 shrink-0 flex items-center justify-center rounded hover:bg-[#FFE500] hover:text-black cursor-pointer ${followsActiveTab ? 'bg-[#FFE500]/40 dark:bg-[#FFE500]/20' : ''}`}>
-            <LocateFixed size={13} strokeWidth={2.5} />
+          <button type="button" onClick={() => onNavigateFolder(null)} aria-pressed={followsActiveTab} title={t("Seguir la carpeta de la pestaña activa")} aria-label={t("Seguir la carpeta de la pestaña activa")} className={`w-6 h-6 shrink-0 flex items-center justify-center rounded-md hover:bg-accent hover:text-foreground cursor-pointer ${followsActiveTab ? 'bg-accent/40 dark:bg-accent/20' : ''}`}>
+            <LocateFixed size={13} strokeWidth={1.75} />
           </button>
         </div>
-        <button type="button" disabled={!chatFolder} onClick={() => chatFolder && onNewChat(chatFolder)} title={chatFolder ? t("Nuevo chat de Claude en {0}", [chatFolder]) : undefined} className="flex items-center justify-center gap-1 px-1.5 py-1 border border-black dark:border-zinc-600 rounded bg-[#FFE500] text-black cursor-pointer disabled:opacity-40 disabled:cursor-default">
-          <Sparkles size={12} strokeWidth={2.5} /> {t("Abrir Claude aquí")}
+        <button type="button" disabled={!chatFolder} onClick={() => chatFolder && onNewChat(chatFolder)} title={chatFolder ? t("Nuevo chat de Claude en {0}", [chatFolder]) : undefined} className="flex items-center justify-center gap-1 px-1.5 py-1 border border-border rounded-md bg-accent text-foreground cursor-pointer disabled:opacity-40 disabled:cursor-default">
+          <Sparkles size={12} strokeWidth={1.75} /> {t("Abrir Claude aquí")}
         </button>
         {chatFolder && <div data-testid="explorer-chat-folder" title={chatFolder} className="truncate font-mono text-[9.5px] opacity-60">{chatFolder}</div>}
       </div>
 
       {/* Agents running here, and where Claude Code is installed */}
-      <div className="shrink-0 border-b-2 border-black dark:border-zinc-700 px-1.5 py-1.5 flex flex-col gap-1 max-h-[45%] overflow-y-auto">
-        <div className="flex items-center justify-between text-[9.5px] uppercase tracking-wider opacity-60">
+      <div className="shrink-0 border-b border-border px-1.5 py-1.5 flex flex-col gap-1 max-h-[45%] overflow-y-auto">
+        <div className="flex items-center justify-between text-[9.5px]  opacity-60">
           <span>{t("Agentes en esta carpeta")}</span>
         </div>
         {rootAgents.length === 0 && <div className="opacity-50 font-medium px-1">{t("Ningún chat abierto en esta carpeta.")}</div>}
         {rootAgents.map(agentRow)}
         {otherAgents.length > 0 && (
           <>
-            <div className="text-[9.5px] uppercase tracking-wider opacity-60 mt-1">{t("Otros chats")}</div>
+            <div className="text-[9.5px]  opacity-60 mt-1">{t("Otros chats")}</div>
             {otherAgents.map(agentRow)}
           </>
         )}
         {install && (
-          <div className="mt-1 pt-1 border-t border-dashed border-black/30 dark:border-zinc-600 flex items-start gap-1" data-testid="claude-install-info">
+          <div className="mt-1 pt-1 border-t border-dashed border-border/30 dark:border-border flex items-start gap-1" data-testid="claude-install-info">
             <div className="min-w-0 flex-1">
-              <div className="text-[9.5px] uppercase tracking-wider opacity-60">
+              <div className="text-[9.5px]  opacity-60">
                 Claude Code{install.version ? ` · ${install.version}` : ''}
                 {install.source ? ` · ${sourceLabel(install.source)}` : ''}
               </div>
@@ -439,8 +439,8 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               </div>
             </div>
             {install.used && (
-              <button type="button" onClick={() => void copy(install.used!, t("Ruta copiada"))} title={t("Copiar la ruta de Claude Code")} aria-label={t("Copiar la ruta de Claude Code")} className="w-5 h-5 shrink-0 flex items-center justify-center rounded hover:bg-[#FFE500] hover:text-black cursor-pointer">
-                <Copy size={11} strokeWidth={2.5} />
+              <button type="button" onClick={() => void copy(install.used!, t("Ruta copiada"))} title={t("Copiar la ruta de Claude Code")} aria-label={t("Copiar la ruta de Claude Code")} className="w-5 h-5 shrink-0 flex items-center justify-center rounded-md hover:bg-accent hover:text-foreground cursor-pointer">
+                <Copy size={11} strokeWidth={1.75} />
               </button>
             )}
           </div>
@@ -455,7 +455,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
             <Loader2 size={12} className="animate-spin" /> {t("Cargando…")}
           </div>
         )}
-        {root && dirs[root]?.error && <div className="px-2 py-2 text-[#C53030] dark:text-[#FF8A8A]">{t("No se pudo leer la carpeta: {0}", [dirs[root].error])}</div>}
+        {root && dirs[root]?.error && <div className="px-2 py-2 text-destructive">{t("No se pudo leer la carpeta: {0}", [dirs[root].error])}</div>}
         {root && !dirs[root]?.loading && !dirs[root]?.error && rows.length === 0 && dirs[root] && <div className="px-2 py-2 opacity-50 font-medium">{t("Carpeta vacía")}</div>}
         {rows.map(({ entry, depth }) => {
           const key = normPath(entry.path);
@@ -493,24 +493,24 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
               }}
               title={entry.path}
               style={{ paddingLeft: 4 + depth * 12 }}
-              className={`group h-[22px] pr-1.5 flex items-center gap-1 cursor-pointer whitespace-nowrap outline-none focus-visible:ring-1 focus-visible:ring-[#FFE500] ${
-                selected === entry.path ? 'bg-[#FFE500]/60 dark:bg-[#FFE500]/20' : 'hover:bg-black/5 dark:hover:bg-white/5'
+              className={`group h-[22px] pr-1.5 flex items-center gap-1 cursor-pointer whitespace-nowrap outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                selected === entry.path ? 'bg-accent/60 dark:bg-accent/20' : 'hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
               <span className="w-3 shrink-0 flex items-center justify-center opacity-70">
-                {entry.isDir ? loadingChildren ? <Loader2 size={10} className="animate-spin" /> : isOpen ? <ChevronDown size={11} strokeWidth={3} /> : <ChevronRight size={11} strokeWidth={3} /> : null}
+                {entry.isDir ? loadingChildren ? <Loader2 size={10} className="animate-spin" /> : isOpen ? <ChevronDown size={11} strokeWidth={1.75} /> : <ChevronRight size={11} strokeWidth={1.75} /> : null}
               </span>
               {entry.isDir ? (
-                isOpen ? <FolderOpen size={13} strokeWidth={2.2} className="shrink-0 text-[#B7791F] dark:text-[#F6C344]" /> : <Folder size={13} strokeWidth={2.2} className="shrink-0 text-[#B7791F] dark:text-[#F6C344]" />
+                isOpen ? <FolderOpen size={13} strokeWidth={2.2} className="shrink-0 text-warning" /> : <Folder size={13} strokeWidth={2.2} className="shrink-0 text-warning" />
               ) : isMarkdownFile(entry.name) ? (
-                <FileText size={13} strokeWidth={2.2} className="shrink-0 text-[#2B6CB0] dark:text-[#7CC4FA]" />
+                <FileText size={13} strokeWidth={2.2} className="shrink-0 text-info" />
               ) : (
                 <FileIcon size={13} strokeWidth={2.2} className="shrink-0 opacity-70" />
               )}
-              <span className={`truncate min-w-0 ${code ? GIT_COLORS[code] : dirty ? GIT_COLORS.M : ''} ${openSet.has(key) ? 'font-black underline decoration-2 decoration-[#FFE500]' : 'font-semibold'}`}>{entry.name}</span>
+              <span className={`truncate min-w-0 ${code ? GIT_COLORS[code] : dirty ? GIT_COLORS.M : ''} ${openSet.has(key) ? 'font-semibold underline decoration-1 decoration-ring' : 'font-semibold'}`}>{entry.name}</span>
               {home && home.length > 0 && (
-                <span className="shrink-0 flex items-center gap-0.5 px-1 h-[15px] rounded border border-black bg-[#D97757] text-white text-[8.5px] font-black" title={t("{0} trabaja en esta carpeta", [home.map((a) => tabTitles[a.tabId] || PROVIDER_LABELS[a.provider]).join(', ')])}>
-                  <Sparkles size={8} strokeWidth={3} />
+                <span className="shrink-0 flex items-center gap-0.5 px-1 h-[15px] rounded-md border border-border bg-[#D97757] text-foreground text-[8.5px] font-semibold" title={t("{0} trabaja en esta carpeta", [home.map((a) => tabTitles[a.tabId] || PROVIDER_LABELS[a.provider]).join(', ')])}>
+                  <Sparkles size={8} strokeWidth={1.75} />
                   {home.length > 1 ? home.length : ''}
                 </span>
               )}
@@ -521,7 +521,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                   className="shrink-0 flex items-center text-[#D97757]"
                   title={t("{0} está trabajando aquí", [working.map((a) => tabTitles[a.tabId] || PROVIDER_LABELS[a.provider]).join(', ')])}
                 >
-                  <Sparkles size={11} strokeWidth={2.8} className="animate-pulse" />
+                  <Sparkles size={11} strokeWidth={1.75} className="animate-pulse" />
                 </span>
               )}
               {/* Quick actions on folders: show on hover/focus, always on the selected row (touch) */}
@@ -533,9 +533,9 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                     onClick={(e) => { e.stopPropagation(); setSelected(entry.path); onNewChat(entry.path); }}
                     title={t("Abrir Claude en {0}", [entry.name])}
                     aria-label={t("Abrir Claude en {0}", [entry.name])}
-                    className="w-[18px] h-[18px] flex items-center justify-center rounded border border-black bg-[#FFE500] text-black cursor-pointer"
+                    className="w-[18px] h-[18px] flex items-center justify-center rounded-md border border-border bg-accent text-foreground cursor-pointer"
                   >
-                    <Sparkles size={10} strokeWidth={2.8} />
+                    <Sparkles size={10} strokeWidth={1.75} />
                   </button>
                   <button
                     type="button"
@@ -543,14 +543,14 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                     onClick={(e) => { e.stopPropagation(); onNavigateFolder(entry.path); }}
                     title={t("Entrar en {0}", [entry.name])}
                     aria-label={t("Entrar en {0}", [entry.name])}
-                    className="w-[18px] h-[18px] flex items-center justify-center rounded hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                    className="w-[18px] h-[18px] flex items-center justify-center rounded-md hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
                   >
-                    <CornerDownRight size={11} strokeWidth={2.8} />
+                    <CornerDownRight size={11} strokeWidth={1.75} />
                   </button>
                 </span>
               )}
               {!working && changed && <span className="w-1.5 h-1.5 rounded-full bg-[#D97757] shrink-0" title={t("Cambiado por Claude en este chat")} />}
-              {code && !entry.isDir && <span className={`shrink-0 w-3 text-center text-[9.5px] font-black ${GIT_COLORS[code]}`}>{GIT_LABELS[code]}</span>}
+              {code && !entry.isDir && <span className={`shrink-0 w-3 text-center text-[9.5px] font-semibold ${GIT_COLORS[code]}`}>{GIT_LABELS[code]}</span>}
               {dirty && !code && <span className={`shrink-0 w-3 text-center text-[11px] leading-none ${GIT_COLORS.M}`}>•</span>}
             </div>
           );
@@ -563,7 +563,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         aria-orientation="vertical"
         aria-label={t("Cambiar el ancho del explorador")}
         onPointerDown={startResize}
-        className="absolute top-0 -right-[3px] w-[6px] h-full cursor-col-resize hover:bg-[#FFE500]/60 z-10"
+        className="absolute top-0 -right-[3px] w-[6px] h-full cursor-col-resize hover:bg-accent/60 z-10"
       />
 
       {menu && (
@@ -615,11 +615,11 @@ const ExplorerMenu: React.FC<{ x: number; y: number; items: MenuItem[]; onClose:
       role="menu"
       data-testid="explorer-menu"
       style={{ left, top }}
-      className="fixed z-[999999] w-56 bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-700 rounded shadow-[4px_4px_0px_#000] py-1 text-xs font-bold"
+      className="fixed z-[999999] w-56 bg-popover text-popover-foreground border border-border rounded-md shadow-sm py-1 text-xs font-medium"
     >
       {items.map((item, i) =>
         item === 'separator' ? (
-          <div key={`sep-${i}`} className="my-1 h-[2px] bg-black/15 dark:bg-zinc-700" />
+          <div key={`sep-${i}`} className="my-1 h-px bg-border" />
         ) : (
           <button
             key={item.label}
@@ -629,9 +629,9 @@ const ExplorerMenu: React.FC<{ x: number; y: number; items: MenuItem[]; onClose:
               onClose();
               item.run();
             }}
-            className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black cursor-pointer"
+            className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-accent hover:text-foreground cursor-pointer"
           >
-            <item.icon size={13} strokeWidth={2.5} className="shrink-0" />
+            <item.icon size={13} strokeWidth={1.75} className="shrink-0" />
             <span>{item.label}</span>
           </button>
         )

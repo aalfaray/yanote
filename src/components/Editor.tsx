@@ -273,19 +273,19 @@ export const Editor: React.FC<EditorProps> = ({
 
   if (usePlainEditor) {
     return (
-      <div className={`flex-1 w-full h-full min-h-0 flex flex-col overflow-hidden ${isDarkMode ? 'bg-[#121212]' : 'bg-white'}`}>
+      <div className={`flex-1 w-full h-full min-h-0 flex flex-col overflow-hidden ${isDarkMode ? 'bg-background' : 'bg-card'}`}>
         {isHeavy ? (
           <div
-            className="heavy-doc-banner shrink-0 flex items-center gap-1.5 px-2 py-1 text-[11px] font-bold border-b-2 border-black dark:border-zinc-700 bg-[#FFE500] text-black"
+            className="heavy-doc-banner shrink-0 flex items-center gap-1.5 px-2 py-1 text-[11px] font-medium border-b border-border bg-accent text-foreground"
             title={t("El modo enriquecido se desactiva en archivos de este tamaño porque congelaría la app.")}
           >
             {t("Archivo muy grande (más de 3 MB): se edita como código Markdown")}</div>
         ) : (
-          <div className="parse-error-banner shrink-0 flex items-start gap-2 px-2 py-1 text-[11px] font-bold border-b-2 border-black dark:border-zinc-700 bg-[#FFE500] text-black">
+          <div className="parse-error-banner shrink-0 flex items-start gap-2 px-2 py-1 text-[11px] font-medium border-b border-border bg-accent text-foreground">
             <span className="flex-1 min-w-0 break-words" title={parseError ?? ''}>
               {t("El modo enriquecido no pudo leer este archivo, se edita como código.")}{' '}
               {errorRange && (
-                <span className="font-black">
+                <span className="font-semibold">
                   {t("Error en la línea")}{' '}{errorRange.from.line}{t(", columna")}{' '}{errorRange.from.column}.{' '}
                 </span>
               )}
@@ -294,14 +294,14 @@ export const Editor: React.FC<EditorProps> = ({
             {errorRange && (
               <button
                 onClick={goToError}
-                className="shrink-0 px-1.5 py-0.5 border-2 border-black rounded bg-black text-[#FFE500] hover:bg-white hover:text-black cursor-pointer"
+                className="shrink-0 px-1.5 py-0.5 border border-border rounded-md bg-primary text-primary-foreground hover:bg-card hover:text-foreground cursor-pointer"
                 title={t("Seleccionar en el editor el texto que causa el error")}
               >
                 {t("Ir al error")}</button>
             )}
             <button
               onClick={retryRichText}
-              className="shrink-0 px-1.5 py-0.5 border-2 border-black rounded bg-white hover:bg-black hover:text-white cursor-pointer"
+              className="shrink-0 px-1.5 py-0.5 border border-border rounded-md bg-card hover:bg-primary hover:text-primary-foreground cursor-pointer"
               title={t("Volver a intentar el modo enriquecido (por ejemplo, después de corregir el texto)")}
             >
               {t("Reintentar")}</button>
@@ -322,7 +322,7 @@ export const Editor: React.FC<EditorProps> = ({
 
   return (
     <SpeechContext.Provider value={speechActions}>
-    <div ref={containerRef} className={`flex-1 w-full h-full flex flex-col overflow-hidden relative ${isDarkMode ? 'bg-[#121212]' : 'bg-white'}`}>
+    <div ref={containerRef} className={`flex-1 w-full h-full flex flex-col overflow-hidden relative ${isDarkMode ? 'bg-background' : 'bg-card'}`}>
       <MDXEditor
         key={`${tabId}-${isDarkMode ? 'dark' : 'light'}-${viewMode}`}
         ref={editorRef}
@@ -351,21 +351,21 @@ export const Editor: React.FC<EditorProps> = ({
             diffMarkdown: '',
           }),
           toolbarPlugin({
-            toolbarClassName: 'mdxeditor-toolbar border-b-2 border-black dark:border-zinc-700 bg-[#FAF8F5] dark:bg-[#1E1E24] flex items-center gap-1 shrink-0 transition-colors',
+            toolbarClassName: 'mdxeditor-toolbar border-b border-border bg-background dark:bg-muted flex items-center gap-1 shrink-0 transition-colors',
             toolbarContents: () => (
               <DiffSourceToggleWrapper options={['rich-text', 'source']}>
                 <div className="contents">
                   <UndoRedo />
-                  <div className="toolbar-separator h-4 w-[1px] bg-black/30 dark:bg-zinc-600 mx-1" />
+                  <div className="toolbar-separator h-4 w-[1px] bg-border mx-1" />
                   <BlockTypeSelect />
                   <BoldItalicUnderlineToggles />
                   <CodeToggle />
-                  <div className="toolbar-separator h-4 w-[1px] bg-black/30 dark:bg-zinc-600 mx-1" />
+                  <div className="toolbar-separator h-4 w-[1px] bg-border mx-1" />
                   <ListsToggle />
                   <InsertTable />
                   <InsertThematicBreak />
                   <CreateLink />
-                  <div className="toolbar-separator h-4 w-[1px] bg-black/30 dark:bg-zinc-600 mx-1" />
+                  <div className="toolbar-separator h-4 w-[1px] bg-border mx-1" />
                   <SpeechToolbarButton />
                 </div>
               </DiffSourceToggleWrapper>

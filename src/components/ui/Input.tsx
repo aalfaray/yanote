@@ -1,36 +1,30 @@
-import React from 'react';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { useId, type InputHTMLAttributes } from 'react';
+import { cn } from '../../lib/utils';
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
 }
 
-export const Input: React.FC<InputProps> = ({
-  label,
-  error,
-  className,
-  ...props
-}) => {
+export function Input({ label, error, className, id, 'aria-describedby': describedBy, ...props }: InputProps) {
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+  const errorId = `${inputId}-error`;
   return (
-    <div className="flex flex-col gap-1 w-full">
-      {label && (
-        <label className="text-xs font-black uppercase tracking-wider text-black dark:text-zinc-200">
-          {label}
-        </label>
-      )}
+    <div className="flex w-full flex-col gap-1.5">
+      {label && <label htmlFor={inputId} className="text-xs font-medium text-foreground">{label}</label>}
       <input
-        className={twMerge(
-          clsx(
-            'w-full px-3 py-1.5 text-sm font-medium bg-white dark:bg-zinc-800 text-black dark:text-white border-2 border-black dark:border-zinc-600 rounded shadow-[2px_2px_0px_#000] focus:outline-none focus:ring-2 focus:ring-[#FFE500] focus:shadow-[3px_3px_0px_#000] transition-all placeholder:text-neutral-400 dark:placeholder:text-zinc-500',
-            error && 'border-[#FF6B6B]',
-            className
-          )
-        )}
         {...props}
+        id={inputId}
+        data-slot="input"
+        aria-invalid={error ? true : props['aria-invalid']}
+        aria-describedby={[describedBy, error ? errorId : undefined].filter(Boolean).join(' ') || undefined}
+        className={cn(
+          'flex h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm text-foreground shadow-xs outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20',
+          className
+        )}
       />
-      {error && <span className="text-[11px] font-bold text-[#FF6B6B]">{error}</span>}
+      {error && <span id={errorId} className="text-[11px] text-destructive">{error}</span>}
     </div>
   );
-};
+}

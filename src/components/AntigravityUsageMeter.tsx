@@ -16,7 +16,7 @@ export function AntigravityUsageMeter({ usage }: { usage: AntigravityUsage | nul
   ].filter(Boolean).join('\n') : usage?.error || (usage ? t("Antigravity no informó una cuota para este modelo.") : t("Consultando la cuota de Antigravity…"));
   return (
     <span data-testid="antigravity-usage" title={title} aria-label={title} className="h-5 flex items-center gap-1.5 px-1 shrink-0 whitespace-nowrap">
-      <span className="text-black/60 dark:text-zinc-400">AG</span>
+      <span className="text-foreground/60 dark:text-muted-foreground">AG</span>
       {available ? <>
         {usage.fiveHour && <UsageWindowMeter label="5h" win={usage.fiveHour} testId="agy-usage-5h" />}
         {usage.weekly && <UsageWindowMeter label={t("Sem")} win={usage.weekly} testId="agy-usage-week" />}

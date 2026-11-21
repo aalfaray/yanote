@@ -68,9 +68,9 @@ export function useClaudeUsage(chatIds: string[], preferredId?: string): ClaudeU
 }
 
 const TONE: Record<ReturnType<typeof usageTone>, string> = {
-  ok: 'bg-[#78E08F]',
-  warn: 'bg-[#FFE500]',
-  high: 'bg-[#FF6B6B]',
+  ok: 'bg-success',
+  warn: 'bg-warning',
+  high: 'bg-destructive',
 };
 
 const TICK_MS = 30 * 1000;
@@ -102,13 +102,13 @@ export const UsageWindowMeter: React.FC<{ label: string; win: ClaudeUsageWindow;
   const countdown = isExhausted(win, now) ? formatCountdown(win.resetsAt, now) : '';
   return (
     <span data-testid={testId} className="flex items-center gap-1 leading-none">
-      <span className="text-black/60 dark:text-zinc-400">{label}</span>
-      <span className="relative h-2 w-6 min-[400px]:w-9 rounded-sm border border-black dark:border-zinc-500 bg-white dark:bg-zinc-800 overflow-hidden" aria-hidden="true">
+      <span className="text-foreground/60 dark:text-muted-foreground">{label}</span>
+      <span className="relative h-2 w-6 min-[400px]:w-9 rounded-sm border border-border bg-card overflow-hidden" aria-hidden="true">
         <span className={`absolute inset-y-0 left-0 ${TONE[usageTone(win.percent)]}`} style={{ width: `${Math.max(0, Math.min(100, win.percent))}%` }} />
       </span>
       {countdown
-        ? <span data-testid={`${testId}-countdown`} title={t("Vuelve a estar disponible en {0}", [countdown])} className="font-black tabular-nums text-[#D63031] dark:text-[#FF6B6B]">⏳ {countdown}</span>
-        : <span className="font-black tabular-nums">{formatPercent(win.percent)}</span>}
+        ? <span data-testid={`${testId}-countdown`} title={t("Vuelve a estar disponible en {0}", [countdown])} className="font-semibold tabular-nums text-destructive">⏳ {countdown}</span>
+        : <span className="font-semibold tabular-nums">{formatPercent(win.percent)}</span>}
     </span>
   );
 };
@@ -130,7 +130,7 @@ export const ClaudeUsageMeter: React.FC<{ usage: ClaudeUsage | null }> = ({ usag
   return (
     <span data-testid="claude-usage" title={title} aria-label={title} className="h-5 flex items-center gap-1.5 px-1 shrink-0 whitespace-nowrap">
       {usage.fiveHour && <UsageWindowMeter label="5h" win={usage.fiveHour} testId="usage-5h" />}
-      {usage.fiveHour && usage.weekly && <span className="text-black/30 dark:text-zinc-600">·</span>}
+      {usage.fiveHour && usage.weekly && <span className="text-foreground/30 dark:text-muted-foreground">·</span>}
       {usage.weekly && <UsageWindowMeter label={t("Sem")} win={usage.weekly} testId="usage-week" />}
     </span>
   );

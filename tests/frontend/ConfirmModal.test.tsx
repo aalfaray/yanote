@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ConfirmModal } from '../../src/components/ui/ConfirmModal';
 
-describe('Frontend: ConfirmModal (Boldkit Style) (20% Happy / 80% Destructive)', () => {
+describe('Frontend: ConfirmModal (20% Happy / 80% Destructive)', () => {
   // --- 20% HAPPY PATH TESTS ---
   it('[HAPPY 1/3] renders modal with title, message and action buttons', () => {
     render(

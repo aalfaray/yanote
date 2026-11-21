@@ -139,15 +139,15 @@ export const FindBar: React.FC<FindBarProps> = ({ getRoot, initialQuery = '', fo
 
   const hasQuery = query.trim().length > 0;
   const iconButton =
-    'h-6 w-6 shrink-0 inline-flex items-center justify-center rounded border-[1.5px] border-black dark:border-zinc-600 bg-white dark:bg-[#27272A] hover:bg-[#FFE500] hover:text-black disabled:opacity-40 disabled:hover:bg-white dark:disabled:hover:bg-[#27272A] cursor-pointer';
+    'h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md border border-border bg-card dark:bg-muted hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-card dark:disabled:hover:bg-muted cursor-pointer';
 
   return (
     <div
       role="search"
       style={{ top }}
-      className="find-bar absolute left-2 right-2 min-[480px]:left-auto min-[480px]:w-80 z-30 flex items-center gap-1 p-1 rounded border-2 border-black dark:border-zinc-600 bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 shadow-[3px_3px_0px_#000]"
+      className="find-bar absolute left-2 right-2 min-[480px]:left-auto min-[480px]:w-80 z-30 flex items-center gap-1 p-1 rounded-md border border-border bg-popover text-popover-foreground shadow-sm"
     >
-      <Search size={14} strokeWidth={2.5} className="mx-1 shrink-0 opacity-70" />
+      <Search size={14} strokeWidth={1.75} className="mx-1 shrink-0 opacity-70" />
       <input
         ref={inputRef}
         value={query}
@@ -158,22 +158,22 @@ export const FindBar: React.FC<FindBarProps> = ({ getRoot, initialQuery = '', fo
         onKeyDown={onKeyDown}
         placeholder={t("Buscar en la nota")}
         aria-label={t("Buscar en la nota")}
-        className="flex-1 min-w-0 h-6 px-1.5 text-xs font-bold rounded border-[1.5px] border-black dark:border-zinc-600 bg-white dark:bg-[#121212] outline-none focus:border-[#FFE500]"
+        className="flex-1 min-w-0 h-6 px-1.5 text-xs font-medium rounded-md border border-border bg-card dark:bg-background outline-none focus:border-border"
       />
       <span
-        className={`shrink-0 px-1 text-[11px] font-black tabular-nums ${hasQuery && ranges.length === 0 ? 'text-[#FF6B6B]' : 'opacity-70'}`}
+        className={`shrink-0 px-1 text-[11px] font-semibold tabular-nums ${hasQuery && ranges.length === 0 ? 'text-destructive' : 'opacity-70'}`}
         aria-live="polite"
       >
         {hasQuery ? (ranges.length ? `${current + 1}/${ranges.length}` : '0/0') : ''}
       </span>
       <button type="button" className={iconButton} onClick={() => go(-1)} disabled={!ranges.length} title={t("Anterior (Shift+Enter)")} aria-label={t("Coincidencia anterior")}>
-        <ChevronUp size={14} strokeWidth={2.5} />
+        <ChevronUp size={14} strokeWidth={1.75} />
       </button>
       <button type="button" className={iconButton} onClick={() => go(1)} disabled={!ranges.length} title={t("Siguiente (Enter)")} aria-label={t("Coincidencia siguiente")}>
-        <ChevronDown size={14} strokeWidth={2.5} />
+        <ChevronDown size={14} strokeWidth={1.75} />
       </button>
       <button type="button" className={iconButton} onClick={onClose} title={t("Cerrar (Esc)")} aria-label={t("Cerrar búsqueda")}>
-        <X size={14} strokeWidth={2.5} />
+        <X size={14} strokeWidth={1.75} />
       </button>
     </div>
   );

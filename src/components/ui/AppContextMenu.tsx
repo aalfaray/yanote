@@ -117,10 +117,10 @@ export const AppContextMenu: React.FC<AppContextMenuProps> = ({ x, y, entries, o
       // Don't take the focus/selection away from what was right-clicked
       onMouseDown={(e) => e.preventDefault()}
       onContextMenu={(e) => e.preventDefault()}
-      className="fixed z-[999999] w-60 max-w-[calc(100vw-8px)] max-h-[calc(100vh-8px)] overflow-y-auto bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-700 rounded shadow-[4px_4px_0px_#000] py-1 select-none text-xs font-bold animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-[999999] w-60 max-w-[calc(100vw-8px)] max-h-[calc(100vh-8px)] overflow-y-auto bg-popover text-popover-foreground border border-border rounded-md shadow-sm py-1 select-none text-xs font-medium animate-in fade-in zoom-in-95 duration-100"
     >
       {entries.map((entry, i) => {
-        if (entry === 'separator') return <div key={`sep-${i}`} className="my-1 border-t border-black/15 dark:border-zinc-700" />;
+        if (entry === 'separator') return <div key={`sep-${i}`} className="my-1 border-t border-border" />;
         const Icon = ICONS[entry.action] || SpellCheck;
         return (
           <React.Fragment key={entry.action}>
@@ -140,19 +140,19 @@ export const AppContextMenu: React.FC<AppContextMenuProps> = ({ x, y, entries, o
               setActiveChild(-1);
             }}
             className={`w-full px-3 py-1.5 flex items-center gap-2.5 text-left transition-colors cursor-pointer group disabled:opacity-40 disabled:cursor-default ${
-              active === i ? 'bg-[#FFE500] text-black' : 'hover:bg-[#FFE500] hover:text-black disabled:hover:bg-transparent disabled:hover:text-inherit'
+              active === i ? 'bg-accent text-foreground' : 'hover:bg-accent hover:text-foreground disabled:hover:bg-transparent disabled:hover:text-inherit'
             }`}
           >
-            <Icon size={13} strokeWidth={2.5} className={`shrink-0 ${active === i ? 'text-black' : 'text-black/70 dark:text-zinc-400 group-hover:text-black'}`} />
+            <Icon size={13} strokeWidth={1.75} className={`shrink-0 ${active === i ? 'text-foreground' : 'text-foreground/70 dark:text-muted-foreground group-hover:text-foreground'}`} />
             <span className="flex-1 truncate">{entry.label}</span>
-            {entry.shortcut && <span className={`text-[10px] font-bold ${active === i ? 'text-black/60' : 'opacity-50'}`}>{entry.shortcut}</span>}
+            {entry.shortcut && <span className={`text-[10px] font-medium ${active === i ? 'text-foreground/60' : 'opacity-50'}`}>{entry.shortcut}</span>}
             {entry.children && <ChevronRight size={12} className={submenu === i ? 'rotate-90' : ''} />}
           </button>
-          {submenu === i && entry.children && <div role="menu" aria-label={t("Sugerencias de ortografía")} className="mx-2 my-1 border-l-2 border-black/20 dark:border-zinc-600 pl-1">
+          {submenu === i && entry.children && <div role="menu" aria-label={t("Sugerencias de ortografía")} className="mx-2 my-1 border-l border-border/20 dark:border-border pl-1">
             {entry.children.map((child, index) => child === 'separator' ? null : <button
               key={child.action} type="button" role="menuitem" disabled={child.disabled}
               onMouseEnter={() => setActiveChild(index)} onClick={() => onAction(child.action)}
-              className={`w-full text-left px-3 py-1.5 rounded cursor-pointer disabled:opacity-50 disabled:cursor-default ${activeChild === index ? 'bg-[#FFE500] text-black' : 'hover:bg-[#FFE500] hover:text-black'}`}
+              className={`w-full text-left px-3 py-1.5 rounded-md cursor-pointer disabled:opacity-50 disabled:cursor-default ${activeChild === index ? 'bg-accent text-foreground' : 'hover:bg-accent hover:text-foreground'}`}
             >{child.label}</button>)}
           </div>}
           </React.Fragment>

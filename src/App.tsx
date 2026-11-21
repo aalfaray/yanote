@@ -913,7 +913,7 @@ export const App: React.FC = () => {
     explorerFolder || (activeTab?.kind === 'terminal' || activeTab?.kind === 'claude' ? activeTab.cwd : parentDir(activeTab?.path ?? null)) || notesDir || undefined;
 
   return (
-    <div className="w-screen h-screen flex flex-col bg-[#FAF8F5] dark:bg-[#121212] overflow-hidden border-2 border-black dark:border-zinc-700 transition-colors">
+    <div className="w-screen h-screen flex flex-col bg-background overflow-hidden border border-border transition-colors">
       {/* 1. Custom Frameless Titlebar with Superposición Toggle */}
       <TitleBar
         isAlwaysOnTop={isAlwaysOnTop}
@@ -979,7 +979,7 @@ export const App: React.FC = () => {
           onNotify={(text, type) => setNotification({ text, type })}
         />
       )}
-      {/* 3. Main Editor (@mdxeditor/editor with Boldkit Neubrutalism) */}
+      {/* 3. Main Editor (@mdxeditor/editor with the app theme) */}
       <div className="flex-1 min-w-0 h-full relative overflow-hidden flex flex-col">
         {/* Terminal tabs stay mounted (hidden when inactive) so their sessions survive tab switches */}
         {tabs
@@ -1031,19 +1031,19 @@ export const App: React.FC = () => {
             onAutoFocused={clearFocusRequest}
           />
         ) : (
-          <div className="flex-1 flex items-center justify-center text-xs font-bold text-neutral-500">
+          <div className="flex-1 flex items-center justify-center text-xs font-medium text-muted-foreground">
             {t("Ninguna nota abierta. Haz clic en \"+\" para crear una nueva pestaña.")}</div>
         )}
 
-        {sessionReady && openingFiles > 0 && <LoadingSkeleton label={t("Abriendo archivos")} variant="line" className="absolute top-2 right-3 z-30 p-2 bg-[#FAF8F5] dark:bg-[#18181B] border-2 border-black dark:border-zinc-600 rounded pointer-events-none" />}
+        {sessionReady && openingFiles > 0 && <LoadingSkeleton label={t("Abriendo archivos")} variant="line" className="absolute top-2 right-3 z-30 p-2 bg-background border border-border rounded-md pointer-events-none" />}
         {/* Drop hint while dragging files over the window (doesn't block the drop target below) */}
         {isDraggingFiles && (
           <div
             data-testid="drop-overlay"
-            className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded border-[3px] border-dashed border-black dark:border-[#FFE500] bg-[#FFE500]/25 dark:bg-[#FFE500]/10"
+            className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-md border border-dashed border-border bg-accent/25 dark:bg-accent/10"
           >
-            <div className="flex items-center gap-2 px-3 py-2 bg-[#FFE500] text-black border-2 border-black rounded shadow-[3px_3px_0px_#000] font-black text-xs text-center">
-              <FileText size={16} strokeWidth={3} className="shrink-0" />
+            <div className="flex items-center gap-2 px-3 py-2 bg-accent text-foreground border border-border rounded-md shadow-sm font-semibold text-xs text-center">
+              <FileText size={16} strokeWidth={1.75} className="shrink-0" />
               <span>{t("Suelta tus .md para abrirlos")}</span>
             </div>
           </div>
@@ -1053,18 +1053,18 @@ export const App: React.FC = () => {
         {notification && (
           <div
             role={notification.type === 'error' ? 'alert' : 'status'}
-            className={`absolute bottom-14 right-2 min-[640px]:bottom-8 min-[640px]:right-3 max-w-[calc(100%-16px)] z-30 px-3 py-1.5 rounded border-2 border-black font-black text-xs shadow-[3px_3px_0px_#000] flex items-center gap-1.5 animate-in slide-in-from-bottom-2 duration-150 ${
+            className={`absolute bottom-14 right-2 min-[640px]:bottom-8 min-[640px]:right-3 max-w-[calc(100%-16px)] z-30 px-3 py-1.5 rounded-md border border-border font-semibold text-xs shadow-sm flex items-center gap-1.5 animate-in slide-in-from-bottom-2 duration-150 ${
               notification.type === 'success'
-                ? 'bg-[#78E08F] text-black'
+                ? 'bg-popover text-success'
                 : notification.type === 'error'
-                ? 'bg-[#FF6B6B] text-white'
-                : 'bg-[#FFE500] text-black'
+                ? 'bg-popover text-destructive'
+                : 'bg-accent text-foreground'
             }`}
           >
             {notification.type === 'success' ? (
-              <Check size={14} strokeWidth={3} />
+              <Check size={14} strokeWidth={1.75} />
             ) : (
-              <AlertCircle size={14} strokeWidth={3} />
+              <AlertCircle size={14} strokeWidth={1.75} />
             )}
             <span className="min-w-0">{notification.text}</span>
             <DismissButton onClick={() => setNotification(null)} />
@@ -1073,15 +1073,15 @@ export const App: React.FC = () => {
       </div>
       </div>
 
-      {/* 4. Bottom Neubrutalist Status Bar */}
-      <div className="h-7 w-full bg-[#FAF8F5] dark:bg-[#18181B] border-t-2 border-black dark:border-zinc-700 flex items-center justify-between px-2 text-[10px] select-none shrink-0 font-bold z-20 text-black dark:text-zinc-200 transition-colors whitespace-nowrap overflow-hidden">
+      {/* 4. Bottom Status Bar */}
+      <div className="h-7 w-full bg-background border-t border-border flex items-center justify-between px-2 text-[10px] select-none shrink-0 font-medium z-20 text-foreground transition-colors whitespace-nowrap overflow-hidden">
         <div className="flex items-center gap-1.5 min-w-0 shrink">
           {/* Active Tab filename & dirty state */}
           <span className="h-5 truncate max-w-[130px] min-[420px]:max-w-[180px] flex items-center gap-1 shrink min-w-0 leading-none">
-            <span className="text-black/60 dark:text-zinc-400 hidden min-[360px]:inline">{isClaudeActive ? 'Chat:' : isTerminalActive ? 'Terminal:' : 'Nota:'}</span>
-            <span className="text-black dark:text-white font-black truncate">{activeTab?.title}</span>
+            <span className="text-foreground/60 dark:text-muted-foreground hidden min-[360px]:inline">{isClaudeActive ? 'Chat:' : isTerminalActive ? 'Terminal:' : 'Nota:'}</span>
+            <span className="text-foreground font-semibold truncate">{activeTab?.title}</span>
             {activeTab?.isDirty && (
-              <span className="text-[#FF6B6B] font-black shrink-0" title={t("Cambios sin guardar")}>
+              <span className="text-destructive font-semibold shrink-0" title={t("Cambios sin guardar")}>
                 <span aria-hidden="true" className="min-[480px]:hidden">●</span>
                 <span className="hidden min-[480px]:inline">{t("*sin guardar")}</span>
               </span>
@@ -1090,15 +1090,15 @@ export const App: React.FC = () => {
 
           {!isTerminalActive && (
           <>
-          <div className="h-5 w-[2px] bg-black/30 dark:bg-zinc-600 shrink-0" />
+          <div className="h-5 w-px bg-border shrink-0" />
 
           {/* Quick Save Button */}
           <button
             onClick={handleSaveActiveTab}
-            className="h-5 flex items-center gap-1 px-1.5 leading-none bg-[#FFE500] hover:bg-[#FFD700] text-black border-2 border-black rounded shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer font-black whitespace-nowrap shrink-0"
+            className="h-5 flex items-center gap-1 px-1.5 leading-none bg-accent hover:bg-accent text-foreground border border-border rounded-md shadow-sm active:shadow-none cursor-pointer font-semibold whitespace-nowrap shrink-0"
             title={t("Guardar nota (Ctrl + S)")}
           >
-            <Save size={10} strokeWidth={2.8} className="shrink-0" />
+            <Save size={10} strokeWidth={1.75} className="shrink-0" />
             <span className="whitespace-nowrap">
               {t("Guardar")}<span className="hidden min-[480px]:inline"> (Ctrl+S)</span>
             </span>
@@ -1107,10 +1107,10 @@ export const App: React.FC = () => {
           {/* Export the note to PDF */}
           <button
             onClick={() => activeTab && void handleExportPdf(activeTab)}
-            className="h-5 flex items-center gap-1 px-1.5 leading-none bg-white dark:bg-[#27272A] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer font-black whitespace-nowrap shrink-0"
+            className="h-5 flex items-center gap-1 px-1.5 leading-none bg-popover text-popover-foreground border border-border rounded-lg shadow-md active:shadow-none cursor-pointer font-semibold whitespace-nowrap shrink-0"
             title={t("Exportar la nota a PDF")}
           >
-            <FileDown size={10} strokeWidth={2.8} className="shrink-0" />
+            <FileDown size={10} strokeWidth={1.75} className="shrink-0" />
             <span className="whitespace-nowrap">PDF</span>
           </button>
           </>
@@ -1124,8 +1124,8 @@ export const App: React.FC = () => {
 
           {/* Superposición Status Badge */}
           <span
-            className={`h-5 px-1.5 items-center leading-none rounded border-2 border-black dark:border-zinc-600 shadow-[1.5px_1.5px_0px_#000] font-black text-[10px] shrink-0 hidden min-[440px]:inline-flex ${
-              isAlwaysOnTop ? 'bg-[#78E08F] text-black' : 'bg-neutral-200 dark:bg-zinc-700 text-neutral-600 dark:text-zinc-300'
+            className={`h-5 px-1.5 items-center leading-none rounded-md border border-border dark:border-border shadow-sm font-semibold text-[10px] shrink-0 hidden min-[440px]:inline-flex ${
+              isAlwaysOnTop ? 'bg-success/15 text-foreground' : 'bg-muted text-muted-foreground dark:text-foreground'
             }`}
           >
             {isAlwaysOnTop ? t("FIJADO") : t("NORMAL")}
@@ -1183,7 +1183,7 @@ export const App: React.FC = () => {
         onBrowse={handleOpenFile}
       />
 
-      {/* Neubrutalist Confirmation Modal for Closing Unsaved Tab */}
+      {/* Confirmation Modal for Closing Unsaved Tab */}
       <ConfirmModal
         isOpen={Boolean(closingTab)}
         title={t("Cambios sin guardar")}
