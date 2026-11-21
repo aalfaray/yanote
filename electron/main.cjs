@@ -79,6 +79,7 @@ const languageService = createLanguageService({ getPreference: () => appConfig.l
 
 function updateConfig(newConfig) {
   appConfig = saveConfig(configFilePath, appConfig, newConfig);
+  if (mainWindow && newConfig.darkMode !== undefined) mainWindow.setBackgroundColor(windowBackground());
   if (mainWindow && newConfig.language !== undefined) spellcheckService.configure(mainWindow.webContents.session, languageService.info().language);
   return appConfig;
 }
@@ -95,6 +96,11 @@ const accountUsageService = createClaudeAccountUsageService({
   getExecutable: () => findClaudeExecutable(withFreshPath({ ...process.env })) || findBundledExecutable(),
 });
 
+// Painted while the page (re)loads, before its CSS applies: match the saved theme so a reload doesn't flash white
+function windowBackground() {
+  return appConfig.darkMode ? '#121212' : '#FAF8F5';
+}
+
 function createWindow() {
   fileService.ensureNotesDir(appConfig.notesPath);
 
@@ -106,7 +112,7 @@ function createWindow() {
     frame: false, // Custom Boldkit Neubrutalist window frame
     alwaysOnTop: appConfig.alwaysOnTop || false,
     opacity: clampOpacity(appConfig.opacity ?? 1),
-    backgroundColor: '#FAF8F5',
+    backgroundColor: windowBackground(),
     icon: path.join(__dirname, '../build/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

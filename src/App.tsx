@@ -30,6 +30,17 @@ import { AppContextMenu } from './components/ui/AppContextMenu';
 import { FileExplorer, MIN_EXPLORER_WIDTH, MAX_EXPLORER_WIDTH } from './components/FileExplorer';
 
 const STARTUP_TAB_ID = 'tab-startup';
+// index.html reads this before the app loads so a reload starts on the right background
+const DARK_MODE_CACHE_KEY = 'yanote:darkMode';
+
+function applyDarkClass(dark: boolean) {
+  document.documentElement.classList.toggle('dark', dark);
+  try {
+    localStorage.setItem(DARK_MODE_CACHE_KEY, dark ? '1' : '0');
+  } catch {
+    // Storage unavailable: only the reload background is affected
+  }
+}
 
 export const App: React.FC = () => {
   useLanguage();
@@ -141,11 +152,7 @@ export const App: React.FC = () => {
           }
           const dark = Boolean(config.darkMode);
           if (!appearanceChanged.current.dark) setIsDarkMode(dark);
-          if (!appearanceChanged.current.dark && dark) {
-            document.documentElement.classList.add('dark');
-          } else if (!appearanceChanged.current.dark) {
-            document.documentElement.classList.remove('dark');
-          }
+          if (!appearanceChanged.current.dark) applyDarkClass(dark);
 
           // Reopen the tabs left open last time: notes (that still exist), unsaved notes,
           // terminals and Claude chats (resumed), in the same order
@@ -218,11 +225,7 @@ export const App: React.FC = () => {
     appearanceChanged.current.dark = true;
     setIsDarkMode((prev) => {
       const next = !prev;
-      if (next) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      applyDarkClass(next);
       if (window.electronAPI) {
         window.electronAPI.saveAppConfig({ darkMode: next }).catch((err) => {
           logError('App.saveDarkMode', err);
