@@ -506,5 +506,12 @@
   "Ruta actual": "Current path",
   "Explorar esta carpeta": "Explore this folder",
   "No se pudo abrir la carpeta": "Could not open the folder",
-  "Elige una carpeta para explorar y abrir Claude.": "Choose a folder to browse and open Claude."
+  "Elige una carpeta para explorar y abrir Claude.": "Choose a folder to browse and open Claude.",
+  "{0} llegó a su límite de uso: sigo con la cuenta {1}": "{0} reached its usage limit: continuing with the {1} account",
+  "Continúa con lo que estabas haciendo: la cuenta anterior llegó a su límite de uso.": "Continue with what you were doing: the previous account reached its usage limit.",
+  "Buscando otra cuenta con cuota disponible…": "Looking for another account with quota available…",
+  "Ninguna otra cuenta con sesión iniciada tiene cuota disponible ahora.": "No other signed-in account has quota available right now.",
+  "Cambiar de cuenta automáticamente al llegar al límite": "Switch accounts automatically when the limit is reached",
+  "Sigue con la cuenta con sesión iniciada que tenga más cuota libre.": "Continues with the signed-in account that has the most quota left.",
+  "Si quieres que yanote cambie de cuenta solo la próxima vez, actívalo en «Cambiar de cuenta».": "If you want yanote to switch accounts by itself next time, turn it on in «Switch account»."
 }

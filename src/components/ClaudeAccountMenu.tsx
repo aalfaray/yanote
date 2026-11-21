@@ -6,6 +6,7 @@ import type { ClaudeAccount, ClaudeAccountStatus, ClaudeUsage } from '../types/e
 import { LoadingSkeleton } from './ui/Skeleton';
 import { UsageWindowMeter } from './ClaudeUsageMeter';
 import { describeWindow } from '../lib/claudeUsage';
+import { loadChatPrefs, saveChatPrefs } from '../lib/claudeChatPrefs';
 
 const PLAN_LABEL: Record<string, string> = { pro: 'Pro', max: 'Max', team: 'Team', enterprise: 'Enterprise', free: 'Free' };
 
@@ -48,6 +49,8 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
   const [error, setError] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
+  // Off until the user turns it on: changing accounts without asking is their call
+  const [autoSwitch, setAutoSwitch] = useState(() => loadChatPrefs().autoSwitchAccount === true);
   const loadRequest = useRef(0);
   const [usages, setUsages] = useState<Record<string, ClaudeUsage>>({});
   const [usageBusy, setUsageBusy] = useState<Record<string, boolean>>({});
@@ -343,6 +346,21 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
         >
           <Plus size={13} strokeWidth={3} /> {' '}{t("Agregar otra cuenta")}</button>
       )}
+      <label className="flex items-start gap-2 px-2.5 py-1.5 text-[11px] font-bold cursor-pointer select-none border-t-2 border-black/10 dark:border-white/10">
+        <input
+          type="checkbox"
+          checked={autoSwitch}
+          onChange={(e) => {
+            setAutoSwitch(e.target.checked);
+            saveChatPrefs({ autoSwitchAccount: e.target.checked });
+          }}
+          className="mt-0.5 h-3.5 w-3.5 accent-[#FFE500] cursor-pointer"
+        />
+        <span>
+          {t("Cambiar de cuenta automáticamente al llegar al límite")}
+          <span className="block text-[10px] font-normal opacity-60">{t("Sigue con la cuenta con sesión iniciada que tenga más cuota libre.")}</span>
+        </span>
+      </label>
       <p className="px-2.5 pb-2 text-[10px] opacity-60 leading-snug">
         {t("Cada cuenta inicia sesión una vez con Claude Code. Al cambiar, la conversación sigue con la otra cuenta. yanote no ve tus credenciales.")}</p>
     </div>

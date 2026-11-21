@@ -28,6 +28,7 @@ import { getChatBackend, PROVIDER_LABELS } from '../lib/chatBackends';
 import { loadChatPrefs, saveChatPrefs, loadEffortByModel, saveEffortByModel } from '../lib/claudeChatPrefs';
 import { copyText } from '../lib/clipboard';
 import { logError } from '../lib/logger';
+import { pickAccountWithQuota } from '../lib/claudeUsage';
 import {
   chatReducer,
   initialChatState,
@@ -508,6 +509,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const [claudeDefaults, setClaudeDefaults] = useState<ClaudeDefaults | null>(null);
   const [defaultsLoading, setDefaultsLoading] = useState(Boolean(provider === 'claude' && window.electronAPI?.claudeDefaults));
   const [accountReadyId, setAccountReadyId] = useState<string | null>(null);
+  // Automatic account change when the limit is hit: accounts already tried for the current message,
+  // and what to send once the other account's session is up
+  const [autoSwitch, setAutoSwitch] = useState<'idle' | 'searching' | 'none'>('idle');
+  const autoSwitchingRef = useRef(false);
+  const triedAccountsRef = useRef(new Set<string>());
+  const pendingResendRef = useRef<string | null>(null);
+  const itemsRef = useRef(state.items);
+  itemsRef.current = state.items;
   const speech = useSpeech();
   // Right-click > "Leer en voz alta" on a selection of this tab
   useReadAloudRequests(tabId, speech.play);
@@ -548,9 +557,22 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
         executableRef.current = res.executable;
         setLaunch({ executable: res.executable, source: res.source });
         if (!res.success) {
+          pendingResendRef.current = null;
           dispatch({ type: 'event', event: { id: tabId, type: 'error', error: t("No se pudo iniciar {0}: {1}", [agentName, res.error]) } });
         } else {
           dispatch({ type: 'auth_retry' });
+          // Switched automatically after a usage limit: pick the work up again with this account
+          const resend = pendingResendRef.current;
+          pendingResendRef.current = null;
+          if (resend) {
+            dispatch({ type: 'send', text: resend, imageCount: 0 });
+            void backend.send(tabId, { text: resend, images: [] }).then((sent) => {
+              if (!sent.success) throw new Error(sent.error || t("No se pudo enviar el mensaje"));
+            }).catch((err) => {
+              logError('ClaudeChatView.autoSwitchResend', err);
+              dispatch({ type: 'event', event: { id: tabId, type: 'error', error: err instanceof Error ? err.message : String(err) } });
+            });
+          }
         }
       })
       .catch((err) => {
@@ -689,16 +711,19 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   /** Continue this conversation with another account: copy it there, then resume it with that sign-in. */
 
-  const switchAccount = async (account: { id: string; name: string }) => {
+  /** Returns whether the conversation went along (false: the other account starts a fresh one). */
+  const switchAccount = async (account: { id: string; name: string }, reason?: { limitedName: string }): Promise<boolean> => {
     setAccountMenuOpen(false);
-    if (account.id === accountRef.current) return;
+    if (account.id === accountRef.current) return true;
     if (state.running) await backend?.interrupt(tabId);
     const sid = sessionIdRef.current;
+    let carried = Boolean(sid);
     if (sid) {
       const res = await api?.claudeAccounts?.copySession(sid, accountRef.current, account.id);
       if (res && !res.success) {
         // Nothing to carry over: the other account starts a fresh conversation
         sessionIdRef.current = undefined;
+        carried = false;
         dispatch({ type: 'notice', text: t("No se pudo pasar la conversación a {0}: empieza una nueva.", [account.name]), tone: 'error' });
       }
     }
@@ -708,9 +733,67 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     void api?.claudeAccounts?.setActive(account.id);
     onAccountChange?.(account.id);
     dispatch({ type: 'auth_retry' });
-    dispatch({ type: 'notice', text: t("Ahora usas la cuenta {0}", [account.name]), tone: 'info' });
+    dispatch({
+      type: 'notice',
+      text: reason
+        ? t("{0} llegó a su límite de uso: sigo con la cuenta {1}", [reason.limitedName, account.name])
+        : t("Ahora usas la cuenta {0}", [account.name]),
+      tone: 'info',
+    });
     setRestartKey((k) => k + 1);
+    return carried;
   };
+
+  /**
+   * The account hit its usage limit: look for another signed-in account with quota left (the one with
+   * the most room), move the conversation there and carry on. Each account is tried once per message.
+   */
+
+  const autoSwitchAccount = async () => {
+    const accountsApi = api?.claudeAccounts;
+    if (!accountsApi?.usage || autoSwitchingRef.current) return;
+    autoSwitchingRef.current = true;
+    setAutoSwitch('searching');
+    try {
+      const limitedName = accountName;
+      triedAccountsRef.current.add(accountRef.current);
+      const { accounts } = await accountsApi.list();
+      const candidates = accounts.filter((a) => !triedAccountsRef.current.has(a.id));
+      const usages = await Promise.all(candidates.map(async (a) => ({
+        id: a.id,
+        usage: await accountsApi.usage!(a.id, true).catch((err) => {
+          logError('ClaudeChatView.autoSwitchUsage', err, { accountId: a.id });
+          return null;
+        }),
+      })));
+      const next = candidates.find((a) => a.id === pickAccountWithQuota(usages));
+      if (!next) {
+        setAutoSwitch('none');
+        return;
+      }
+      const lastPrompt = [...itemsRef.current].reverse().find((i) => i.kind === 'user');
+      const carried = await switchAccount(next, { limitedName });
+      // With the conversation carried over Claude knows what it was doing; otherwise repeat the request
+      pendingResendRef.current = carried
+        ? t("Continúa con lo que estabas haciendo: la cuenta anterior llegó a su límite de uso.")
+        : lastPrompt && lastPrompt.kind === 'user' ? lastPrompt.text : null;
+      setAutoSwitch('idle');
+    } catch (err) {
+      logError('ClaudeChatView.autoSwitchAccount', err);
+      setAutoSwitch('none');
+    } finally {
+      autoSwitchingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!isClaude || !state.rateLimited || state.running || starting) return;
+    // Opt-in: only users who turned it on in the account menu
+    if (loadChatPrefs().autoSwitchAccount !== true) return;
+    void autoSwitchAccount();
+    // Only when the limit shows up; autoSwitchAccount reads the latest state through refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isClaude, state.rateLimited, state.running, starting]);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -722,6 +805,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     }
     if ((!text && images.length === 0) || !backend || starting || state.ended) return;
     const payload = { text, images: images.map(({ data, mediaType }) => ({ data, mediaType })) };
+    // A new message from the user: every account may be tried again if a limit shows up
+    triedAccountsRef.current.clear();
+    setAutoSwitch('idle');
     dispatch({ type: 'send', text, imageCount: images.length });
     resetDraft('');
     setImages([]);
@@ -1120,7 +1206,18 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
             <div className={`${card} p-3 space-y-2 bg-[#FFFBDA] dark:bg-[#26240F]`} role="alert" data-testid="rate-limit-card">
               <div className="flex items-center gap-1.5 text-[13px] font-black">
                 <UserRound size={15} strokeWidth={2.5} /> {accountName} {' '}{t("llegó a su límite de uso")}</div>
-              <p className="text-[12px] opacity-80">{t("Puedes esperar a que se reinicie o seguir esta misma conversación con otra de tus cuentas.")}</p>
+              {autoSwitch === 'searching' ? (
+                <p className="text-[12px] opacity-80 flex items-center gap-1.5" data-testid="auto-switch-searching">
+                  <Loader2 size={12} strokeWidth={3} className="animate-spin" /> {t("Buscando otra cuenta con cuota disponible…")}</p>
+              ) : (
+                <p className="text-[12px] opacity-80">
+                  {autoSwitch === 'none' ? t("Ninguna otra cuenta con sesión iniciada tiene cuota disponible ahora.") + ' ' : ''}
+                  {t("Puedes esperar a que se reinicie o seguir esta misma conversación con otra de tus cuentas.")}</p>
+              )}
+              {autoSwitch === 'idle' && loadChatPrefs().autoSwitchAccount !== true && (
+                <p className="text-[11px] opacity-60" data-testid="auto-switch-hint">
+                  {t("Si quieres que yanote cambie de cuenta solo la próxima vez, actívalo en «Cambiar de cuenta».")}</p>
+              )}
               <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
                 <UserRound size={11} strokeWidth={3} /> {' '}{t("Cambiar de cuenta")}</button>
             </div>

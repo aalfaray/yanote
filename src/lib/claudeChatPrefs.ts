@@ -16,6 +16,8 @@ export interface ChatPrefs {
   mode?: ClaudePermissionMode;
   /** '' = Claude Code's default model */
   model?: string;
+  /** When a chat hits its usage limit, continue with another signed-in account that has quota (default off: the user opts in) */
+  autoSwitchAccount?: boolean;
 }
 
 export const isPermissionMode = (value: unknown): value is ClaudePermissionMode =>
@@ -47,6 +49,7 @@ export function loadChatPrefs(): ChatPrefs {
     const prefs: ChatPrefs = {};
     if (parsed && isPermissionMode(parsed.mode)) prefs.mode = parsed.mode;
     if (parsed && typeof parsed.model === 'string') prefs.model = parsed.model;
+    if (parsed && typeof parsed.autoSwitchAccount === 'boolean') prefs.autoSwitchAccount = parsed.autoSwitchAccount;
     return prefs;
   } catch (err) {
     logError('claudeChatPrefs.loadChatPrefs', err);
