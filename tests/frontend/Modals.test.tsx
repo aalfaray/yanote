@@ -31,7 +31,6 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     window.electronAPI = {
       getAppConfig: vi.fn().mockResolvedValue({
         notesPath: '/notes',
-        alwaysOnTop: false,
         darkMode: false,
       }),
       saveAppConfig: vi.fn().mockResolvedValue({}),
@@ -127,7 +126,7 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     });
     expect(onSaved).toHaveBeenCalledTimes(1);
     const saved = (window.electronAPI?.saveAppConfig as any).mock.calls[0][0];
-    expect(saved).toEqual({ alwaysOnTop: false, darkMode: false, notifyClaude: true, language: 'auto' });
+    expect(saved).toEqual({ darkMode: false, notifyClaude: true, language: 'auto' });
   });
 
   it('[CHAOS 5/6] SettingsModal displays error banner if saving config fails', async () => {

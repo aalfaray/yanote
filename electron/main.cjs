@@ -60,7 +60,6 @@ const fileTreeWatcher = fileTreeService.createFileTreeWatcher();
 let updateService = null;
 
 let mainWindow = null;
-let isAlwaysOnTop = false;
 
 const dataDir = getBaseDataDir(process.env, process.execPath, app ? app.getPath('userData') : '');
 if (!fs.existsSync(dataDir)) {
@@ -98,7 +97,7 @@ const accountUsageService = createClaudeAccountUsageService({
 
 // Painted while the page (re)loads, before its CSS applies: match the saved theme so a reload doesn't flash white
 function windowBackground() {
-  return appConfig.darkMode ? '#121212' : '#FAF8F5';
+  return appConfig.darkMode ? '#282c34' : '#ffffff';
 }
 
 function createWindow() {
@@ -109,8 +108,7 @@ function createWindow() {
     height: 680,
     minWidth: 340,
     minHeight: 400,
-    frame: false, // Custom Boldkit Neubrutalist window frame
-    alwaysOnTop: appConfig.alwaysOnTop || false,
+    frame: false, // Custom window frame
     opacity: clampOpacity(appConfig.opacity ?? 1),
     backgroundColor: windowBackground(),
     icon: path.join(__dirname, '../build/icon.png'),
@@ -122,7 +120,6 @@ function createWindow() {
     },
   });
 
-  isAlwaysOnTop = appConfig.alwaysOnTop || false;
   spellcheckService.attach(mainWindow.webContents, process.platform, languageService.info().language);
 
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -263,19 +260,6 @@ ipc.handle('window:close', () => {
 
 ipc.handle('window:isMaximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
-});
-
-ipc.handle('window:setAlwaysOnTop', (_, flag) => {
-  if (mainWindow) {
-    isAlwaysOnTop = Boolean(flag);
-    mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
-    updateConfig({ alwaysOnTop: isAlwaysOnTop });
-  }
-  return isAlwaysOnTop;
-});
-
-ipc.handle('window:getAlwaysOnTop', () => {
-  return isAlwaysOnTop;
 });
 
 // Window transparency: applied live while the slider moves, persisted once it settles

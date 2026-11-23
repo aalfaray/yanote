@@ -39,8 +39,6 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       minimize: vi.fn(),
       maximize: vi.fn(),
       close: vi.fn(),
-      setAlwaysOnTop: vi.fn().mockImplementation((flag) => Promise.resolve(flag)),
-      getAlwaysOnTop: vi.fn().mockResolvedValue(false),
       getNotesPath: vi.fn().mockResolvedValue('/notes'),
       listNotes: vi.fn().mockImplementation(() => Promise.resolve({ success: true, notes: mockNotes })),
       readFile: vi.fn().mockImplementation((filePath) =>
@@ -54,7 +52,6 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
       renameFile: vi.fn().mockResolvedValue({ success: true }),
       getAppConfig: vi.fn().mockResolvedValue({
         notesPath: '/notes',
-        alwaysOnTop: false,
         openTabs: [{ kind: 'note', path: '/notes/ejemplo.md', title: 'ejemplo.md' }],
       }),
       saveAppConfig: vi.fn().mockResolvedValue({}),
@@ -94,19 +91,6 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
         '# Tareas Pendientes\n\n- [x] Implementar yanote'
       );
       expect(screen.getByText(/✓ Guardado: scratch-1.md/i)).toBeInTheDocument();
-    });
-  });
-
-  it('[HAPPY E2E 2/4] Superposición (Always on Top) toggle flow', async () => {
-    render(<App />);
-
-    const pinBtn = screen.getByTitle(/Activar superposición/i);
-    fireEvent.click(pinBtn);
-
-    await waitFor(() => {
-      expect(window.electronAPI?.setAlwaysOnTop).toHaveBeenCalledWith(true);
-      expect(screen.getByText(/Superposición activada/i)).toBeInTheDocument();
-      expect(screen.getByText('ENCIMA')).toBeInTheDocument();
     });
   });
 
@@ -282,7 +266,6 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
   it('[CHAOS E2E 5/8] Recent files history opens a file; an already open one switches without duplication', async () => {
     (window.electronAPI?.getAppConfig as any).mockResolvedValue({
       notesPath: '/notes',
-      alwaysOnTop: false,
       openTabs: [{ kind: 'note', path: '/notes/ejemplo.md', title: 'ejemplo.md' }],
       recentFiles: [
         { path: '/proyectos/Plan.md', name: 'Plan.md', openedAt: Date.now() - 60_000 },
@@ -336,7 +319,6 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     // The note on disk comes back from the previous session
     window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
       notesPath: '/notes',
-      alwaysOnTop: false,
       openTabs: [{ path: '/notes/ejemplo.md', title: 'ejemplo.md' }],
     });
     render(<App />);
@@ -420,7 +402,6 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
   it('[CHAOS E2E 11/12] initial load respects darkMode: true from stored app-config.json', async () => {
     (window.electronAPI?.getAppConfig as any).mockResolvedValueOnce({
       notesPath: '/notes',
-      alwaysOnTop: false,
       darkMode: true,
     });
 
@@ -554,7 +535,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
 
   describe('startup session', () => {
     const config = (extra: object) =>
-      (window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({ notesPath: '/notes', alwaysOnTop: false, ...extra }));
+      (window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({ notesPath: '/notes', ...extra }));
 
     it('starts with a blank note and no welcome on the first launch', async () => {
       config({});
@@ -630,7 +611,7 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
     };
 
     beforeEach(() => {
-      window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({ notesPath: '/notes', alwaysOnTop: false, welcomeSeen: true });
+      window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({ notesPath: '/notes', welcomeSeen: true });
       window.electronAPI!.getPathForFile = vi.fn((f: File) => `/docs/${f.name}`);
       writtenFiles['/docs/plan.md'] = '# Plan soltado';
       writtenFiles['/docs/ideas.markdown'] = '# Ideas';
@@ -690,7 +671,6 @@ describe('E2E: End-to-End Workflow & Stress Chaos Testing (20% Happy / 80% Destr
   it('opening a note never marks it unsaved, even when the editor reformats it; typing does', async () => {
     window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
       notesPath: '/notes',
-      alwaysOnTop: false,
       welcomeSeen: true,
       openTabs: [{ path: '/notes/AGENTS.md', title: 'AGENTS.md' }],
     });

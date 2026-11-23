@@ -23,7 +23,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSaved,
 }) => {
   useLanguage();
-  const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [notifyClaude, setNotifyClaude] = useState(true);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -67,7 +66,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (window.electronAPI) {
       void window.electronAPI.getAppConfig().then((cfg) => {
         if (cancelled) return;
-        setAlwaysOnTop(cfg.alwaysOnTop || false);
         setIsDarkMode(Boolean(cfg.darkMode));
         setNotifyClaude(cfg.notifyClaude !== false);
         setLanguagePreference(cfg.language || 'auto');
@@ -89,7 +87,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setStatusMessage(null);
     try {
       const updated: Partial<AppConfig> = {
-        alwaysOnTop,
         darkMode: isDarkMode,
         notifyClaude,
         language: languagePreference,
@@ -161,17 +158,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
             <span className="font-medium text-foreground">
               {t("Modo oscuro")}</span>
-          </label>
-
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={alwaysOnTop}
-              onChange={(e) => setAlwaysOnTop(e.target.checked)}
-              className="w-4 h-4 rounded-md border border-border text-foreground focus:ring-0 cursor-pointer accent-primary"
-            />
-            <span className="font-medium text-foreground">
-              {t("Iniciar siempre en modo superposición (Always on Top)")}</span>
           </label>
 
           <label className="flex items-center gap-2 cursor-pointer select-none">

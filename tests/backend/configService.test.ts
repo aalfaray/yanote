@@ -55,7 +55,7 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     const config = loadConfig(configPath, notesPath);
     expect(config).toBeDefined();
     expect(config.notesPath).toBe(notesPath);
-    expect(config.alwaysOnTop).toBe(false);
+    expect(config).not.toHaveProperty('alwaysOnTop');
     expect(config.darkMode).toBe(false);
     expect(config).not.toHaveProperty('githubRepo');
     expect(config).not.toHaveProperty('autoSyncOnSave');
@@ -64,16 +64,16 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
   it('[HAPPY 2/3] saves and loads valid config changes correctly', () => {
     const current = loadConfig(configPath, notesPath);
     const updated = saveConfig(configPath, current, {
-      alwaysOnTop: true,
+      notifyClaude: false,
       notesPath: '/tmp/other-notes',
     });
 
-    expect(updated.alwaysOnTop).toBe(true);
+    expect(updated.notifyClaude).toBe(false);
     expect(updated.notesPath).toBe('/tmp/other-notes');
 
     // Reload from disk to verify persistence
     const reloaded = loadConfig(configPath, notesPath);
-    expect(reloaded.alwaysOnTop).toBe(true);
+    expect(reloaded.notifyClaude).toBe(false);
     expect(reloaded.notesPath).toBe('/tmp/other-notes');
   });
 
@@ -106,7 +106,7 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     const config = loadConfig(configPath, notesPath);
     expect(config).toBeDefined();
     expect(config.notesPath).toBe(notesPath);
-    expect(config.alwaysOnTop).toBe(false);
+    expect(config.darkMode).toBe(false);
   });
 
   it('[CHAOS 2/8] handles empty config file without crashing', () => {
@@ -168,7 +168,7 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
 
   it('[CHAOS 5/8] resists prototype pollution attempts when saving', () => {
     const current = loadConfig(configPath, notesPath);
-    const maliciousPayload = JSON.parse('{"__proto__": {"polluted": true}, "alwaysOnTop": true}');
+    const maliciousPayload = JSON.parse('{"__proto__": {"polluted": true}, "darkMode": true}');
     saveConfig(configPath, current, maliciousPayload);
 
     // Verify global prototype is not polluted
@@ -190,10 +190,10 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
   it('[CHAOS 7/8] creates parent directory recursively if deeply nested path is provided', () => {
     const deepConfigPath = path.join(tempDir, 'sub1', 'sub2', 'sub3', 'nested-config.json');
     const current = loadConfig(deepConfigPath, notesPath);
-    const updated = saveConfig(deepConfigPath, current, { alwaysOnTop: true });
+    const updated = saveConfig(deepConfigPath, current, { darkMode: true });
 
     expect(fs.existsSync(deepConfigPath)).toBe(true);
-    expect(updated.alwaysOnTop).toBe(true);
+    expect(updated.darkMode).toBe(true);
   });
 
   it('[CHAOS 8/12] resolves portable directory correctly with PORTABLE_EXECUTABLE_DIR environment variable', () => {
@@ -222,11 +222,11 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
   it('[CHAOS 11/12] retains darkMode across multiple subsequent updates without resetting', () => {
     let cfg = loadConfig(configPath, notesPath);
     cfg = saveConfig(configPath, cfg, { darkMode: true });
-    cfg = saveConfig(configPath, cfg, { alwaysOnTop: true });
+    cfg = saveConfig(configPath, cfg, { notifyClaude: false });
     cfg = saveConfig(configPath, cfg, { notesPath: '/tmp/prod' });
 
     expect(cfg.darkMode).toBe(true);
-    expect(cfg.alwaysOnTop).toBe(true);
+    expect(cfg.notifyClaude).toBe(false);
     expect(cfg.notesPath).toBe('/tmp/prod');
 
     const reloaded = loadConfig(configPath, notesPath);
@@ -234,7 +234,7 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
   });
 
   it('[CHAOS 12/13] defaults darkMode to false when absent in corrupted config', () => {
-    fs.writeFileSync(configPath, '{"alwaysOnTop": true}', 'utf8');
+    fs.writeFileSync(configPath, '{"notifyClaude": false}', 'utf8');
     const cfg = loadConfig(configPath, notesPath);
     expect(cfg.darkMode).toBe(false);
   });
@@ -242,7 +242,7 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
   it('[CHAOS 13/13] drops legacy GitHub keys (including tokens) from old config files', () => {
     fs.writeFileSync(
       configPath,
-      JSON.stringify({ alwaysOnTop: true, githubRepo: 'https://github.com/x/y.git', githubBranch: 'main', githubToken: 'ghp_secret', autoSyncOnSave: true }),
+      JSON.stringify({ notifyClaude: false, githubRepo: 'https://github.com/x/y.git', githubBranch: 'main', githubToken: 'ghp_secret', autoSyncOnSave: true }),
       'utf8'
     );
     const loaded = loadConfig(configPath, notesPath);
@@ -252,7 +252,15 @@ describe('Backend: ConfigService (20% Happy / 80% Destructive)', () => {
     saveConfig(configPath, { ...loaded, githubToken: 'ghp_secret' }, { darkMode: true });
     const raw = fs.readFileSync(configPath, 'utf8');
     expect(raw).not.toMatch(/github|ghp_secret|autoSyncOnSave/);
-    expect(JSON.parse(raw).alwaysOnTop).toBe(true);
+    expect(JSON.parse(raw).notifyClaude).toBe(false);
+  });
+
+  it('drops the removed always-on-top setting from old config files', () => {
+    fs.writeFileSync(configPath, JSON.stringify({ alwaysOnTop: true, darkMode: true }), 'utf8');
+    const loaded = loadConfig(configPath, notesPath);
+    expect(loaded).not.toHaveProperty('alwaysOnTop');
+    saveConfig(configPath, { ...loaded, alwaysOnTop: true } as any, { darkMode: false });
+    expect(JSON.parse(fs.readFileSync(configPath, 'utf8'))).not.toHaveProperty('alwaysOnTop');
   });
 
   // --- Rename BoldNotes -> yanote ---

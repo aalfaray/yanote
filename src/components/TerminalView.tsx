@@ -43,12 +43,29 @@ interface TerminalViewProps {
   initialCommand?: string;
 }
 
+// One Dark Pro terminal colours
 const DARK_THEME = {
-  background: '#0A0A0A',
-  foreground: '#E4E4E7',
-  cursor: '#FAFAFA',
-  cursorAccent: '#0A0A0A',
-  selectionBackground: '#A3A3A344',
+  background: '#282C34',
+  foreground: '#ABB2BF',
+  cursor: '#528BFF',
+  cursorAccent: '#282C34',
+  selectionBackground: '#67769660',
+  black: '#3F4451',
+  red: '#E05561',
+  green: '#8CC265',
+  yellow: '#D18F52',
+  blue: '#4AA5F0',
+  magenta: '#C162DE',
+  cyan: '#42B3C2',
+  white: '#D7DAE0',
+  brightBlack: '#4F5666',
+  brightRed: '#FF616E',
+  brightGreen: '#A5E075',
+  brightYellow: '#F0A45D',
+  brightBlue: '#4DC4FF',
+  brightMagenta: '#DE73FF',
+  brightCyan: '#4CD1E0',
+  brightWhite: '#E6E6E6',
 };
 
 const LIGHT_THEME = {

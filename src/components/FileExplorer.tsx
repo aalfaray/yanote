@@ -47,6 +47,8 @@ interface FileExplorerProps {
   onNewChat: (folder: string) => void;
   onNewTerminal: (folder: string) => void;
   onNotify: (text: string, type: 'success' | 'info' | 'error') => void;
+  /** Folder where new chats and terminals open: the selected folder, else the root */
+  onTargetFolderChange?: (folder: string | undefined) => void;
 }
 
 type DirState = { entries: TreeEntry[]; error?: string; loading?: boolean };
@@ -98,6 +100,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   onNewChat,
   onNewTerminal,
   onNotify,
+  onTargetFolderChange,
 }) => {
   useLanguage();
   const api = window.electronAPI;
@@ -268,6 +271,10 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
   const openSet = useMemo(() => new Set(openPaths.map(normPath)), [openPaths]);
   const selectedEntry = rows.find(({ entry }) => entry.path === selected)?.entry;
   const chatFolder = selectedEntry ? (selectedEntry.isDir ? selectedEntry.path : parentDir(selectedEntry.path) || root) : root;
+  useEffect(() => {
+    onTargetFolderChange?.(chatFolder);
+  }, [chatFolder, onTargetFolderChange]);
+  useEffect(() => () => onTargetFolderChange?.(undefined), [onTargetFolderChange]);
   const parent = root ? parentFolder(root) : null;
   const crumbs = useMemo(() => pathCrumbs(root), [root]);
   const rootAgents = root ? agents.filter((a) => a.cwd && (isWithin(a.cwd, root) || isWithin(root, a.cwd))) : [];
@@ -411,11 +418,22 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
         <button type="button" disabled={!chatFolder} onClick={() => chatFolder && onNewChat(chatFolder)} title={chatFolder ? t("Nuevo chat de Claude en {0}", [chatFolder]) : undefined} className="flex items-center justify-center gap-1 px-1.5 py-1 border border-border rounded-md bg-accent text-foreground cursor-pointer disabled:opacity-40 disabled:cursor-default">
           <Sparkles size={12} strokeWidth={1.75} /> {t("Abrir Claude aquí")}
         </button>
-        {chatFolder && <div data-testid="explorer-chat-folder" title={chatFolder} className="truncate font-mono text-[9.5px] opacity-60">{chatFolder}</div>}
+        {chatFolder && (
+          <div className="flex flex-col gap-0.5 min-w-0" title={t("Elige una carpeta en el árbol para abrir ahí los chats y terminales nuevos")}>
+            <span className="text-[9.5px] text-muted-foreground">{t("Los chats y terminales nuevos (+) se abren en:")}</span>
+            <span className="flex items-center gap-1 min-w-0">
+              <Folder size={12} strokeWidth={2.2} className="shrink-0 text-warning" />
+              <span className="font-semibold truncate">{baseName(chatFolder)}</span>
+            </span>
+            <div data-testid="explorer-chat-folder" title={chatFolder} className="truncate font-mono text-[9.5px] opacity-60" style={{ direction: 'rtl', textAlign: 'left' }}>
+              <bdi>{chatFolder}</bdi>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Agents running here, and where Claude Code is installed */}
-      <div className="shrink-0 border-b border-border px-1.5 py-1.5 flex flex-col gap-1 max-h-[45%] overflow-y-auto">
+      <div className="shrink-0 border-b border-border px-1.5 py-1.5 flex flex-col gap-1 max-h-[30%] overflow-y-auto">
         <div className="flex items-center justify-between text-[9.5px]  opacity-60">
           <span>{t("Agentes en esta carpeta")}</span>
         </div>
@@ -434,7 +452,7 @@ export const FileExplorer: React.FC<FileExplorerProps> = ({
                 Claude Code{install.version ? ` · ${install.version}` : ''}
                 {install.source ? ` · ${sourceLabel(install.source)}` : ''}
               </div>
-              <div className="font-mono text-[9.5px] break-all" title={install.used || ''}>
+              <div className="font-mono text-[9.5px] truncate" title={install.used || ''}>
                 {install.used || t("No encontrado: instálalo desde claude.com/claude-code")}
               </div>
             </div>

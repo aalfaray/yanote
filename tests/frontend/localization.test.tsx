@@ -42,8 +42,7 @@ describe('Application languages', () => {
 
   it('switches the app in settings and persists the choice without restarting the chat or changing drafts', async () => {
     let config: any = {
-      language: 'es', notesPath: '/notes', alwaysOnTop: false,
-      openTabs: [{ kind: 'scratch', title: 'nota.md', content: '# Mi texto en español' }, { kind: 'claude', title: 'Claude' }], activeTabIndex: 1,
+      language: 'es', notesPath: '/notes', openTabs: [{ kind: 'scratch', title: 'nota.md', content: '# Mi texto en español' }, { kind: 'claude', title: 'Claude' }], activeTabIndex: 1,
     };
     const api = {
       getAppConfig: vi.fn(async () => config),
