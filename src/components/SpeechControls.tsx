@@ -35,9 +35,9 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, hint, disabled, onSele
     disabled={disabled}
     onMouseDown={(e) => e.preventDefault()}
     onClick={onSelect}
-    className="w-full px-3 py-2 min-[640px]:py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black dark:hover:text-black transition-colors cursor-pointer group disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:text-zinc-100"
+    className="w-full px-3 py-2 min-[640px]:py-1.5 flex items-center gap-2.5 text-left hover:bg-accent hover:text-foreground transition-colors cursor-pointer group disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent dark:disabled:hover:text-foreground"
   >
-    <span className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black">{icon}</span>
+    <span className="shrink-0 text-foreground/70 dark:text-muted-foreground group-hover:text-foreground">{icon}</span>
     <span className="flex-1">{label}</span>
     {hint && <span className="text-[10px] font-semibold opacity-60">{hint}</span>}
   </button>
@@ -115,7 +115,7 @@ export const SpeechToolbarButton: React.FC = () => {
         }}
         onClick={toggleMenu}
       >
-        <Volume2 size={16} strokeWidth={2.5} />
+        <Volume2 size={16} strokeWidth={1.75} />
       </button>
 
       {menu &&
@@ -126,29 +126,29 @@ export const SpeechToolbarButton: React.FC = () => {
             aria-label={t("Opciones de lectura en voz alta")}
             data-testid="speech-menu"
             style={{ left: menu.x, top: menu.y }}
-            className="fixed z-[999999] w-60 max-w-[calc(100vw-16px)] bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-700 rounded shadow-[4px_4px_0px_#000] py-1 select-none text-xs font-bold"
+            className="fixed z-[999999] w-60 max-w-[calc(100vw-16px)] bg-popover text-popover-foreground border border-border rounded-md shadow-sm py-1 select-none text-xs font-medium"
           >
-            <MenuItem icon={<FileText size={13} strokeWidth={2.5} />} label={t("Leer todo")} onSelect={() => run(readAll)} />
+            <MenuItem icon={<FileText size={13} strokeWidth={1.75} />} label={t("Leer todo")} onSelect={() => run(readAll)} />
             <MenuItem
-              icon={<TextSelect size={13} strokeWidth={2.5} />}
+              icon={<TextSelect size={13} strokeWidth={1.75} />}
               label={t("Leer selección")}
               disabled={!hasSelection}
               onSelect={() => run(() => readSelection(snapshot))}
             />
             <MenuItem
-              icon={<Pilcrow size={13} strokeWidth={2.5} />}
+              icon={<Pilcrow size={13} strokeWidth={1.75} />}
               label={t("Leer párrafo actual")}
               disabled={!hasCaret}
               onSelect={() => run(() => readParagraph(snapshot, false))}
             />
             <MenuItem
-              icon={<ArrowDownToLine size={13} strokeWidth={2.5} />}
+              icon={<ArrowDownToLine size={13} strokeWidth={1.75} />}
               label={t("Leer desde aquí")}
               disabled={!hasCaret}
               onSelect={() => run(() => readParagraph(snapshot, true))}
             />
 
-            <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
+            <div className="my-1 border-t border-border" />
             <div className="px-3 pt-0.5 pb-1 text-[10px] uppercase tracking-wide opacity-60">{t("Velocidad")}</div>
             <div className="px-2 pb-1.5 flex gap-1">
               {SPEECH_RATES.map((rate) => (
@@ -158,10 +158,10 @@ export const SpeechToolbarButton: React.FC = () => {
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => speech.setRate(rate)}
                   aria-pressed={speech.state.rate === rate}
-                  className={`flex-1 h-8 min-[640px]:h-6 text-[10px] font-black border-[1.5px] border-black dark:border-zinc-600 rounded transition-colors ${
+                  className={`flex-1 h-8 min-[640px]:h-6 text-[10px] font-semibold border border-border dark:border-border rounded-md transition-colors ${
                     speech.state.rate === rate
-                      ? 'bg-[#FFE500] text-black shadow-[1px_1px_0px_#000]'
-                      : 'bg-white dark:bg-[#27272A] hover:bg-[#FFE500] hover:text-black'
+                      ? 'bg-accent text-foreground shadow-sm'
+                      : 'bg-card dark:bg-muted hover:bg-accent hover:text-foreground'
                   }`}
                 >
                   {formatRate(rate)}
@@ -180,7 +180,7 @@ export const SpeechToolbarButton: React.FC = () => {
 };
 
 const playerButton =
-  'h-7 min-w-7 px-1 inline-flex items-center justify-center border-[1.5px] border-black dark:border-zinc-600 rounded bg-white dark:bg-[#27272A] shadow-[1.5px_1.5px_0px_#000] hover:bg-[#FFE500] hover:text-black transition-colors disabled:opacity-40';
+  'h-7 min-w-7 px-1 inline-flex items-center justify-center border border-border rounded-md bg-card dark:bg-muted shadow-sm hover:bg-accent hover:text-foreground transition-colors disabled:opacity-40';
 
 /** Floating mini-player shown while reading. */
 
@@ -193,7 +193,7 @@ export const SpeechPlayerBar: React.FC<{ speech: SpeechController }> = ({ speech
     return (
       <div
         role="alert"
-        className="absolute bottom-2 inset-x-2 min-[480px]:inset-x-auto min-[480px]:right-3 min-[480px]:bottom-3 z-30 px-3 py-1.5 rounded border-2 border-black font-black text-xs shadow-[3px_3px_0px_#000] bg-[#FF6B6B] text-white flex items-center justify-between gap-2"
+        className="absolute bottom-2 inset-x-2 min-[480px]:inset-x-auto min-[480px]:right-3 min-[480px]:bottom-3 z-30 px-3 py-1.5 rounded-md border border-border font-semibold text-xs shadow-sm bg-destructive text-destructive-foreground flex items-center justify-between gap-2"
       >
         <span className="min-w-0">{state.error}</span>
         <DismissButton onClick={speech.clearError} />
@@ -209,19 +209,19 @@ export const SpeechPlayerBar: React.FC<{ speech: SpeechController }> = ({ speech
   return (
     <div
       data-testid="speech-player"
-      className="absolute bottom-2 right-2 min-[480px]:right-3 min-[480px]:bottom-3 max-w-[calc(100%-16px)] z-30 flex items-center justify-end gap-1 p-1 rounded border-2 border-black dark:border-zinc-700 bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 shadow-[3px_3px_0px_#000] text-xs font-black select-none"
+      className="absolute bottom-2 right-2 min-[480px]:right-3 min-[480px]:bottom-3 max-w-[calc(100%-16px)] z-30 flex items-center justify-end gap-1 p-1 rounded-md border border-border bg-popover text-popover-foreground shadow-sm text-xs font-semibold select-none"
     >
-      <Volume2 size={14} strokeWidth={2.5} className="mx-1 shrink-0 animate-pulse hidden min-[380px]:block" />
+      <Volume2 size={14} strokeWidth={1.75} className="mx-1 shrink-0 animate-pulse hidden min-[380px]:block" />
       <button type="button" className={playerButton} onClick={speech.previous} disabled={state.index === 0} title={t("Párrafo anterior")} aria-label={t("Párrafo anterior")}>
-        <SkipBack size={13} strokeWidth={2.5} />
+        <SkipBack size={13} strokeWidth={1.75} />
       </button>
       {state.status === 'speaking' ? (
-        <button type="button" className={`${playerButton} !bg-[#FFE500] text-black`} onClick={speech.pause} title={t("Pausar")} aria-label={t("Pausar")}>
-          <Pause size={13} strokeWidth={2.5} />
+        <button type="button" className={`${playerButton} !bg-accent text-foreground`} onClick={speech.pause} title={t("Pausar")} aria-label={t("Pausar")}>
+          <Pause size={13} strokeWidth={1.75} />
         </button>
       ) : (
-        <button type="button" className={`${playerButton} !bg-[#78E08F] text-black`} onClick={speech.resume} title={t("Reanudar")} aria-label={t("Reanudar")}>
-          <Play size={13} strokeWidth={2.5} />
+        <button type="button" className={`${playerButton} !bg-success/15 text-foreground`} onClick={speech.resume} title={t("Reanudar")} aria-label={t("Reanudar")}>
+          <Play size={13} strokeWidth={1.75} />
         </button>
       )}
       <button
@@ -232,10 +232,10 @@ export const SpeechPlayerBar: React.FC<{ speech: SpeechController }> = ({ speech
         title={t("Párrafo siguiente")}
         aria-label={t("Párrafo siguiente")}
       >
-        <SkipForward size={13} strokeWidth={2.5} />
+        <SkipForward size={13} strokeWidth={1.75} />
       </button>
       <button type="button" className={playerButton} onClick={speech.stop} title={t("Detener (Esc)")} aria-label={t("Detener")}>
-        <Square size={12} strokeWidth={2.5} />
+        <Square size={12} strokeWidth={1.75} />
       </button>
       <button type="button" className={`${playerButton} text-[10px]`} onClick={cycleRate} title={t("Cambiar velocidad")} aria-label={t("Cambiar velocidad")}>
         {formatRate(state.rate)}

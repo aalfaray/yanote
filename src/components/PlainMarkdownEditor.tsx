@@ -52,22 +52,22 @@ const SPANISH_PHRASES = EditorState.phrases.of({
 });
 
 const lightTheme = EditorView.theme({
-  '&': { height: '100%', backgroundColor: '#ffffff', color: '#111111', fontSize: '13px' },
+  '&': { height: '100%', backgroundColor: 'var(--background)', color: 'var(--foreground)', fontSize: '13px' },
   '.cm-scroller': { fontFamily: 'ui-monospace, Consolas, monospace', overflow: 'auto' },
-  '.cm-gutters': { backgroundColor: '#faf8f5', color: '#888', borderRight: '2px solid #000' },
-  '.cm-activeLine': { backgroundColor: 'rgba(255, 229, 0, 0.15)' },
-  '.cm-activeLineGutter': { backgroundColor: '#ffe500', color: '#000' },
+  '.cm-gutters': { backgroundColor: 'var(--muted)', color: 'var(--muted-foreground)', borderRight: '1px solid var(--border)' },
+  '.cm-activeLine': { backgroundColor: 'var(--accent)' },
+  '.cm-activeLineGutter': { backgroundColor: 'var(--accent)', color: 'var(--foreground)' },
   '&.cm-focused': { outline: 'none' },
 });
 
 const darkTheme = EditorView.theme(
   {
-    '&': { height: '100%', backgroundColor: '#121212', color: '#e4e4e7', fontSize: '13px' },
+    '&': { height: '100%', backgroundColor: 'var(--background)', color: 'var(--foreground)', fontSize: '13px' },
     '.cm-scroller': { fontFamily: 'ui-monospace, Consolas, monospace', overflow: 'auto' },
-    '.cm-gutters': { backgroundColor: '#18181b', color: '#71717a', borderRight: '2px solid #3f3f46' },
-    '.cm-activeLine': { backgroundColor: 'rgba(255, 229, 0, 0.08)' },
-    '.cm-activeLineGutter': { backgroundColor: '#27272a', color: '#ffe500' },
-    '.cm-cursor': { borderLeftColor: '#ffe500' },
+    '.cm-gutters': { backgroundColor: 'var(--muted)', color: 'var(--muted-foreground)', borderRight: '1px solid var(--border)' },
+    '.cm-activeLine': { backgroundColor: 'var(--accent)' },
+    '.cm-activeLineGutter': { backgroundColor: 'var(--accent)', color: 'var(--foreground)' },
+    '.cm-cursor': { borderLeftColor: 'var(--foreground)' },
     '&.cm-focused': { outline: 'none' },
   },
   { dark: true }

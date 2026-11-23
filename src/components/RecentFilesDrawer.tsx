@@ -53,13 +53,13 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           <div className="relative flex-1 min-w-0">
-            <Search size={14} className="absolute left-2.5 top-2.5 text-neutral-400 dark:text-zinc-400" />
+            <Search size={14} className="absolute left-2.5 top-2.5 text-muted-foreground" />
             <input
               type="text"
               placeholder={t("Buscar por nombre o carpeta...")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs font-bold bg-white dark:bg-zinc-800 dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[2px_2px_0px_#000] focus:outline-none focus:ring-1 focus:ring-[#FFE500]"
+              className="w-full pl-8 pr-3 py-1.5 text-xs font-medium bg-card dark:text-foreground border border-border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
             />
           </div>
           <Button
@@ -71,14 +71,14 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
             }}
             title={t("Buscar un archivo en el disco (Ctrl+O)")}
           >
-            <FolderOpen size={14} strokeWidth={2.5} />
+            <FolderOpen size={14} strokeWidth={1.75} />
             <span className="hidden min-[400px]:inline">{t("Abrir…")}</span>
           </Button>
         </div>
 
         <div className="flex flex-col gap-1.5 max-h-[340px] overflow-y-auto pr-1">
           {filtered.length === 0 ? (
-            <div className="p-6 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded text-center text-xs font-medium text-neutral-500 dark:text-zinc-400">
+            <div className="p-6 bg-card border border-border rounded-md text-center text-xs font-medium text-muted-foreground">
               {recentFiles.length === 0
                 ? t("Todavía no abriste archivos. Los que abras aparecerán aquí.")
                 : t("Ningún archivo reciente coincide con la búsqueda.")}
@@ -103,25 +103,25 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
                     }
                   }}
                   title={file.path}
-                  className="group flex items-center justify-between gap-2 p-2.5 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-700 rounded shadow-[2px_2px_0px_#000] hover:bg-[#FFFDF0] dark:hover:bg-zinc-700 hover:translate-x-[1px] hover:translate-y-[1px] cursor-pointer transition-all"
+                  className="group flex items-center justify-between gap-2 p-2.5 bg-card border border-border rounded-md shadow-sm hover:bg-accent dark:hover:bg-muted hover:hover:cursor-pointer transition-all"
                 >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <div className="p-1.5 bg-[#FFE500] border border-black rounded shadow-[1px_1px_0px_#000] shrink-0 text-black">
-                      <FileText size={14} strokeWidth={2.5} />
+                    <div className="p-1.5 bg-accent border border-border rounded-md shadow-sm shrink-0 text-foreground">
+                      <FileText size={14} strokeWidth={1.75} />
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-bold text-xs text-black dark:text-zinc-100 truncate">{file.name}</span>
+                        <span className="font-medium text-xs text-foreground truncate">{file.name}</span>
                         {isOpenNow && (
-                          <span className="shrink-0 px-1 text-[9px] font-black uppercase rounded border border-black bg-[#78E08F] text-black">
+                          <span className="shrink-0 px-1 text-[9px] font-semibold uppercase rounded-md border border-border bg-success/15 text-foreground">
                             {t("abierto")}</span>
                         )}
                       </span>
-                      <span className="text-[10px] text-neutral-500 dark:text-zinc-400 font-medium truncate" dir="rtl">
+                      <span className="text-[10px] text-muted-foreground font-medium truncate" dir="rtl">
                         {/* rtl keeps the end of long folders visible (the most specific part) */}
                         <bdi>{folder}</bdi>
                       </span>
-                      <span className="flex items-center gap-0.5 text-[10px] text-neutral-500 dark:text-zinc-400 font-medium">
+                      <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground font-medium">
                         <Clock size={10} />
                         {formatOpenedAgo(file.openedAt)}
                       </span>
@@ -133,11 +133,11 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
                       e.stopPropagation();
                       onRemoveRecent(file.path);
                     }}
-                    className="shrink-0 opacity-60 group-hover:opacity-100 p-1 hover:bg-[#FF6B6B] hover:text-white rounded border border-transparent hover:border-black transition-all text-neutral-600 dark:text-zinc-300"
+                    className="shrink-0 opacity-60 group-hover:opacity-100 p-1 hover:bg-destructive hover:text-destructive-foreground rounded-md border border-transparent hover:border-border transition-all text-muted-foreground dark:text-foreground"
                     title={t("Quitar del historial (no borra el archivo)")}
                     aria-label={t("Quitar {0} del historial", [file.name])}
                   >
-                    <X size={13} strokeWidth={2.5} />
+                    <X size={13} strokeWidth={1.75} />
                   </button>
                 </div>
               );
@@ -148,7 +148,7 @@ export const RecentFilesDrawer: React.FC<RecentFilesDrawerProps> = ({
         {recentFiles.length > 0 && (
           <button
             onClick={onClearRecent}
-            className="self-end text-[10px] font-bold underline text-neutral-500 dark:text-zinc-400 hover:text-black dark:hover:text-white cursor-pointer"
+            className="self-end text-[10px] font-medium underline text-muted-foreground hover:text-foreground cursor-pointer"
           >
             {t("Limpiar historial")}</button>
         )}

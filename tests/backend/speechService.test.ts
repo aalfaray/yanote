@@ -13,18 +13,21 @@ function fakeProcess() {
 }
 
 describe('Backend: SpeechService (System.Speech fallback)', () => {
-  it('maps web speech rates to the SAPI range', () => {
+  it('maps speed multipliers to the exponential SAPI scale (+10 = 3x)', () => {
     expect(toSapiRate(1)).toBe(0);
-    expect(toSapiRate(1.5)).toBe(5);
-    expect(toSapiRate(2)).toBe(10);
-    expect(toSapiRate(0.75)).toBe(-2);
+    expect(toSapiRate(1.25)).toBe(2);
+    expect(toSapiRate(1.5)).toBe(4);
+    expect(toSapiRate(2)).toBe(6);
+    expect(toSapiRate(0.75)).toBe(-3);
+    expect(toSapiRate(3)).toBe(10);
     expect(toSapiRate(9)).toBe(10);
+    expect(toSapiRate(0)).toBe(0);
     expect(toSapiRate('abc')).toBe(0);
   });
 
   it('encodes the request as UTF-8 base64 JSON (keeps accents)', () => {
     const decoded = JSON.parse(Buffer.from(encodeRequest({ segments: ['Canción ñandú'], start: 2, rate: 1.5 }), 'base64').toString('utf8'));
-    expect(decoded).toEqual({ segments: ['Canción ñandú'], start: 2, rate: 5 });
+    expect(decoded).toEqual({ segments: ['Canción ñandú'], start: 2, rate: 4 });
   });
 
   it('spawns hidden PowerShell and forwards segment/end progress', () => {

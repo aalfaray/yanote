@@ -24,6 +24,12 @@ const { createEditCommandService } = require('./services/editCommandService.cjs'
 const { createSpellcheckService } = require('./services/spellcheckService.cjs');
 const { createLanguageService } = require('./services/languageService.cjs');
 
+// E2E tests (Playwright) run on a throwaway data folder so they never touch the user's notes or settings
+if (process.env.YANOTE_USER_DATA) {
+  app.setPath('userData', process.env.YANOTE_USER_DATA);
+  app.setPath('logs', path.join(process.env.YANOTE_USER_DATA, 'logs'));
+}
+
 // System log (%APPDATA%/yanote/logs/yanote.log): every layer reports its failures here
 const logService = configureSharedLog({ dir: app.getPath('logs') });
 const mainLog = logService.scoped('main');
@@ -54,7 +60,6 @@ const fileTreeWatcher = fileTreeService.createFileTreeWatcher();
 let updateService = null;
 
 let mainWindow = null;
-let isAlwaysOnTop = false;
 
 const dataDir = getBaseDataDir(process.env, process.execPath, app ? app.getPath('userData') : '');
 if (!fs.existsSync(dataDir)) {
@@ -73,6 +78,7 @@ const languageService = createLanguageService({ getPreference: () => appConfig.l
 
 function updateConfig(newConfig) {
   appConfig = saveConfig(configFilePath, appConfig, newConfig);
+  if (mainWindow && newConfig.darkMode !== undefined) mainWindow.setBackgroundColor(windowBackground());
   if (mainWindow && newConfig.language !== undefined) spellcheckService.configure(mainWindow.webContents.session, languageService.info().language);
   return appConfig;
 }
@@ -89,6 +95,11 @@ const accountUsageService = createClaudeAccountUsageService({
   getExecutable: () => findClaudeExecutable(withFreshPath({ ...process.env })) || findBundledExecutable(),
 });
 
+// Painted while the page (re)loads, before its CSS applies: match the saved theme so a reload doesn't flash white
+function windowBackground() {
+  return appConfig.darkMode ? '#282c34' : '#ffffff';
+}
+
 function createWindow() {
   fileService.ensureNotesDir(appConfig.notesPath);
 
@@ -97,10 +108,9 @@ function createWindow() {
     height: 680,
     minWidth: 340,
     minHeight: 400,
-    frame: false, // Custom Boldkit Neubrutalist window frame
-    alwaysOnTop: appConfig.alwaysOnTop || false,
+    frame: false, // Custom window frame
     opacity: clampOpacity(appConfig.opacity ?? 1),
-    backgroundColor: '#FAF8F5',
+    backgroundColor: windowBackground(),
     icon: path.join(__dirname, '../build/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -110,13 +120,13 @@ function createWindow() {
     },
   });
 
-  isAlwaysOnTop = appConfig.alwaysOnTop || false;
   spellcheckService.attach(mainWindow.webContents, process.platform, languageService.info().language);
 
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    // E2E tests serve the renderer on their own port so they don't depend on (or clash with) `npm run dev`
+    mainWindow.loadURL(process.env.YANOTE_RENDERER_URL || 'http://localhost:5173');
     if (process.env.OPEN_DEVTOOLS) {
       mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
@@ -250,19 +260,6 @@ ipc.handle('window:close', () => {
 
 ipc.handle('window:isMaximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
-});
-
-ipc.handle('window:setAlwaysOnTop', (_, flag) => {
-  if (mainWindow) {
-    isAlwaysOnTop = Boolean(flag);
-    mainWindow.setAlwaysOnTop(isAlwaysOnTop, 'screen-saver');
-    updateConfig({ alwaysOnTop: isAlwaysOnTop });
-  }
-  return isAlwaysOnTop;
-});
-
-ipc.handle('window:getAlwaysOnTop', () => {
-  return isAlwaysOnTop;
 });
 
 // Window transparency: applied live while the slider moves, persisted once it settles

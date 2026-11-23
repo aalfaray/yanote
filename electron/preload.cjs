@@ -6,8 +6,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   maximize: () => ipcRenderer.invoke('window:maximize'),
   close: () => ipcRenderer.invoke('window:close'),
   isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
-  setAlwaysOnTop: (alwaysOnTop) => ipcRenderer.invoke('window:setAlwaysOnTop', alwaysOnTop),
-  getAlwaysOnTop: () => ipcRenderer.invoke('window:getAlwaysOnTop'),
   setOpacity: (opacity) => ipcRenderer.invoke('window:setOpacity', opacity),
 
   // File system

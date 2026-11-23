@@ -1,6 +1,6 @@
-# ⚡ yanote - Editor Markdown Neubrutalista Portable
+# yanote - Editor Markdown Portable
 
-Un editor de notas Markdown de escritorio **portable**, con **superposición (Always on Top)**, pestañas múltiples (estilo **Orca**), editor enriquecido con **@mdxeditor/editor**, diseño **Neubrutalista (Boldkit)**, lectura en voz alta y terminal integrada.
+Un editor de notas Markdown de escritorio **portable**, con pestañas múltiples (estilo **Orca**), editor enriquecido con **@mdxeditor/editor**, diseño basado en **shadcn/ui**, lectura en voz alta y terminal integrada.
 
 ---
 
@@ -17,21 +17,16 @@ Un editor de notas Markdown de escritorio **portable**, con **superposición (Al
 
 ## ✨ Características Principales
 
-1. **Estilo Neubrutalista (Boldkit Style)**
-   - Bordes negros sólidos (2px / 3px), sombras proyectadas rígidas (`shadow-[2px_2px_0px_#000]`), contrastes altos y paleta vibrante (Amarillo neón, menta, coral, cian, lavanda).
-   - Componentes interactivos con microinteracciones de pulsación brutalista.
+1. **Interfaz basada en shadcn/ui**
+   - Paleta neutra en modo claro y colores del tema **One Dark** (VS Code) en modo oscuro, bordes finos, sombras suaves y esquinas redondeadas.
+   - Controles con estados de foco y selección consistentes para usar el ratón o el teclado.
    - Barra de título personalizada sin marcos (Frameless window) perfectamente integrada.
 
-2. **Superposición sobre otros programas (Always on Top)**
-   - Botón de **Pin 📌 / Superposición** en la barra superior.
-   - Permite mantener la ventana flotante siempre por encima de cualquier otro software (navegadores, IDEs, videollamadas, etc.).
-   - Indicador visual dinámico (`ENCIMA` / `FLOTANTE` / `PINNED`).
-
-3. **Resolución Compacta y Redimensionable**
+2. **Resolución Compacta y Redimensionable**
    - Resolución inicial pequeña tipo bloc de notas flotante (`520 x 680 px`).
    - El usuario puede redimensionar libremente la ventana arrastrando sus bordes o maximizarla con el control superior.
 
-4. **Pestañas de Markdown Múltiples (Inspirado en Orca)**
+3. **Pestañas de Markdown Múltiples (Inspirado en Orca)**
    - Permite abrir múltiples notas markdown en pestañas simultáneas.
    - Cada pestaña mantiene su propio documento independiente.
    - Botón `+ NUEVA` para crear notas rápidas tipo scratchpad (`scratch-1.md`, etc.).
@@ -40,18 +35,18 @@ Un editor de notas Markdown de escritorio **portable**, con **superposición (Al
    - Cierre de pestañas con alerta protectora ante cambios sin guardar.
    - Explorador de notas integrado para abrir notas existentes de la carpeta de notas.
 
-5. **Editor Enriquecido con `@mdxeditor/editor`**
+4. **Editor Enriquecido con `@mdxeditor/editor`**
    - Encabezados (H1 - H6), negrita, cursiva, subrayado, código en línea.
    - Listas ordenadas y desordenadas.
    - Tablas interactivas y bloques de código con syntax highlighting (JS, TS, HTML, CSS, Python, Bash, SQL, etc.).
    - Alternancia instantánea entre modo visual enriquecido (WYSIWYG) y modo código fuente Markdown (Source mode) con el botón de alternancia.
 
-6. **Lectura en Voz Alta**
+5. **Lectura en Voz Alta**
    - Botón 🔊 en la barra de herramientas: leer todo, la selección, el párrafo actual o desde el cursor hasta el final.
    - Barra de reproducción con pausa, párrafo anterior/siguiente, velocidad y resaltado del párrafo que se lee.
    - Usa las voces del sistema (preferencia por español) con respaldo nativo de Windows (System.Speech).
 
-7. **Portabilidad Total**
+6. **Portabilidad Total**
    - La aplicación detecta carpetas portables (`portable-data` o carpeta ejecutable) para almacenar todas las notas y configuración localmente.
    - Permite cambiar la carpeta de notas en cualquier momento desde los Ajustes.
    - Empaquetable como ejecutable único Windows (`.exe` portable) que no requiere instalación.
@@ -61,7 +56,7 @@ Un editor de notas Markdown de escritorio **portable**, con **superposición (Al
 ## 🚀 Inicio Rápido
 
 ### Requisitos
-- Node.js >= 18
+- Node.js 24
 
 ### Instalación de dependencias
 ```bash
@@ -84,7 +79,7 @@ El proyecto cuenta con pruebas automatizadas que cubren **Backend**, **Frontend*
 | Capa | Archivos de Prueba | Pruebas | Cobertura |
 |---|---|---|---|
 | **Backend** | `tests/backend/configService.test.ts`<br>`tests/backend/fileService.test.ts`<br>`tests/backend/speechService.test.ts`<br>`tests/backend/terminalService.test.ts` | — | Configuración portable, lectura/escritura atómica, borrado, renombrado, prevención de corrupción JSON, voz nativa, terminales, fallos forzados de I/O. |
-| **Frontend** | `tests/frontend/TabBar.test.tsx`<br>`tests/frontend/TitleBar.test.tsx`<br>`tests/frontend/UIComponents.test.tsx`<br>`tests/frontend/Modals.test.tsx` | — | Pestañas estilo Orca, renombrado con enter/escape, spam de clics, superposición siempre visible, controles de ventana, componentes Neubrutalistas, modales y alertas de error. |
+| **Frontend** | `tests/frontend/TabBar.test.tsx`<br>`tests/frontend/TitleBar.test.tsx`<br>`tests/frontend/UIComponents.test.tsx`<br>`tests/frontend/Modals.test.tsx` | — | Pestañas estilo Orca, renombrado con enter/escape, spam de clics, controles de ventana, componentes con estilo shadcn/ui, modales y alertas de error. |
 | **E2E** | `tests/e2e/workflow.test.tsx` | — | Ciclo completo de creación de pestañas, edición markdown, guardado con `Ctrl+S`, creación rápida de 20 notas simultáneas (stress test), y recuperación ante fallos de disco. |
 
 ### Ejecutar todas las pruebas:
@@ -106,15 +101,17 @@ Genera en `dist-electron/` el instalador `yanote-Setup-x.y.z.exe`, el portable `
 La publicación la hace GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)) al subir una etiqueta `v*`:
 
 ```bash
-npm version 1.1.0 --no-git-tag-version          # sube la versión en package.json
-git commit -am "chore: release v1.1.0"
-git tag -a v1.1.0 -m "Novedades de la versión:
+npm version 1.6.0 --no-git-tag-version          # actualiza package.json y package-lock.json
+# Preparar y verificar los cambios; obtener aprobación explícita para commit y push a beta.
+git add .
+git commit -m "chore: release v1.6.0"
+git tag -a v1.6.0 -m "Novedades de la versión:
 - Lo que cambió
 - Otra mejora"                                   # este texto aparece en el aviso de actualización
-git push origin main --follow-tags
+git push --atomic origin beta refs/tags/v1.6.0
 ```
 
-El workflow comprueba que la etiqueta coincide con `package.json`, ejecuta los tests, compila y crea la release con los `.exe`. Las copias instaladas lo detectan al iniciar (y cada 6 horas) y preguntan al usuario si quiere actualizar.
+El workflow comprueba que la etiqueta coincide con `package.json`, ejecuta los tests, compila y crea la release con los `.exe`. Las copias instaladas lo detectan al iniciar (y cada 6 horas) y preguntan al usuario si quiere actualizar. Publicar desde `beta` no modifica `main`; cualquier merge y push a `main` requiere una autorización explícita independiente, según [AGENTS.md](AGENTS.md). Las novedades están en [CHANGELOG.md](CHANGELOG.md).
 
 ### Landing page
 La web está en [site/](site/) y se publica en GitHub Pages con [.github/workflows/pages.yml](.github/workflows/pages.yml) cada vez que cambia. Los botones de descarga apuntan siempre al `.exe` de la última release.

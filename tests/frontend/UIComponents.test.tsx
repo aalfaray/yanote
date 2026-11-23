@@ -6,7 +6,7 @@ import { Input } from '../../src/components/ui/Input';
 import { Badge } from '../../src/components/ui/Badge';
 import { Modal } from '../../src/components/ui/Modal';
 
-describe('Frontend: Neubrutalist UI Components (Boldkit) (20% Happy / 80% Destructive)', () => {
+describe('Frontend: UI Components (20% Happy / 80% Destructive)', () => {
   // --- 20% HAPPY PATH TESTS ---
   it('[HAPPY 1/3] Button renders with primary variant and handles click event', () => {
     const handleClick = vi.fn();
@@ -116,9 +116,9 @@ describe('Frontend: Neubrutalist UI Components (Boldkit) (20% Happy / 80% Destru
     expect(screen.getByText('Mint')).toBeInTheDocument();
   });
 
-  it('[CHAOS 8/8] Button with active prop applies neubrutal pressed styling classes', () => {
+  it('[CHAOS 8/8] Button with active prop exposes its selected state', () => {
     const { container } = render(<Button active={true}>Active Pressed</Button>);
     const button = container.querySelector('button');
-    expect(button?.className).toContain('translate-x-[1.5px]');
+    expect(button).toHaveAttribute('data-active', 'true');
   });
 });

@@ -50,7 +50,7 @@ describe('buildMenu', () => {
 describe('App: yanote right-click menu', () => {
   beforeEach(() => {
     window.electronAPI = {
-      getAppConfig: vi.fn().mockResolvedValue({ notesPath: '/n', alwaysOnTop: false, welcomeSeen: true, ideas: [], activeClaudeAccount: 'default' }),
+      getAppConfig: vi.fn().mockResolvedValue({ notesPath: '/n', welcomeSeen: true, ideas: [], activeClaudeAccount: 'default' }),
       saveAppConfig: vi.fn().mockResolvedValue({}),
       getNotesPath: vi.fn().mockResolvedValue('/n'),
       readFile: vi.fn(),
@@ -179,7 +179,7 @@ describe('App: yanote right-click menu', () => {
 describe('Right-click > "Leer en voz alta"', () => {
   beforeEach(() => {
     window.electronAPI = {
-      getAppConfig: vi.fn().mockResolvedValue({ notesPath: '/n', alwaysOnTop: false, welcomeSeen: true, ideas: [] }),
+      getAppConfig: vi.fn().mockResolvedValue({ notesPath: '/n', welcomeSeen: true, ideas: [] }),
       saveAppConfig: vi.fn().mockResolvedValue({}),
       getNotesPath: vi.fn().mockResolvedValue('/n'),
       readFile: vi.fn(),

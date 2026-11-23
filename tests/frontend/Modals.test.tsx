@@ -31,7 +31,6 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     window.electronAPI = {
       getAppConfig: vi.fn().mockResolvedValue({
         notesPath: '/notes',
-        alwaysOnTop: false,
         darkMode: false,
       }),
       saveAppConfig: vi.fn().mockResolvedValue({}),
@@ -65,7 +64,7 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     await waitFor(() => {
       expect(window.electronAPI?.getAppConfig).toHaveBeenCalled();
     });
-    expect(screen.getByText(/Modo Oscuro/)).toBeInTheDocument();
+    expect(screen.getByText(/Modo oscuro/i)).toBeInTheDocument();
     expect(screen.queryByText(/Carpeta de Notas/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Examinar')).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('/notes')).not.toBeInTheDocument();
@@ -118,14 +117,16 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     expect(screen.queryByText(/github/i)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/ghp_/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Guardar Ajustes'));
+    const saveButton = screen.getByRole('button', { name: 'Guardar Ajustes' });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
     expect(onSaved).toHaveBeenCalledTimes(1);
     const saved = (window.electronAPI?.saveAppConfig as any).mock.calls[0][0];
-    expect(saved).toEqual({ alwaysOnTop: false, darkMode: false, notifyClaude: true, language: 'auto' });
+    expect(saved).toEqual({ darkMode: false, notifyClaude: true, language: 'auto' });
   });
 
   it('[CHAOS 5/6] SettingsModal displays error banner if saving config fails', async () => {
@@ -142,7 +143,9 @@ describe('Frontend: Modals & Drawers (20% Happy / 80% Destructive)', () => {
     await waitFor(() => {
       expect(window.electronAPI?.getAppConfig).toHaveBeenCalled();
     });
-    fireEvent.click(screen.getByText('Guardar Ajustes'));
+    const saveButton = screen.getByRole('button', { name: 'Guardar Ajustes' });
+    await waitFor(() => expect(saveButton).toBeEnabled());
+    fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(screen.getByText('Disco lleno')).toBeInTheDocument();

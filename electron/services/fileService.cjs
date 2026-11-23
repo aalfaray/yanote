@@ -27,16 +27,15 @@ function describeFsError(err) {
   return (err && err.message) || 'Error desconocido';
 }
 
-const WELCOME_CONTENT = `# Bienvenido a tu Editor Markdown Neubrutalista ⚡
+const WELCOME_CONTENT = `# Bienvenido a yanote ⚡
 
-Este es un editor **portable y flotante** diseñado con la estética **Boldkit**.
+Este es un editor **portable** y compacto para tus notas.
 
 ### ✨ Características destacadas:
-- **Superposición (Always on Top):** Haz clic en el botón de pin 📌 en la barra superior para mantener la ventana siempre visible encima de otras aplicaciones.
 - **Pestañas tipo Orca:** Abre múltiples notas simultáneamente con el botón \`+\`. Cada pestaña es un archivo markdown independiente.
 - **Editor Rico con @mdxeditor/editor:** Formato enriquecido, tablas, bloques de código, listas, enlaces y alternancia rápida a código fuente Markdown.
 - **Lectura en voz alta:** Escucha la nota completa, la selección o el párrafo actual con el botón 🔊 de la barra de herramientas.
-- **Resolución Compacta y Redimensionable:** Diseñado inicialmente en tamaño pequeño/compacto tipo bloc de notas flotante, con libertad total para agrandarlo o maximizarlo.
+- **Resolución Compacta y Redimensionable:** Diseñado inicialmente en tamaño pequeño/compacto tipo bloc de notas, con libertad total para agrandarlo o maximizarlo.
 
 ---
 > *Tip: Presiona Ctrl + S para guardar tu nota.*

@@ -28,6 +28,7 @@ import { getChatBackend, PROVIDER_LABELS } from '../lib/chatBackends';
 import { loadChatPrefs, saveChatPrefs, loadEffortByModel, saveEffortByModel } from '../lib/claudeChatPrefs';
 import { copyText } from '../lib/clipboard';
 import { logError } from '../lib/logger';
+import { pickAccountWithQuota } from '../lib/claudeUsage';
 import {
   chatReducer,
   initialChatState,
@@ -96,8 +97,8 @@ const getModes = () => [
 ];
 
 const btn =
-  'inline-flex items-center justify-center gap-1 border-2 border-black dark:border-zinc-600 rounded font-black text-[11px] shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition';
-const card = 'border-2 border-black dark:border-zinc-600 rounded bg-white dark:bg-[#1C1C20] shadow-[2px_2px_0px_#000]';
+  'inline-flex items-center justify-center gap-1 border border-border rounded-md font-semibold text-[11px] shadow-sm active:shadow-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition';
+const card = 'border border-border rounded-md bg-card dark:bg-muted shadow-sm';
 
 /* ---------------------------------- Markdown --------------------------------- */
 
@@ -107,7 +108,7 @@ const Markdown: React.FC<{ text: string }> = React.memo(({ text }) => (
       remarkPlugins={[remarkGfm]}
       components={{
         a: ({ href, children }) => (
-          <a href={href} target="_blank" rel="noreferrer" className="underline decoration-2 decoration-[#FFB800] font-bold">
+          <a href={href} target="_blank" rel="noreferrer" className="underline decoration-1 decoration-ring font-medium">
             {children}
           </a>
         ),
@@ -125,7 +126,7 @@ const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [copied, setCopied] = useState(false);
   return (
     <div className="relative group my-2">
-      <pre ref={ref} className="overflow-x-auto text-[12px] p-2.5 rounded border-2 border-black dark:border-zinc-600 bg-[#F4F1EA] dark:bg-[#0D0D0F]">
+      <pre ref={ref} className="overflow-x-auto text-[12px] p-2.5 rounded-md border border-border bg-muted dark:bg-background">
         {children}
       </pre>
       <button
@@ -136,9 +137,9 @@ const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           setCopied(true);
           setTimeout(() => setCopied(false), 1200);
         }}
-        className={`${btn} absolute top-1.5 right-1.5 h-6 w-6 bg-white dark:bg-[#27272A] opacity-0 group-hover:opacity-100 focus:opacity-100`}
+        className={`${btn} absolute top-1.5 right-1.5 h-6 w-6 bg-card dark:bg-muted opacity-0 group-hover:opacity-100 focus:opacity-100`}
       >
-        {copied ? <Check size={12} strokeWidth={3} /> : <Copy size={12} strokeWidth={2.5} />}
+        {copied ? <Check size={12} strokeWidth={1.75} /> : <Copy size={12} strokeWidth={1.75} />}
       </button>
     </div>
   );
@@ -148,8 +149,8 @@ const CodeBlock: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const Pre: React.FC<{ text: string; tone?: 'plain' | 'error'; max?: number }> = ({ text, tone = 'plain', max = 4000 }) => { useLanguage(); return (
   <pre
-    className={`overflow-auto max-h-72 whitespace-pre-wrap break-words text-[11.5px] p-2 rounded border border-black/30 dark:border-zinc-700 ${
-      tone === 'error' ? 'bg-[#FFE4E4] text-[#9B1C1C] dark:bg-[#3A1515] dark:text-[#FCA5A5]' : 'bg-[#F4F1EA] dark:bg-[#0D0D0F]'
+    className={`overflow-auto max-h-72 whitespace-pre-wrap break-words text-[11.5px] p-2 rounded-md border border-border/30 dark:border-border ${
+      tone === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-muted dark:bg-background'
     }`}
   >
     {text.length > max ? t("{0}\n… ({1} caracteres más)", [text.slice(0, max), text.length - max]) : text}
@@ -157,14 +158,14 @@ const Pre: React.FC<{ text: string; tone?: 'plain' | 'error'; max?: number }> = 
 ); };
 
 const Diff: React.FC<{ oldText: string; newText: string }> = ({ oldText, newText }) => { useLanguage(); return (
-  <pre className="overflow-auto max-h-72 text-[11.5px] rounded border border-black/30 dark:border-zinc-700 bg-[#F4F1EA] dark:bg-[#0D0D0F]">
+  <pre className="overflow-auto max-h-72 text-[11.5px] rounded-md border border-border/30 dark:border-border bg-muted dark:bg-background">
     {oldText.split('\n').map((l, i) => (
-      <div key={`o${i}`} className="px-2 bg-[#FFE4E4] text-[#9B1C1C] dark:bg-[#3A1515] dark:text-[#FCA5A5] whitespace-pre-wrap break-words">
+      <div key={`o${i}`} className="px-2 bg-destructive/10 text-destructive whitespace-pre-wrap break-words">
         - {l}
       </div>
     ))}
     {newText.split('\n').map((l, i) => (
-      <div key={`n${i}`} className="px-2 bg-[#DCFCE7] text-[#14532D] dark:bg-[#11301C] dark:text-[#86EFAC] whitespace-pre-wrap break-words">
+      <div key={`n${i}`} className="px-2 bg-success/15 text-success whitespace-pre-wrap break-words">
         + {l}
       </div>
     ))}
@@ -178,13 +179,13 @@ const TodoList: React.FC<{ todos: Todo[] }> = ({ todos }) => { useLanguage(); re
     {todos.map((t, i) => (
       <li key={i} className="flex items-start gap-1.5">
         <span
-          className={`mt-[2px] h-3.5 w-3.5 shrink-0 border-2 border-black dark:border-zinc-500 rounded-sm flex items-center justify-center ${
-            t.status === 'completed' ? 'bg-[#78E08F]' : t.status === 'in_progress' ? 'bg-[#FFE500]' : 'bg-white dark:bg-[#27272A]'
+          className={`mt-[2px] h-3.5 w-3.5 shrink-0 border border-border dark:border-border rounded-sm flex items-center justify-center ${
+            t.status === 'completed' ? 'bg-success/15' : t.status === 'in_progress' ? 'bg-accent' : 'bg-card dark:bg-muted'
           }`}
         >
-          {t.status === 'completed' && <Check size={9} strokeWidth={4} className="text-black" />}
+          {t.status === 'completed' && <Check size={9} strokeWidth={4} className="text-foreground" />}
         </span>
-        <span className={t.status === 'completed' ? 'line-through opacity-60' : t.status === 'in_progress' ? 'font-black' : ''}>
+        <span className={t.status === 'completed' ? 'line-through opacity-60' : t.status === 'in_progress' ? 'font-semibold' : ''}>
           {t.status === 'in_progress' ? t.activeForm || t.content : t.content}
         </span>
       </li>
@@ -235,8 +236,8 @@ const ToolCard: React.FC<{ item: Extract<ChatItem, { kind: 'tool' }>; all: ChatI
   if (item.name === 'TodoWrite' && Array.isArray(item.input.todos)) {
     return (
       <div className={`${card} p-2`}>
-        <div className="flex items-center gap-1.5 text-[11px] font-black mb-1.5">
-          <ListTodo size={13} strokeWidth={2.5} /> {' '}{t("Tareas")}</div>
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold mb-1.5">
+          <ListTodo size={13} strokeWidth={1.75} /> {' '}{t("Tareas")}</div>
         <TodoList todos={item.input.todos as Todo[]} />
       </div>
     );
@@ -248,20 +249,20 @@ const ToolCard: React.FC<{ item: Extract<ChatItem, { kind: 'tool' }>; all: ChatI
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-[#FFF8C4] dark:hover:bg-[#27272A] cursor-pointer"
+        className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-accent dark:hover:bg-muted cursor-pointer"
       >
         <span
-          className={`h-2.5 w-2.5 shrink-0 rounded-full border-2 border-black ${
-            failed ? 'bg-[#FF6B6B]' : done ? 'bg-[#78E08F]' : running ? 'bg-[#FFE500] animate-pulse' : 'bg-zinc-300'
+          className={`h-2.5 w-2.5 shrink-0 rounded-full border border-border ${
+            failed ? 'bg-destructive' : done ? 'bg-success/15' : running ? 'bg-accent animate-pulse' : 'bg-zinc-300'
           }`}
         />
-        <span className="text-[11px] font-black shrink-0">{item.name.replace(/^mcp__/, '')}</span>
+        <span className="text-[11px] font-semibold shrink-0">{item.name.replace(/^mcp__/, '')}</span>
         <span className="text-[11px] font-mono opacity-70 truncate min-w-0 flex-1">{summary}</span>
-        {children.length > 0 && <span className="text-[10px] font-black opacity-60 shrink-0">{children.filter((c) => c.kind === 'tool').length} {' '}{t("pasos")}</span>}
-        <ChevronRight size={13} strokeWidth={3} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+        {children.length > 0 && <span className="text-[10px] font-semibold opacity-60 shrink-0">{children.filter((c) => c.kind === 'tool').length} {' '}{t("pasos")}</span>}
+        <ChevronRight size={13} strokeWidth={1.75} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
       </button>
       {open && (
-        <div className="px-2 pb-2 pt-0.5 border-t-2 border-black/10 dark:border-zinc-700 space-y-1.5">
+        <div className="px-2 pb-2 pt-0.5 border-t border-border/10 dark:border-border space-y-1.5">
           {children.length > 0 && (
             <ul className="text-[11px] font-mono space-y-0.5 opacity-80">
               {children
@@ -298,8 +299,8 @@ const QuestionPrompt: React.FC<{ request: ClaudePermissionRequest; onAnswer: (an
     <div className="space-y-3">
       {questions.map((q) => (
         <div key={q.question}>
-          {q.header && <div className="text-[10px] font-black uppercase opacity-60">{q.header}</div>}
-          <div className="text-[12.5px] font-black mb-1.5">{q.question}</div>
+          {q.header && <div className="text-[10px] font-semibold uppercase opacity-60">{q.header}</div>}
+          <div className="text-[12.5px] font-semibold mb-1.5">{q.question}</div>
           <div className="space-y-1">
             {q.options.map((o) => {
               const on = picked[q.question]?.includes(o.label);
@@ -314,11 +315,11 @@ const QuestionPrompt: React.FC<{ request: ClaudePermissionRequest; onAnswer: (an
                       return { ...p, [q.question]: next };
                     })
                   }
-                  className={`w-full text-left px-2 py-1.5 border-2 border-black dark:border-zinc-600 rounded cursor-pointer ${
-                    on ? 'bg-[#FFE500] text-black' : 'bg-white dark:bg-[#27272A] hover:bg-[#FFF8C4] dark:hover:bg-[#33333A]'
+                  className={`w-full text-left px-2 py-1.5 border border-border dark:border-border rounded-md cursor-pointer ${
+                    on ? 'bg-accent text-foreground' : 'bg-card dark:bg-muted hover:bg-accent'
                   }`}
                 >
-                  <div className="text-[12px] font-black">{o.label}</div>
+                  <div className="text-[12px] font-semibold">{o.label}</div>
                   {o.description && <div className="text-[11px] opacity-70">{o.description}</div>}
                 </button>
               );
@@ -327,7 +328,7 @@ const QuestionPrompt: React.FC<{ request: ClaudePermissionRequest; onAnswer: (an
               value={other[q.question] || ''}
               onChange={(e) => setOther((p) => ({ ...p, [q.question]: e.target.value }))}
               placeholder={t("Otra respuesta…")}
-              className="w-full px-2 py-1.5 text-[12px] border-2 border-black dark:border-zinc-600 rounded bg-white dark:bg-[#121212] outline-none focus:bg-[#FFFDE8] dark:focus:bg-[#1A1A1D]"
+              className="w-full px-2 py-1.5 text-[12px] border border-border rounded-md bg-card dark:bg-background outline-none focus:bg-accent dark:focus:bg-accent"
             />
           </div>
         </div>
@@ -343,10 +344,10 @@ const QuestionPrompt: React.FC<{ request: ClaudePermissionRequest; onAnswer: (an
               )
             )
           }
-          className={`${btn} h-7 px-2.5 bg-[#78E08F] text-black`}
+          className={`${btn} h-7 px-2.5 bg-success/15 text-foreground`}
         >
-          <Check size={12} strokeWidth={3} /> {' '}{t("Responder")}</button>
-        <button type="button" onClick={onDeny} className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}>
+          <Check size={12} strokeWidth={1.75} /> {' '}{t("Responder")}</button>
+        <button type="button" onClick={onDeny} className={`${btn} h-7 px-2.5 bg-card dark:bg-muted`}>
           {t("Omitir")}</button>
       </div>
     </div>
@@ -371,17 +372,17 @@ const PermissionCard: React.FC<{
       ? status === 'allowed' ? t("Plan aprobado") : t("Plan rechazado")
       : status === 'allowed' ? t("Permitido") : status === 'denied' ? t("Rechazado") : t("Cancelado");
     return (
-      <div className="text-[10.5px] font-black opacity-60 flex items-center gap-1 pl-1">
-        {status === 'allowed' ? <Check size={11} strokeWidth={3} /> : <X size={11} strokeWidth={3} />}
+      <div className="text-[10.5px] font-semibold opacity-60 flex items-center gap-1 pl-1">
+        {status === 'allowed' ? <Check size={11} strokeWidth={1.75} /> : <X size={11} strokeWidth={1.75} />}
         {label}: {request.toolName} {toolSummary(request.toolName, request.input)}
       </div>
     );
   }
 
   return (
-    <div className={`${card} p-2.5 bg-[#FFFBDA] dark:bg-[#26240F] border-[#000] space-y-2`} role="alertdialog" aria-label={t("Permiso solicitado")}>
-      <div className="flex items-center gap-1.5 text-[12px] font-black">
-        <ShieldCheck size={14} strokeWidth={2.5} />
+    <div className={`${card} p-2.5 bg-muted border-border space-y-2`} role="alertdialog" aria-label={t("Permiso solicitado")}>
+      <div className="flex items-center gap-1.5 text-[12px] font-semibold">
+        <ShieldCheck size={14} strokeWidth={1.75} />
         {isQuestion ? t("{0} te pregunta", [agentName]) : isPlan ? t("{0} propone este plan", [agentName]) : request.title || t("{0} quiere usar {1}", [agentName, request.toolName])}
       </div>
       {request.decisionReason && !isQuestion && <div className="text-[11px] opacity-70">{request.decisionReason}</div>}
@@ -395,7 +396,7 @@ const PermissionCard: React.FC<{
       ) : (
         <>
           {isPlan ? (
-            <div className="max-h-80 overflow-auto px-2 py-1 rounded border border-black/30 bg-white dark:bg-[#1C1C20]">
+            <div className="max-h-80 overflow-auto px-2 py-1 rounded-md border border-border/30 bg-card dark:bg-muted">
               <Markdown text={typeof request.input.plan === 'string' ? request.input.plan : ''} />
             </div>
           ) : (
@@ -406,22 +407,22 @@ const PermissionCard: React.FC<{
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder={isPlan ? t("Qué cambiar del plan (opcional)…") : t("Motivo para rechazar / qué hacer en su lugar (opcional)…")}
-            className="w-full px-2 py-1 text-[11.5px] border-2 border-black dark:border-zinc-600 rounded bg-white dark:bg-[#121212] outline-none"
+            className="w-full px-2 py-1 text-[11.5px] border border-border rounded-md bg-card dark:bg-background outline-none"
           />
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
               autoFocus
               onClick={() => onDecide(request.requestId, { behavior: 'allow' })}
-              className={`${btn} h-7 px-2.5 bg-[#78E08F] text-black`}
+              className={`${btn} h-7 px-2.5 bg-success/15 text-foreground`}
             >
-              <Check size={12} strokeWidth={3} /> {isPlan ? t("Aprobar plan") : t("Permitir")}
+              <Check size={12} strokeWidth={1.75} /> {isPlan ? t("Aprobar plan") : t("Permitir")}
             </button>
             {request.canAlwaysAllow && !isPlan && (
               <button
                 type="button"
                 onClick={() => onDecide(request.requestId, { behavior: 'allow', always: true })}
-                className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}
+                className={`${btn} h-7 px-2.5 bg-accent text-foreground`}
                 title={t("No volver a preguntar por esto en esta sesión")}
               >
                 {t("Permitir siempre")}</button>
@@ -434,9 +435,9 @@ const PermissionCard: React.FC<{
                   message: reason.trim() || (isPlan ? t("El usuario quiere seguir planificando") : t("El usuario rechazó esta acción")),
                 })
               }
-              className={`${btn} h-7 px-2.5 bg-[#FF6B6B] text-white`}
+              className={`${btn} h-7 px-2.5 bg-destructive text-destructive-foreground`}
             >
-              <X size={12} strokeWidth={3} /> {isPlan ? t("Seguir planificando") : t("Rechazar")}
+              <X size={12} strokeWidth={1.75} /> {isPlan ? t("Seguir planificando") : t("Rechazar")}
             </button>
           </div>
         </>
@@ -508,6 +509,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const [claudeDefaults, setClaudeDefaults] = useState<ClaudeDefaults | null>(null);
   const [defaultsLoading, setDefaultsLoading] = useState(Boolean(provider === 'claude' && window.electronAPI?.claudeDefaults));
   const [accountReadyId, setAccountReadyId] = useState<string | null>(null);
+  // Automatic account change when the limit is hit: accounts already tried for the current message,
+  // and what to send once the other account's session is up
+  const [autoSwitch, setAutoSwitch] = useState<'idle' | 'searching' | 'none'>('idle');
+  const autoSwitchingRef = useRef(false);
+  const triedAccountsRef = useRef(new Set<string>());
+  const pendingResendRef = useRef<string | null>(null);
+  const itemsRef = useRef(state.items);
+  itemsRef.current = state.items;
   const speech = useSpeech();
   // Right-click > "Leer en voz alta" on a selection of this tab
   useReadAloudRequests(tabId, speech.play);
@@ -548,9 +557,22 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
         executableRef.current = res.executable;
         setLaunch({ executable: res.executable, source: res.source });
         if (!res.success) {
+          pendingResendRef.current = null;
           dispatch({ type: 'event', event: { id: tabId, type: 'error', error: t("No se pudo iniciar {0}: {1}", [agentName, res.error]) } });
         } else {
           dispatch({ type: 'auth_retry' });
+          // Switched automatically after a usage limit: pick the work up again with this account
+          const resend = pendingResendRef.current;
+          pendingResendRef.current = null;
+          if (resend) {
+            dispatch({ type: 'send', text: resend, imageCount: 0 });
+            void backend.send(tabId, { text: resend, images: [] }).then((sent) => {
+              if (!sent.success) throw new Error(sent.error || t("No se pudo enviar el mensaje"));
+            }).catch((err) => {
+              logError('ClaudeChatView.autoSwitchResend', err);
+              dispatch({ type: 'event', event: { id: tabId, type: 'error', error: err instanceof Error ? err.message : String(err) } });
+            });
+          }
         }
       })
       .catch((err) => {
@@ -689,16 +711,19 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   /** Continue this conversation with another account: copy it there, then resume it with that sign-in. */
 
-  const switchAccount = async (account: { id: string; name: string }) => {
+  /** Returns whether the conversation went along (false: the other account starts a fresh one). */
+  const switchAccount = async (account: { id: string; name: string }, reason?: { limitedName: string }): Promise<boolean> => {
     setAccountMenuOpen(false);
-    if (account.id === accountRef.current) return;
+    if (account.id === accountRef.current) return true;
     if (state.running) await backend?.interrupt(tabId);
     const sid = sessionIdRef.current;
+    let carried = Boolean(sid);
     if (sid) {
       const res = await api?.claudeAccounts?.copySession(sid, accountRef.current, account.id);
       if (res && !res.success) {
         // Nothing to carry over: the other account starts a fresh conversation
         sessionIdRef.current = undefined;
+        carried = false;
         dispatch({ type: 'notice', text: t("No se pudo pasar la conversación a {0}: empieza una nueva.", [account.name]), tone: 'error' });
       }
     }
@@ -708,9 +733,67 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     void api?.claudeAccounts?.setActive(account.id);
     onAccountChange?.(account.id);
     dispatch({ type: 'auth_retry' });
-    dispatch({ type: 'notice', text: t("Ahora usas la cuenta {0}", [account.name]), tone: 'info' });
+    dispatch({
+      type: 'notice',
+      text: reason
+        ? t("{0} llegó a su límite de uso: sigo con la cuenta {1}", [reason.limitedName, account.name])
+        : t("Ahora usas la cuenta {0}", [account.name]),
+      tone: 'info',
+    });
     setRestartKey((k) => k + 1);
+    return carried;
   };
+
+  /**
+   * The account hit its usage limit: look for another signed-in account with quota left (the one with
+   * the most room), move the conversation there and carry on. Each account is tried once per message.
+   */
+
+  const autoSwitchAccount = async () => {
+    const accountsApi = api?.claudeAccounts;
+    if (!accountsApi?.usage || autoSwitchingRef.current) return;
+    autoSwitchingRef.current = true;
+    setAutoSwitch('searching');
+    try {
+      const limitedName = accountName;
+      triedAccountsRef.current.add(accountRef.current);
+      const { accounts } = await accountsApi.list();
+      const candidates = accounts.filter((a) => !triedAccountsRef.current.has(a.id));
+      const usages = await Promise.all(candidates.map(async (a) => ({
+        id: a.id,
+        usage: await accountsApi.usage!(a.id, true).catch((err) => {
+          logError('ClaudeChatView.autoSwitchUsage', err, { accountId: a.id });
+          return null;
+        }),
+      })));
+      const next = candidates.find((a) => a.id === pickAccountWithQuota(usages));
+      if (!next) {
+        setAutoSwitch('none');
+        return;
+      }
+      const lastPrompt = [...itemsRef.current].reverse().find((i) => i.kind === 'user');
+      const carried = await switchAccount(next, { limitedName });
+      // With the conversation carried over Claude knows what it was doing; otherwise repeat the request
+      pendingResendRef.current = carried
+        ? t("Continúa con lo que estabas haciendo: la cuenta anterior llegó a su límite de uso.")
+        : lastPrompt && lastPrompt.kind === 'user' ? lastPrompt.text : null;
+      setAutoSwitch('idle');
+    } catch (err) {
+      logError('ClaudeChatView.autoSwitchAccount', err);
+      setAutoSwitch('none');
+    } finally {
+      autoSwitchingRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!isClaude || !state.rateLimited || state.running || starting) return;
+    // Opt-in: only users who turned it on in the account menu
+    if (loadChatPrefs().autoSwitchAccount !== true) return;
+    void autoSwitchAccount();
+    // Only when the limit shows up; autoSwitchAccount reads the latest state through refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isClaude, state.rateLimited, state.running, starting]);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -722,6 +805,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     }
     if ((!text && images.length === 0) || !backend || starting || state.ended) return;
     const payload = { text, images: images.map(({ data, mediaType }) => ({ data, mediaType })) };
+    // A new message from the user: every account may be tried again if a limit shows up
+    triedAccountsRef.current.clear();
+    setAutoSwitch('idle');
     dispatch({ type: 'send', text, imageCount: images.length });
     resetDraft('');
     setImages([]);
@@ -896,14 +982,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
 
   return (
     <div
-      className={`absolute inset-0 flex flex-col bg-[#FAF8F5] dark:bg-[#121212] text-black dark:text-zinc-100 ${isActive ? '' : 'invisible pointer-events-none'}`}
+      className={`absolute inset-0 flex flex-col bg-background dark:bg-background text-foreground dark:text-foreground ${isActive ? '' : 'invisible pointer-events-none'}`}
       aria-hidden={!isActive}
       data-testid={`claude-chat-${tabId}`}
       data-chat-tab={tabId}
     >
       {/* Session strip */}
-      <div className="h-8 shrink-0 flex items-center gap-1.5 px-2 border-b-2 border-black dark:border-zinc-700 text-[10.5px] font-black overflow-hidden whitespace-nowrap">
-        <Sparkles size={13} strokeWidth={2.5} className="shrink-0 text-[#D97757]" />
+      <div className="h-8 shrink-0 flex items-center gap-1.5 px-2 border-b border-border text-[10.5px] font-semibold overflow-hidden whitespace-nowrap">
+        <Sparkles size={13} strokeWidth={1.75} className="shrink-0 text-[#D97757]" />
         {/* Full working folder; when it doesn't fit it trims from the left so the folder name stays visible */}
         <span className="truncate min-w-0 [direction:rtl] text-left" title={cwdPath || agentName} data-testid="claude-cwd">
           <bdi dir="ltr">{cwdPath || agentName}</bdi>
@@ -927,11 +1013,11 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
             title={t("Cuenta de Claude: {0} (clic para cambiar)", [accountName])}
             aria-label={t("Cuenta de Claude: {0}", [accountName])}
             aria-expanded={accountMenuOpen}
-            className={`${btn} h-6 px-1.5 max-w-[9rem] shrink-0 bg-white dark:bg-[#27272A] ${accountMenuOpen ? 'bg-[#FFE500] text-black' : ''}`}
+            className={`${btn} h-6 px-1.5 max-w-[9rem] shrink-0 bg-card dark:bg-muted ${accountMenuOpen ? 'bg-accent text-foreground' : ''}`}
           >
-            <UserRound size={11} strokeWidth={3} className="shrink-0" />
+            <UserRound size={11} strokeWidth={1.75} className="shrink-0" />
             <span className="truncate hidden min-[400px]:inline">{api?.claudeAccounts && accountReadyId !== accountId ? <LoadingSkeleton label={t("Cargando cuenta del chat")} variant="line" className="max-w-16" /> : accountName}</span>
-            <ChevronDown size={10} strokeWidth={3} className="shrink-0" />
+            <ChevronDown size={10} strokeWidth={1.75} className="shrink-0" />
           </button>
         )}
         {state.contextTokens > 0 && (
@@ -945,21 +1031,21 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
             <button
               type="button"
               onClick={() => void copyConversation()}
-              className={`${btn} h-6 w-6 bg-white dark:bg-[#27272A]`}
+              className={`${btn} h-6 w-6 bg-card dark:bg-muted`}
               title={t("Copiar la conversación como Markdown (para pegarla en otra IA)")}
               aria-label={t("Copiar conversación")}
             >
-              <ClipboardCopy size={11} strokeWidth={2.5} />
+              <ClipboardCopy size={11} strokeWidth={1.75} />
             </button>
             {api?.saveTextAs && (
               <button
                 type="button"
                 onClick={() => void saveConversation()}
-                className={`${btn} h-6 w-6 bg-white dark:bg-[#27272A]`}
+                className={`${btn} h-6 w-6 bg-card dark:bg-muted`}
                 title={t("Guardar la conversación como archivo .md")}
                 aria-label={t("Guardar conversación")}
               >
-                <Download size={11} strokeWidth={2.5} />
+                <Download size={11} strokeWidth={1.75} />
               </button>
             )}
           </>
@@ -968,10 +1054,10 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
           <button
             type="button"
             onClick={() => setRestartKey((k) => k + 1)}
-            className={`${btn} h-6 px-1.5 bg-[#FFE500] text-black`}
+            className={`${btn} h-6 px-1.5 bg-accent text-foreground`}
             title={t("Reanudar la sesión de {0}", [agentName])}
           >
-            <RotateCcw size={11} strokeWidth={3} /> {' '}{t("Reanudar")}</button>
+            <RotateCcw size={11} strokeWidth={1.75} /> {' '}{t("Reanudar")}</button>
         )}
       </div>
 
@@ -1006,7 +1092,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
           {visible.length === 0 && !starting && !historyLoading && (
             <div className="pt-10 text-center space-y-2">
               <Sparkles size={28} strokeWidth={2} className="mx-auto text-[#D97757]" />
-              <div className="text-sm font-black">{t("¿En qué te ayudo?")}</div>
+              <div className="text-sm font-semibold">{t("¿En qué te ayudo?")}</div>
               <div className="text-[11px] opacity-60">
                 {t("Trabaja en")}{' '}<span className="font-mono">{state.cwd || cwd || t("la carpeta de notas")}</span>{t(". Escribe")}{' '}<span className="font-mono">/</span> {' '}{t("para ver comandos.")}</div>
             </div>
@@ -1017,9 +1103,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               case 'user':
                 return (
                   <div key={item.id} className="flex justify-end">
-                    <div className="max-w-[88%] px-2.5 py-1.5 rounded border-2 border-black bg-[#FFE500] text-black shadow-[2px_2px_0px_#000] text-[13px] whitespace-pre-wrap break-words">
+                    <div className="max-w-[88%] px-2.5 py-1.5 rounded-md border border-border bg-accent text-foreground shadow-sm text-[13px] whitespace-pre-wrap break-words">
                       {item.imageCount > 0 && (
-                        <div className="text-[10px] font-black opacity-70 mb-0.5">
+                        <div className="text-[10px] font-semibold opacity-70 mb-0.5">
                           🖼 {item.imageCount} {item.imageCount === 1 ? 'imagen' : t("imágenes")}
                         </div>
                       )}
@@ -1031,15 +1117,15 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                 return (
                   <div key={item.id} className="group relative">
                     <Markdown text={item.text} />
-                    {item.streaming && <span className="inline-block w-2 h-3.5 bg-black dark:bg-zinc-200 animate-pulse align-middle" />}
+                    {item.streaming && <span className="inline-block w-2 h-3.5 bg-foreground animate-pulse align-middle" />}
                     {!item.streaming && item.id === lastTextId && speech.state.status === 'idle' && (
                       <button
                         type="button"
                         onClick={() => speech.play(markdownToSegments(item.text).map((text) => ({ text })))}
                         title={t("Leer en voz alta")}
-                        className={`${btn} h-6 w-6 mt-1 bg-white dark:bg-[#27272A] opacity-50 hover:opacity-100`}
+                        className={`${btn} h-6 w-6 mt-1 bg-card dark:bg-muted opacity-50 hover:opacity-100`}
                       >
-                        <Volume2 size={12} strokeWidth={2.5} />
+                        <Volume2 size={12} strokeWidth={1.75} />
                       </button>
                     )}
                   </div>
@@ -1047,10 +1133,10 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               case 'thinking':
                 return item.text.trim() ? (
                   <details key={item.id} className="text-[12px] opacity-70" open={item.streaming}>
-                    <summary className="cursor-pointer font-black flex items-center gap-1 select-none">
-                      <Brain size={12} strokeWidth={2.5} /> {item.streaming ? t('Pensando…') : t("Razonamiento")}
+                    <summary className="cursor-pointer font-semibold flex items-center gap-1 select-none">
+                      <Brain size={12} strokeWidth={1.75} /> {item.streaming ? t('Pensando…') : t("Razonamiento")}
                     </summary>
-                    <div className="mt-1 pl-3 border-l-2 border-black/20 dark:border-zinc-700 italic whitespace-pre-wrap">{item.text}</div>
+                    <div className="mt-1 pl-3 border-l border-border/20 dark:border-border italic whitespace-pre-wrap">{item.text}</div>
                   </details>
                 ) : null;
               case 'tool':
@@ -1061,21 +1147,21 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                 return (
                   <div
                     key={item.id}
-                    className={`text-[10px] font-black flex items-center gap-1 ${item.isError ? 'text-[#C0392B]' : 'opacity-50'}`}
+                    className={`text-[10px] font-semibold flex items-center gap-1 ${item.isError ? 'text-destructive' : 'opacity-50'}`}
                   >
-                    {item.isError ? <CircleAlert size={11} strokeWidth={3} /> : <Check size={11} strokeWidth={3} />}
+                    {item.isError ? <CircleAlert size={11} strokeWidth={1.75} /> : <Check size={11} strokeWidth={1.75} />}
                     {(item.durationMs / 1000).toFixed(1)}s{item.costUsd > 0 ? ` · $${item.costUsd.toFixed(4)}` : ''}
-                    {item.errors.length > 0 && <span className="font-bold truncate">· {item.errors.join(' · ')}</span>}
+                    {item.errors.length > 0 && <span className="font-medium truncate">· {item.errors.join(' · ')}</span>}
                   </div>
                 );
               case 'notice':
                 return (
                   <div
                     key={item.id}
-                    className={`flex items-start gap-1.5 text-[11px] font-bold px-2 py-1 rounded border-2 ${
+                    className={`flex items-start gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md border ${
                       item.tone === 'error'
-                        ? 'border-[#C0392B] bg-[#FFE4E4] text-[#9B1C1C] dark:bg-[#3A1515] dark:text-[#FCA5A5]'
-                        : 'border-black/20 dark:border-zinc-700 opacity-70'
+                        ? 'border-destructive bg-destructive/10 text-destructive'
+                        : 'border-border/20 dark:border-border opacity-70'
                     }`}
                   >
                     <span className="min-w-0 flex-1 break-words">{item.text}</span>
@@ -1088,18 +1174,18 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
           })}
 
           {state.authRequired && (
-            <div className={`${card} p-3 space-y-2 bg-[#FFFBDA] dark:bg-[#26240F]`} role="alert">
-              <div className="flex items-center gap-1.5 text-[13px] font-black">
-                <ShieldCheck size={15} strokeWidth={2.5} /> {' '}{t("Inicia sesión en Claude")}</div>
+            <div className={`${card} p-3 space-y-2 bg-muted`} role="alert">
+              <div className="flex items-center gap-1.5 text-[13px] font-semibold">
+                <ShieldCheck size={15} strokeWidth={1.75} /> {' '}{t("Inicia sesión en Claude")}</div>
               <p className="text-[12px] opacity-80">
                 {t("El chat usa Claude Code con tu propia cuenta: tu suscripción de Claude o una API key de Anthropic. Se abrirá una terminal con el inicio de sesión oficial de Claude Code, que continúa en tu navegador. yanote no ve tus credenciales.")}</p>
               <div className="flex flex-wrap gap-1.5">
-                <button type="button" onClick={() => onLogin?.({ id: accountId, name: accountName })} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
+                <button type="button" onClick={() => onLogin?.({ id: accountId, name: accountName })} className={`${btn} h-7 px-2.5 bg-accent text-foreground`}>
                   {t("Iniciar sesión")}{accountId !== 'default' ? ` (${accountName})` : ''}
                 </button>
                 {isClaude && (
-                  <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}>
-                    <UserRound size={11} strokeWidth={3} /> {' '}{t("Usar otra cuenta")}</button>
+                  <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-card dark:bg-muted`}>
+                    <UserRound size={11} strokeWidth={1.75} /> {' '}{t("Usar otra cuenta")}</button>
                 )}
                 <button
                   type="button"
@@ -1109,26 +1195,37 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                     dispatch({ type: 'auth_retry' });
                     setRestartKey((k) => k + 1);
                   }}
-                  className={`${btn} h-7 px-2.5 bg-white dark:bg-[#27272A]`}
+                  className={`${btn} h-7 px-2.5 bg-card dark:bg-muted`}
                 >
-                  <RotateCcw size={11} strokeWidth={3} /> {' '}{t("Ya inicié sesión, reintentar")}</button>
+                  <RotateCcw size={11} strokeWidth={1.75} /> {' '}{t("Ya inicié sesión, reintentar")}</button>
               </div>
             </div>
           )}
 
           {isClaude && state.rateLimited && !state.running && (
-            <div className={`${card} p-3 space-y-2 bg-[#FFFBDA] dark:bg-[#26240F]`} role="alert" data-testid="rate-limit-card">
-              <div className="flex items-center gap-1.5 text-[13px] font-black">
-                <UserRound size={15} strokeWidth={2.5} /> {accountName} {' '}{t("llegó a su límite de uso")}</div>
-              <p className="text-[12px] opacity-80">{t("Puedes esperar a que se reinicie o seguir esta misma conversación con otra de tus cuentas.")}</p>
-              <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-[#FFE500] text-black`}>
-                <UserRound size={11} strokeWidth={3} /> {' '}{t("Cambiar de cuenta")}</button>
+            <div className={`${card} p-3 space-y-2 bg-muted`} role="alert" data-testid="rate-limit-card">
+              <div className="flex items-center gap-1.5 text-[13px] font-semibold">
+                <UserRound size={15} strokeWidth={1.75} /> {accountName} {' '}{t("llegó a su límite de uso")}</div>
+              {autoSwitch === 'searching' ? (
+                <p className="text-[12px] opacity-80 flex items-center gap-1.5" data-testid="auto-switch-searching">
+                  <Loader2 size={12} strokeWidth={1.75} className="animate-spin" /> {t("Buscando otra cuenta con cuota disponible…")}</p>
+              ) : (
+                <p className="text-[12px] opacity-80">
+                  {autoSwitch === 'none' ? t("Ninguna otra cuenta con sesión iniciada tiene cuota disponible ahora.") + ' ' : ''}
+                  {t("Puedes esperar a que se reinicie o seguir esta misma conversación con otra de tus cuentas.")}</p>
+              )}
+              {autoSwitch === 'idle' && loadChatPrefs().autoSwitchAccount !== true && (
+                <p className="text-[11px] opacity-60" data-testid="auto-switch-hint">
+                  {t("Si quieres que yanote cambie de cuenta solo la próxima vez, actívalo en «Cambiar de cuenta».")}</p>
+              )}
+              <button type="button" onClick={() => setAccountMenuOpen(true)} className={`${btn} h-7 px-2.5 bg-accent text-foreground`}>
+                <UserRound size={11} strokeWidth={1.75} /> {' '}{t("Cambiar de cuenta")}</button>
             </div>
           )}
 
           {state.running && !streamingSomething && (
-            <div className="flex items-center gap-1.5 text-[11px] font-black opacity-60">
-              <Loader2 size={12} strokeWidth={3} className="animate-spin" />
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold opacity-60">
+              <Loader2 size={12} strokeWidth={1.75} className="animate-spin" />
               {state.status === 'compacting'
                 ? t("Compactando conversación…")
                 : pendingPermissions(state.items).length > 0
@@ -1144,7 +1241,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 border-t-2 border-black dark:border-zinc-700 p-2 bg-[#FAF8F5] dark:bg-[#18181B]">
+      <div className="shrink-0 border-t border-border p-2 bg-background">
         <div className="max-w-3xl mx-auto relative">
           {suggestions.length > 0 && (
             <div role="listbox" className={`${card} absolute bottom-full mb-1.5 left-0 right-0 py-1 z-20 max-h-56 overflow-auto`}>
@@ -1159,28 +1256,28 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                     setDraft(`/${c.name.replace(/^\//, '')} `);
                     inputRef.current?.focus();
                   }}
-                  className={`w-full text-left px-2 py-1 flex gap-2 items-baseline cursor-pointer ${i === cmdIndex ? 'bg-[#FFE500] text-black' : ''}`}
+                  className={`w-full text-left px-2 py-1 flex gap-2 items-baseline cursor-pointer ${i === cmdIndex ? 'bg-accent text-foreground' : ''}`}
                 >
-                  <span className="text-[12px] font-black font-mono shrink-0">/{c.name.replace(/^\//, '')}</span>
+                  <span className="text-[12px] font-semibold font-mono shrink-0">/{c.name.replace(/^\//, '')}</span>
                   <span className="text-[11px] opacity-70 truncate">{c.description}</span>
                 </button>
               ))}
             </div>
           )}
 
-          <div className={`${card} p-1.5 focus-within:shadow-[3px_3px_0px_#000]`}>
+          <div className={`${card} p-1.5 focus-within:shadow-sm`}>
             {images.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-1.5">
                 {images.map((img, i) => (
                   <div key={i} className="relative">
-                    <img src={img.url} alt="" className="h-12 w-12 object-cover rounded border-2 border-black" />
+                    <img src={img.url} alt="" className="h-12 w-12 object-cover rounded-md border border-border" />
                     <button
                       type="button"
                       aria-label={t("Quitar imagen")}
                       onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
-                      className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-[#FF6B6B] border-2 border-black flex items-center justify-center cursor-pointer"
+                      className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive border border-border flex items-center justify-center cursor-pointer"
                     >
-                      <X size={8} strokeWidth={4} className="text-white" />
+                      <X size={8} strokeWidth={4} className="text-foreground" />
                     </button>
                   </div>
                 ))}
@@ -1212,7 +1309,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               placeholder={state.ended ? t("Sesión terminada — pulsa Reanudar") : state.running ? t("Escribe para encolar otro mensaje…") : t("Pregúntale a {0}… ( / comandos )", [agentName])}
               disabled={state.ended}
               aria-label={t("Mensaje para {0}", [agentName])}
-              className="w-full resize-none bg-transparent outline-none text-[13px] leading-snug px-1 py-0.5 placeholder:text-black/40 dark:placeholder:text-zinc-500"
+              className="w-full resize-none bg-transparent outline-none text-[13px] leading-snug px-1 py-0.5 placeholder:text-foreground/40 dark:placeholder:text-muted-foreground"
             />
             <div className="flex items-end gap-1 mt-1">
               {/* Pickers wrap onto a second line on narrow windows; send/stop stay pinned right */}
@@ -1222,14 +1319,14 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                 onChange={(e) => void changeMode(e.target.value)}
                 title={modes.find((m) => m.value === mode)?.hint}
                 aria-label={t("Modo de permisos")}
-                className={`h-6 max-w-[9.5rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none ${
+                className={`h-6 max-w-[9.5rem] px-1 text-[10.5px] font-semibold border border-border dark:border-border rounded-md cursor-pointer outline-none ${
                   mode === 'bypassPermissions'
-                    ? 'bg-[#FF6B6B] text-white'
+                    ? 'bg-destructive text-destructive-foreground'
                     : mode === 'plan'
-                    ? 'bg-[#A3D8F4] text-black'
+                    ? 'bg-secondary text-foreground'
                     : mode === 'acceptEdits' || mode === 'accept-edits' || mode === 'auto'
-                    ? 'bg-[#78E08F] text-black'
-                    : 'bg-white dark:bg-[#27272A]'
+                    ? 'bg-success/15 text-foreground'
+                    : 'bg-card dark:bg-muted'
                 }`}
               >
                 {modes.map((m) => (
@@ -1244,7 +1341,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                   onChange={(e) => void changeModel(e.target.value)}
                   aria-label={t("Modelo")}
                   title={modelInfo?.description || t("Modelo")}
-                  className="h-6 max-w-[9.5rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none bg-white dark:bg-[#27272A]"
+                  className="h-6 max-w-[9.5rem] px-1 text-[10.5px] font-semibold border border-border rounded-md cursor-pointer outline-none bg-card dark:bg-muted"
                 >
                   {!modelInfo && <option value="">{t("Modelo")}</option>}
                   {state.models.map((m) => (
@@ -1261,8 +1358,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                   onChange={(e) => void changeEffort(e.target.value as ClaudeEffortLevel | '')}
                   aria-label={t("Esfuerzo")}
                   title={t("Esfuerzo de razonamiento para {0} (se recuerda por modelo)", [modelInfo?.displayName ?? t("este modelo")])}
-                  className={`h-6 max-w-[7rem] px-1 text-[10.5px] font-black border-2 border-black dark:border-zinc-600 rounded cursor-pointer outline-none ${
-                    shownEffort === 'max' || shownEffort === 'xhigh' ? 'bg-[#C9A7F5] text-black' : 'bg-white dark:bg-[#27272A]'
+                  className={`h-6 max-w-[7rem] px-1 text-[10.5px] font-semibold border border-border dark:border-border rounded-md cursor-pointer outline-none ${
+                    shownEffort === 'max' || shownEffort === 'xhigh' ? 'bg-secondary text-foreground' : 'bg-card dark:bg-muted'
                   }`}
                 >
                   <option value="">{shownEffort ? t("Predeterminado") : t("Esfuerzo")}</option>
@@ -1273,8 +1370,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                   ))}
                 </select>
               )}
-              <label title={t("Adjuntar imagen")} className={`${btn} h-6 w-6 bg-white dark:bg-[#27272A]`}>
-                <ImagePlus size={12} strokeWidth={2.5} />
+              <label title={t("Adjuntar imagen")} className={`${btn} h-6 w-6 bg-card dark:bg-muted`}>
+                <ImagePlus size={12} strokeWidth={1.75} />
                 <input
                   type="file"
                   accept="image/*"
@@ -1288,8 +1385,8 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
               </label>
               </div>
               {state.running && (
-                <button type="button" onClick={interrupt} title={t("Detener (Esc)")} aria-label={t("Detener")} className={`${btn} h-7 w-7 bg-[#FF6B6B] text-white`}>
-                  <Square size={11} strokeWidth={3} fill="currentColor" />
+                <button type="button" onClick={interrupt} title={t("Detener (Esc)")} aria-label={t("Detener")} className={`${btn} h-7 w-7 bg-destructive text-destructive-foreground`}>
+                  <Square size={11} strokeWidth={1.75} fill="currentColor" />
                 </button>
               )}
               <button
@@ -1298,9 +1395,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                 disabled={starting || !backend || state.ended || (!draft.trim() && images.length === 0)}
                 title={t("Enviar (Enter)")}
                 aria-label={t("Enviar")}
-                className={`${btn} h-7 w-7 bg-[#FFE500] text-black`}
+                className={`${btn} h-7 w-7 bg-accent text-foreground`}
               >
-                <ArrowUp size={14} strokeWidth={3} />
+                <ArrowUp size={14} strokeWidth={1.75} />
               </button>
             </div>
           </div>

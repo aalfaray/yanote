@@ -6,6 +6,7 @@ import type { ClaudeAccount, ClaudeAccountStatus, ClaudeUsage } from '../types/e
 import { LoadingSkeleton } from './ui/Skeleton';
 import { UsageWindowMeter } from './ClaudeUsageMeter';
 import { describeWindow } from '../lib/claudeUsage';
+import { loadChatPrefs, saveChatPrefs } from '../lib/claudeChatPrefs';
 
 const PLAN_LABEL: Record<string, string> = { pro: 'Pro', max: 'Max', team: 'Team', enterprise: 'Enterprise', free: 'Free' };
 
@@ -48,6 +49,8 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
   const [error, setError] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
+  // Off until the user turns it on: changing accounts without asking is their call
+  const [autoSwitch, setAutoSwitch] = useState(() => loadChatPrefs().autoSwitchAccount === true);
   const loadRequest = useRef(0);
   const [usages, setUsages] = useState<Record<string, ClaudeUsage>>({});
   const [usageBusy, setUsageBusy] = useState<Record<string, boolean>>({});
@@ -166,22 +169,22 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
     await load();
   };
 
-  const row = 'w-full flex items-center gap-2 px-2.5 py-2 text-left border-b-2 border-black/10 dark:border-zinc-700/60';
+  const row = 'w-full flex items-center gap-2 px-2.5 py-2 text-left border-b border-border';
 
   return (
     <div
       ref={boxRef}
       role="dialog"
       aria-label={t("Cuentas de Claude")}
-      className="absolute top-9 right-2 left-2 min-[420px]:left-auto min-[420px]:w-80 z-40 bg-white dark:bg-[#1E1E21] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[3px_3px_0px_#000] text-[12px]"
+      className="absolute top-9 right-2 left-2 min-[420px]:left-auto min-[420px]:w-80 z-40 bg-popover text-popover-foreground border border-border rounded-lg shadow-md text-[12px]"
     >
-      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-[#FFE500] text-black border-b-2 border-black font-black text-[11px] uppercase">
-        <UserRound size={13} strokeWidth={3} /> {' '}{t("Cuentas de Claude")}
-        <button type="button" onClick={refreshUsage} disabled={!loaded || Object.values(usageBusy).some(Boolean)} title={t('Actualizar uso de las cuentas')} aria-label={t('Actualizar uso de las cuentas')} className="ml-auto h-6 w-6 inline-flex items-center justify-center rounded hover:bg-black/10 disabled:opacity-40 cursor-pointer">
+      <div className="flex items-center gap-2 px-2.5 py-1.5 bg-accent text-foreground border-b border-border font-semibold text-[11px] uppercase">
+        <UserRound size={13} strokeWidth={1.75} /> {' '}{t("Cuentas de Claude")}
+        <button type="button" onClick={refreshUsage} disabled={!loaded || Object.values(usageBusy).some(Boolean)} title={t('Actualizar uso de las cuentas')} aria-label={t('Actualizar uso de las cuentas')} className="ml-auto h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-black/10 disabled:opacity-40 cursor-pointer">
           <RefreshCw size={12} className={Object.values(usageBusy).some(Boolean) ? 'animate-spin' : ''} />
         </button>
-        <button type="button" onClick={onClose} aria-label={t("Cerrar")} title={t("Cerrar")} className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-black/10 cursor-pointer">
-          <X size={13} strokeWidth={3} />
+        <button type="button" onClick={onClose} aria-label={t("Cerrar")} title={t("Cerrar")} className="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-black/10 cursor-pointer">
+          <X size={13} strokeWidth={1.75} />
         </button>
       </div>
 
@@ -201,7 +204,7 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
             <li key={a.id} className={row}>
               {confirmLogout === a.id ? (
                 <div className="flex-1 min-w-0 flex flex-col gap-1.5" role="alertdialog" aria-label={t("Cerrar la sesión de {0}", [a.name])}>
-                  <span className="text-[11.5px] font-bold leading-snug">
+                  <span className="text-[11.5px] font-medium leading-snug">
                     {a.isDefault
                       ? t("¿Cerrar la sesión de {0}? Claude Code quedará sin sesión en todo tu PC (terminal y VS Code incluidos).", [a.name])
                       : t("¿Cerrar la sesión de {0}? La cuenta queda en la lista para volver a entrar.", [a.name])}
@@ -211,14 +214,14 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
                       type="button"
                       disabled={loggingOut}
                       onClick={() => void logoutAccount(a)}
-                      className="h-6 px-2 inline-flex items-center gap-1 text-[10.5px] font-black bg-[#FF6B6B] text-white border-2 border-black rounded cursor-pointer disabled:opacity-50"
+                      className="h-6 px-2 inline-flex items-center gap-1 text-[10.5px] font-semibold bg-destructive text-destructive-foreground border border-border rounded-md cursor-pointer disabled:opacity-50"
                     >
-                      <LogOut size={11} strokeWidth={3} /> {loggingOut ? t('Cerrando…') : t("Cerrar sesión")}
+                      <LogOut size={11} strokeWidth={1.75} /> {loggingOut ? t('Cerrando…') : t("Cerrar sesión")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmLogout(null)}
-                      className="h-6 px-2 text-[10.5px] font-black bg-white dark:bg-zinc-700 border-2 border-black dark:border-zinc-500 rounded cursor-pointer"
+                      className="h-6 px-2 text-[10.5px] font-semibold bg-card dark:bg-muted border border-border rounded-md cursor-pointer"
                     >
                       {t("Cancelar")}</button>
                   </span>
@@ -233,14 +236,14 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
                 title={current ? t("Cuenta actual de este chat") : exhausted ? t('Cuenta sin cuota disponible') : loggedIn ? t("Continuar este chat con {0}", [a.name]) : t("Iniciar sesión en {0}", [a.name])}
               >
                 <span
-                  className={`h-5 w-5 shrink-0 inline-flex items-center justify-center rounded border-2 border-black ${current ? 'bg-[#78E08F]' : 'bg-white dark:bg-zinc-700'}`}
+                  className={`h-5 w-5 shrink-0 inline-flex items-center justify-center rounded-md border border-border ${current ? 'bg-success/15' : 'bg-card dark:bg-muted'}`}
                   aria-hidden="true"
                 >
-                  {current && <Check size={11} strokeWidth={4} className="text-black" />}
+                  {current && <Check size={11} strokeWidth={4} className="text-foreground" />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block font-black truncate">{a.name}</span>
-                  <span className={`block text-[10.5px] truncate ${st?.success && !st.loggedIn ? 'text-[#C0392B] dark:text-[#FCA5A5] font-bold' : 'opacity-60'}`}>
+                  <span className="block font-semibold truncate">{a.name}</span>
+                  <span className={`block text-[10.5px] truncate ${st?.success && !st.loggedIn ? 'text-destructive font-medium' : 'opacity-60'}`}>
                     {st ? describeAccountStatus(st) : <LoadingSkeleton label={t("Comprobando cuenta {0}", [a.name])} variant="line" />}
                   </span>
                   {loggedIn && <span data-testid={`account-usage-${a.id}`} aria-busy={Boolean(usageBusy[a.id])} title={usageTitle || usage?.error} className="block mt-1 text-[10px]">
@@ -250,7 +253,7 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
                           {usage.fiveHour && <UsageWindowMeter label="5h" win={usage.fiveHour} testId={`account-5h-${a.id}`} />}
                           {usage.weekly && <UsageWindowMeter label={t('Sem')} win={usage.weekly} testId={`account-week-${a.id}`} />}
                         </span>
-                        {exhausted && <span className="block font-black text-[#C0392B] dark:text-[#FCA5A5] mt-1">{t('Límite alcanzado')}</span>}
+                        {exhausted && <span className="block font-semibold text-destructive mt-1">{t('Límite alcanzado')}</span>}
                       </> : <span className="opacity-60">{usage.success && usage.available === false ? t('Cuota de suscripción no disponible') : t('Uso no disponible')}</span>}
                   </span>}
                 </span>
@@ -259,9 +262,9 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
                 <button
                   type="button"
                   onClick={() => onLogin(a)}
-                  className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 text-[10.5px] font-black bg-[#FFE500] text-black border-2 border-black rounded cursor-pointer"
+                  className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 text-[10.5px] font-semibold bg-accent text-foreground border border-border rounded-md cursor-pointer"
                 >
-                  <LogIn size={11} strokeWidth={3} /> {' '}{t("Entrar")}</button>
+                  <LogIn size={11} strokeWidth={1.75} /> {' '}{t("Entrar")}</button>
               )}
               {loggedIn && (
                 <button
@@ -272,9 +275,9 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
                   }}
                   title={t("Cerrar la sesión de {0}", [a.name])}
                   aria-label={t("Cerrar la sesión de {0}", [a.name])}
-                  className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded opacity-60 hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
+                  className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded-md opacity-60 hover:opacity-100 hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
                 >
-                  <LogOut size={12} strokeWidth={2.5} />
+                  <LogOut size={12} strokeWidth={1.75} />
                 </button>
               )}
               {!a.isDefault &&
@@ -283,11 +286,11 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
                     <button
                       type="button"
                       onClick={() => void removeAccount(a.id)}
-                      className="h-6 px-1.5 text-[10.5px] font-black bg-[#FF6B6B] text-white border-2 border-black rounded cursor-pointer"
+                      className="h-6 px-1.5 text-[10.5px] font-semibold bg-destructive text-destructive-foreground border border-border rounded-md cursor-pointer"
                     >
                       {t("Quitar")}</button>
-                    <button type="button" onClick={() => setConfirmRemove(null)} aria-label={t("Cancelar")} className="h-6 w-6 inline-flex items-center justify-center rounded hover:bg-black/10 cursor-pointer">
-                      <X size={12} strokeWidth={3} />
+                    <button type="button" onClick={() => setConfirmRemove(null)} aria-label={t("Cancelar")} className="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-black/10 cursor-pointer">
+                      <X size={12} strokeWidth={1.75} />
                     </button>
                   </span>
                 ) : (
@@ -297,9 +300,9 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
                     disabled={current}
                     title={current ? t("Cambia de cuenta antes de quitarla") : t("Quitar {0} (cierra su sesión en yanote)", [a.name])}
                     aria-label={t("Quitar {0}", [a.name])}
-                    className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded opacity-60 hover:opacity-100 hover:bg-[#FF6B6B] hover:text-white disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer"
+                    className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded-md opacity-60 hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer"
                   >
-                    <Trash2 size={12} strokeWidth={2.5} />
+                    <Trash2 size={12} strokeWidth={1.75} />
                   </button>
                 ))}
               </>
@@ -310,7 +313,7 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
       </ul>
 
       {error && (
-        <p role="alert" className="mx-2.5 mt-2 px-2 py-1 text-[11px] font-bold rounded border-2 border-[#C0392B] bg-[#FFE4E4] text-[#9B1C1C] dark:bg-[#3A1515] dark:text-[#FCA5A5]">
+        <p role="alert" className="mx-2.5 mt-2 px-2 py-1 text-[11px] font-medium rounded-md border border-destructive bg-destructive/10 text-destructive">
           {error}
         </p>
       )}
@@ -330,19 +333,34 @@ export const ClaudeAccountMenu: React.FC<ClaudeAccountMenuProps> = ({ currentId,
             placeholder={t("Nombre (p. ej. Trabajo)")}
             maxLength={40}
             aria-label={t("Nombre de la cuenta")}
-            className="flex-1 min-w-0 h-7 px-2 text-[12px] border-2 border-black dark:border-zinc-600 rounded bg-white dark:bg-zinc-800 outline-none"
+            className="flex-1 min-w-0 h-7 px-2 text-[12px] border border-border rounded-md bg-card outline-none"
           />
-          <button type="submit" className="shrink-0 h-7 px-2 text-[11px] font-black bg-[#FFE500] text-black border-2 border-black rounded cursor-pointer">
+          <button type="submit" className="shrink-0 h-7 px-2 text-[11px] font-semibold bg-accent text-foreground border border-border rounded-md cursor-pointer">
             {t("Agregar")}</button>
         </form>
       ) : (
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="w-full flex items-center gap-1.5 px-2.5 py-2 font-black text-[11.5px] hover:bg-[#FFE500] hover:text-black cursor-pointer"
+          className="w-full flex items-center gap-1.5 px-2.5 py-2 font-semibold text-[11.5px] hover:bg-accent hover:text-foreground cursor-pointer"
         >
-          <Plus size={13} strokeWidth={3} /> {' '}{t("Agregar otra cuenta")}</button>
+          <Plus size={13} strokeWidth={1.75} /> {' '}{t("Agregar otra cuenta")}</button>
       )}
+      <label className="flex items-start gap-2 px-2.5 py-1.5 text-[11px] font-medium cursor-pointer select-none border-t border-border/10 dark:border-white/10">
+        <input
+          type="checkbox"
+          checked={autoSwitch}
+          onChange={(e) => {
+            setAutoSwitch(e.target.checked);
+            saveChatPrefs({ autoSwitchAccount: e.target.checked });
+          }}
+          className="mt-0.5 h-3.5 w-3.5 accent-primary cursor-pointer"
+        />
+        <span>
+          {t("Cambiar de cuenta automáticamente al llegar al límite")}
+          <span className="block text-[10px] font-normal opacity-60">{t("Sigue con la cuenta con sesión iniciada que tenga más cuota libre.")}</span>
+        </span>
+      </label>
       <p className="px-2.5 pb-2 text-[10px] opacity-60 leading-snug">
         {t("Cada cuenta inicia sesión una vez con Claude Code. Al cambiar, la conversación sigue con la otra cuenta. yanote no ve tus credenciales.")}</p>
     </div>

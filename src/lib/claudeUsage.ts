@@ -1,6 +1,6 @@
 import { t } from './i18n';
 import { logWarn } from './logger';
-import type { ClaudeUsageWindow } from '../types/electron';
+import type { ClaudeUsage, ClaudeUsageWindow } from '../types/electron';
 
 /** Colour step for a usage percent: calm, getting close, almost out. */
 
@@ -46,6 +46,36 @@ export function isExhausted(win: ClaudeUsageWindow, now: Date = new Date()): boo
   if (win.percent < 100) return false;
   const at = win.resetsAt ? Date.parse(win.resetsAt) : NaN;
   return Number.isNaN(at) || at > now.getTime();
+}
+
+/**
+ * Room an account has left (100 minus its most-used window), or null when it cannot take a turn now:
+ * usage unknown (not signed in, query failed), no plan windows, or a window used up.
+ */
+
+export function quotaHeadroom(usage: ClaudeUsage | null | undefined, now: Date = new Date()): number | null {
+  try {
+    if (!usage?.success || usage.available === false) return null;
+    const windows = [usage.fiveHour, usage.weekly].filter((w): w is ClaudeUsageWindow => Boolean(w));
+    if (windows.length === 0 || windows.some((w) => isExhausted(w, now))) return null;
+    // A window whose reset already passed is fresh again
+    const used = windows.map((w) => (w.resetsAt && Date.parse(w.resetsAt) <= now.getTime() ? 0 : w.percent));
+    return 100 - Math.max(...used);
+  } catch (err) {
+    logWarn('claudeUsage.quotaHeadroom', `headroom failed: ${(err as Error)?.message ?? err}`);
+    return null;
+  }
+}
+
+/** Account to continue with when the current one hits its limit: the one with the most room left. */
+
+export function pickAccountWithQuota(candidates: { id: string; usage: ClaudeUsage | null | undefined }[], now: Date = new Date()): string | null {
+  let best: { id: string; room: number } | null = null;
+  for (const { id, usage } of candidates) {
+    const room = quotaHeadroom(usage, now);
+    if (room !== null && room > 0 && (!best || room > best.room)) best = { id, room };
+  }
+  return best?.id ?? null;
 }
 
 /**

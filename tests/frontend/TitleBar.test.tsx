@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { TitleBar } from '../../src/components/TitleBar';
 
-describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% Destructive)', () => {
+describe('Frontend: TitleBar (20% Happy / 80% Destructive)', () => {
   beforeEach(() => {
     window.electronAPI = {
       minimize: vi.fn(),
@@ -13,42 +13,22 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
   });
 
   // --- 20% HAPPY PATH TESTS ---
-  it('[HAPPY 1/2] renders titlebar with logo and superposición button', () => {
+  it('[HAPPY 1/2] renders titlebar with logo and no always-on-top control', () => {
     render(
       <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={vi.fn()}
         onOpenSettings={vi.fn()}
         onOpenFiles={vi.fn()}
       />
     );
 
     expect(screen.getByText(/YANOTE/i)).toBeInTheDocument();
-    expect(screen.getByTitle(/Activar superposición/i)).toBeInTheDocument();
-  });
-
-  it('[HAPPY 2/3] clicking superposición button triggers onToggleAlwaysOnTop callback', () => {
-    const onToggle = vi.fn();
-    render(
-      <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={onToggle}
-        onOpenSettings={vi.fn()}
-        onOpenFiles={vi.fn()}
-      />
-    );
-
-    const pinBtn = screen.getByTitle(/Activar superposición/i);
-    fireEvent.click(pinBtn);
-    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTitle(/superposici/i)).not.toBeInTheDocument();
   });
 
   it('[HAPPY 3/3] renders dark mode toggle button and triggers onToggleDarkMode callback', () => {
     const onToggleDark = vi.fn();
     render(
       <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={vi.fn()}
         isDarkMode={false}
         onToggleDarkMode={onToggleDark}
         onOpenSettings={vi.fn()}
@@ -64,25 +44,9 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
   });
 
   // --- 80% DESTRUCTIVE / CHAOS / ADVERSARIAL TESTS ---
-  it('[CHAOS 1/7] displays highlighted state when superposición is active', () => {
-    render(
-      <TitleBar
-        isAlwaysOnTop={true}
-        onToggleAlwaysOnTop={vi.fn()}
-        onOpenSettings={vi.fn()}
-        onOpenFiles={vi.fn()}
-      />
-    );
-
-    expect(screen.getByText('ENCIMA')).toBeInTheDocument();
-    expect(screen.getByTitle(/Superposición activa/i)).toBeInTheDocument();
-  });
-
   it('[CHAOS 2/7] calls window controls (minimize, maximize, close) on electronAPI', () => {
     render(
       <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={vi.fn()}
         onOpenSettings={vi.fn()}
         onOpenFiles={vi.fn()}
       />
@@ -103,8 +67,6 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
 
     render(
       <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={vi.fn()}
         onOpenSettings={vi.fn()}
         onOpenFiles={vi.fn()}
       />
@@ -120,8 +82,6 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
   it('[CHAOS 4/7] no longer renders any Git / GitHub controls', () => {
     const { container } = render(
       <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={vi.fn()}
         onOpenSettings={vi.fn()}
         onOpenFiles={vi.fn()}
       />
@@ -137,8 +97,6 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
     const onOpenFiles = vi.fn();
     render(
       <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={vi.fn()}
         onOpenSettings={onOpenSettings}
         onOpenFiles={onOpenFiles}
       />
@@ -150,29 +108,9 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
     expect(onOpenFiles).toHaveBeenCalledTimes(1);
   });
 
-  it('[CHAOS 7/11] rapid toggling of superposición button (stress test)', () => {
-    const onToggle = vi.fn();
-    render(
-      <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={onToggle}
-        onOpenSettings={vi.fn()}
-        onOpenFiles={vi.fn()}
-      />
-    );
-
-    const pinBtn = screen.getByTitle(/Activar superposición/i);
-    for (let i = 0; i < 40; i++) {
-      fireEvent.click(pinBtn);
-    }
-    expect(onToggle).toHaveBeenCalledTimes(40);
-  });
-
   it('[CHAOS 8/11] displays CLARO label when isDarkMode is true', () => {
     render(
       <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={vi.fn()}
         isDarkMode={true}
         onToggleDarkMode={vi.fn()}
         onOpenSettings={vi.fn()}
@@ -188,8 +126,6 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
     const onToggleDark = vi.fn();
     render(
       <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={vi.fn()}
         isDarkMode={false}
         onToggleDarkMode={onToggleDark}
         onOpenSettings={vi.fn()}
@@ -207,8 +143,6 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
   it('[CHAOS 10/11] clicking dark mode button with undefined onToggleDarkMode does not throw', () => {
     render(
       <TitleBar
-        isAlwaysOnTop={false}
-        onToggleAlwaysOnTop={vi.fn()}
         onOpenSettings={vi.fn()}
         onOpenFiles={vi.fn()}
       />
@@ -222,8 +156,6 @@ describe('Frontend: TitleBar & Superposición (Always on Top) (20% Happy / 80% D
     expect(() => {
       render(
         <TitleBar
-          isAlwaysOnTop={false}
-          onToggleAlwaysOnTop={vi.fn()}
           isDarkMode={'not-a-bool' as any}
           onOpenSettings={vi.fn()}
           onOpenFiles={vi.fn()}

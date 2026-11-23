@@ -40,40 +40,40 @@ export const IdeasDrawer: React.FC<IdeasDrawerProps> = ({ isOpen, onClose, ideas
   };
 
   const action =
-    'h-7 px-2 inline-flex items-center gap-1 text-[11px] font-black border-2 border-black dark:border-zinc-600 rounded shadow-[1.5px_1.5px_0px_#000] cursor-pointer active:translate-x-[1px] active:translate-y-[1px]';
+    'h-7 px-2 inline-flex items-center gap-1 text-[11px] font-semibold border border-border rounded-md shadow-sm cursor-pointer ';
   if (loading) return <Modal isOpen={isOpen} onClose={onClose} title={t("Ideas guardadas")}><LoadingSkeleton label={t("Cargando ideas guardadas")} className="py-3" /></Modal>;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t("Ideas guardadas")} badge={`${ideas.length}`}>
-      <div className="flex flex-col gap-3 text-black dark:text-zinc-100">
+      <div className="flex flex-col gap-3 text-foreground">
         {ideas.length > 3 && (
           <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-2.5 text-neutral-400 dark:text-zinc-400" />
+            <Search size={14} className="absolute left-2.5 top-2.5 text-muted-foreground" />
             <input
               type="text"
               placeholder={t("Buscar en tus ideas…")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               aria-label={t("Buscar ideas")}
-              className="w-full pl-8 pr-3 py-1.5 text-xs font-bold bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-600 rounded shadow-[2px_2px_0px_#000] focus:outline-none"
+              className="w-full pl-8 pr-3 py-1.5 text-xs font-medium bg-card border border-border rounded-md shadow-sm focus:outline-none"
             />
           </div>
         )}
 
         {ideas.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <Lightbulb size={28} strokeWidth={2.5} className="text-[#E0B800]" />
-            <p className="text-xs font-bold">{t("Aún no guardaste ideas.")}</p>
+            <Lightbulb size={28} strokeWidth={1.75} className="text-muted-foreground" />
+            <p className="text-xs font-medium">{t("Aún no guardaste ideas.")}</p>
             <p className="text-[11px] opacity-70 max-w-[16rem]">{t("Selecciona un texto, haz clic derecho y elige «Guardar idea».")}</p>
           </div>
         ) : shown.length === 0 ? (
-          <p className="text-xs font-bold opacity-70 text-center py-4">{t('Ninguna idea coincide con «{0}».', [search])}</p>
+          <p className="text-xs font-medium opacity-70 text-center py-4">{t('Ninguna idea coincide con «{0}».', [search])}</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {shown.map((idea) => {
               const open = expanded === idea.id;
               return (
-                <li key={idea.id} className="p-2.5 bg-white dark:bg-zinc-800 border-2 border-black dark:border-zinc-600 rounded shadow-[2px_2px_0px_#000]">
+                <li key={idea.id} className="p-2.5 bg-card border border-border rounded-md shadow-sm">
                   <button
                     type="button"
                     onClick={() => setExpanded(open ? null : idea.id)}
@@ -82,18 +82,18 @@ export const IdeasDrawer: React.FC<IdeasDrawerProps> = ({ isOpen, onClose, ideas
                   >
                     {idea.text}
                   </button>
-                  <div className="mt-1 text-[10px] font-bold opacity-60 truncate">
+                  <div className="mt-1 text-[10px] font-medium opacity-60 truncate">
                     {[idea.source, formatIdeaDate(idea.createdAt)].filter(Boolean).join(' · ')}
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    <button type="button" onClick={() => onSendToNewChat(idea)} className={`${action} bg-[#FFE500] text-black`}>
-                      <Send size={11} strokeWidth={3} /> {' '}{t("Chat nuevo")}</button>
+                    <button type="button" onClick={() => onSendToNewChat(idea)} className={`${action} bg-accent text-foreground`}>
+                      <Send size={11} strokeWidth={1.75} /> {' '}{t("Chat nuevo")}</button>
                     {onInsertInChat && (
-                      <button type="button" onClick={() => onInsertInChat(idea)} className={`${action} bg-white dark:bg-zinc-700`} title={t("Añadir al mensaje del chat abierto")}>
-                        <ClipboardPaste size={11} strokeWidth={3} /> {' '}{t("En este chat")}</button>
+                      <button type="button" onClick={() => onInsertInChat(idea)} className={`${action} bg-card dark:bg-muted`} title={t("Añadir al mensaje del chat abierto")}>
+                        <ClipboardPaste size={11} strokeWidth={1.75} /> {' '}{t("En este chat")}</button>
                     )}
-                    <button type="button" onClick={() => copy(idea)} className={`${action} bg-white dark:bg-zinc-700`} aria-label={t("Copiar idea")}>
-                      {copied === idea.id ? <Check size={11} strokeWidth={3} /> : <Copy size={11} strokeWidth={3} />}
+                    <button type="button" onClick={() => copy(idea)} className={`${action} bg-card dark:bg-muted`} aria-label={t("Copiar idea")}>
+                      {copied === idea.id ? <Check size={11} strokeWidth={1.75} /> : <Copy size={11} strokeWidth={1.75} />}
                       {copied === idea.id ? t("Copiada") : t("Copiar")}
                     </button>
                     <button
@@ -101,9 +101,9 @@ export const IdeasDrawer: React.FC<IdeasDrawerProps> = ({ isOpen, onClose, ideas
                       onClick={() => onRemove(idea.id)}
                       aria-label={t("Borrar idea")}
                       title={t("Borrar idea")}
-                      className={`${action} ml-auto bg-white dark:bg-zinc-700 hover:bg-[#FF6B6B] hover:text-white`}
+                      className={`${action} ml-auto bg-card dark:bg-muted hover:bg-destructive hover:text-destructive-foreground`}
                     >
-                      <Trash2 size={11} strokeWidth={3} />
+                      <Trash2 size={11} strokeWidth={1.75} />
                     </button>
                   </div>
                 </li>

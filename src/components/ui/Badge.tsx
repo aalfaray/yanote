@@ -1,38 +1,27 @@
-import React from 'react';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import type { HTMLAttributes } from 'react';
+import { cva } from 'class-variance-authority';
+import { cn } from '../../lib/utils';
 
-interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: 'yellow' | 'mint' | 'coral' | 'lilac' | 'cyan' | 'neutral';
+interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
+  variant?: 'default' | 'secondary' | 'outline' | 'destructive' | 'yellow' | 'mint' | 'coral' | 'lilac' | 'cyan' | 'neutral';
 }
 
-export const Badge: React.FC<BadgeProps> = ({
-  children,
-  className,
-  variant = 'yellow',
-  ...props
-}) => {
-  const variantClasses = {
-    yellow: 'bg-[#FFE500] text-black',
-    mint: 'bg-[#78E08F] text-black',
-    coral: 'bg-[#FF6B6B] text-white',
-    lilac: 'bg-[#D8B4FE] text-black',
-    cyan: 'bg-[#7DF9FF] text-black',
-    neutral: 'bg-white text-black',
-  };
+const badgeVariants = cva(
+  'inline-flex shrink-0 items-center justify-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap',
+  { variants: { variant: {
+    default: 'border-transparent bg-primary text-primary-foreground',
+    secondary: 'border-transparent bg-secondary text-secondary-foreground',
+    outline: 'border-border text-foreground',
+    destructive: 'border-transparent bg-destructive/10 text-destructive',
+    yellow: 'border-transparent bg-secondary text-secondary-foreground',
+    mint: 'border-transparent bg-success/10 text-success',
+    coral: 'border-transparent bg-destructive/10 text-destructive',
+    lilac: 'border-transparent bg-secondary text-secondary-foreground',
+    cyan: 'border-transparent bg-secondary text-secondary-foreground',
+    neutral: 'border-border text-foreground',
+  } }, defaultVariants: { variant: 'secondary' } }
+);
 
-  return (
-    <span
-      className={twMerge(
-        clsx(
-          'inline-flex items-center px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider border-1.5 border-black rounded shadow-[1.5px_1.5px_0px_#000]',
-          variantClasses[variant],
-          className
-        )
-      )}
-      {...props}
-    >
-      {children}
-    </span>
-  );
-};
+export function Badge({ className, variant = 'yellow', ...props }: BadgeProps) {
+  return <span data-slot="badge" className={cn(badgeVariants({ variant }), className)} {...props} />;
+}

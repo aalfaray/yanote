@@ -43,20 +43,37 @@ interface TerminalViewProps {
   initialCommand?: string;
 }
 
+// One Dark Pro terminal colours
 const DARK_THEME = {
-  background: '#121212',
-  foreground: '#E4E4E7',
-  cursor: '#FFE500',
-  cursorAccent: '#121212',
-  selectionBackground: '#FFE50055',
+  background: '#282C34',
+  foreground: '#ABB2BF',
+  cursor: '#528BFF',
+  cursorAccent: '#282C34',
+  selectionBackground: '#67769660',
+  black: '#3F4451',
+  red: '#E05561',
+  green: '#8CC265',
+  yellow: '#D18F52',
+  blue: '#4AA5F0',
+  magenta: '#C162DE',
+  cyan: '#42B3C2',
+  white: '#D7DAE0',
+  brightBlack: '#4F5666',
+  brightRed: '#FF616E',
+  brightGreen: '#A5E075',
+  brightYellow: '#F0A45D',
+  brightBlue: '#4DC4FF',
+  brightMagenta: '#DE73FF',
+  brightCyan: '#4CD1E0',
+  brightWhite: '#E6E6E6',
 };
 
 const LIGHT_THEME = {
-  background: '#FAF8F5',
+  background: '#FFFFFF',
   foreground: '#111111',
   cursor: '#000000',
-  cursorAccent: '#FAF8F5',
-  selectionBackground: '#FFE50099',
+  cursorAccent: '#FFFFFF',
+  selectionBackground: '#17171722',
   // Light background needs darker variants of the bright ANSI colours
   yellow: '#9A7B00',
   brightYellow: '#B38F00',
@@ -265,13 +282,13 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
 
   return (
     <div
-      className={`absolute inset-0 p-2 bg-[#FAF8F5] dark:bg-[#121212] ${isActive ? '' : 'invisible pointer-events-none'}`}
+      className={`absolute inset-0 p-2 bg-background dark:bg-background ${isActive ? '' : 'invisible pointer-events-none'}`}
       aria-hidden={!isActive}
       data-testid={`terminal-${tabId}`}
       data-term-tab={tabId}
     >
       <div ref={containerRef} className="w-full h-full" />
-      {starting && <div className="absolute inset-0 p-4 bg-[#FAF8F5] dark:bg-[#121212]"><LoadingSkeleton label={t("Iniciando terminal")} /></div>}
+      {starting && <div className="absolute inset-0 p-4 bg-background"><LoadingSkeleton label={t("Iniciando terminal")} /></div>}
 
       {speech.state.status === 'idle' && (
         <button
@@ -279,9 +296,9 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
           onClick={readLatest}
           title={t("Leer en voz alta la última respuesta (Ctrl+Shift+Espacio). Si hay texto seleccionado, lee la selección.")}
           aria-label={t("Leer la última respuesta")}
-          className="absolute top-2 right-3 z-20 h-7 w-7 inline-flex items-center justify-center border-2 border-black dark:border-zinc-600 rounded bg-white dark:bg-[#27272A] text-black dark:text-zinc-100 shadow-[1.5px_1.5px_0px_#000] opacity-60 hover:opacity-100 hover:bg-[#FFE500] hover:text-black transition"
+          className="absolute top-2 right-3 z-20 h-7 w-7 inline-flex items-center justify-center border border-border rounded-md bg-card dark:bg-muted text-foreground shadow-sm opacity-60 hover:opacity-100 hover:bg-accent hover:text-foreground transition"
         >
-          <Volume2 size={14} strokeWidth={2.5} />
+          <Volume2 size={14} strokeWidth={1.75} />
         </button>
       )}
 
@@ -293,7 +310,7 @@ export const TerminalView: React.FC<TerminalViewProps> =({ tabId, shell, isActiv
       {notice && (
         <div
           role="status"
-          className="absolute top-11 right-3 z-30 max-w-[calc(100%-24px)] px-2 py-1 rounded border-2 border-black text-[11px] font-black bg-[#FFE500] text-black shadow-[2px_2px_0px_#000] flex items-center gap-1.5"
+          className="absolute top-11 right-3 z-30 max-w-[calc(100%-24px)] px-2 py-1 rounded-md border border-border text-[11px] font-semibold bg-accent text-foreground shadow-sm flex items-center gap-1.5"
         >
           <span className="min-w-0">{notice}</span>
           <DismissButton onClick={() => setNotice(null)} />

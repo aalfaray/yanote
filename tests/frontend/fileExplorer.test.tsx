@@ -185,6 +185,18 @@ describe('FileExplorer', () => {
     expect(props.onNewChat).toHaveBeenLastCalledWith('C:\\proj\\src');
   });
 
+  it('reports the folder where new tabs should open as the selection changes', async () => {
+    const onTargetFolderChange = vi.fn();
+    const { props, view } = setup();
+    view.rerender(<FileExplorer {...props} onTargetFolderChange={onTargetFolderChange} />);
+    await screen.findByText('README.md');
+    expect(onTargetFolderChange).toHaveBeenLastCalledWith('C:\\proj');
+    fireEvent.click(screen.getAllByText('src')[0]);
+    expect(onTargetFolderChange).toHaveBeenLastCalledWith('C:\\proj\\src');
+    view.unmount();
+    expect(onTargetFolderChange).toHaveBeenLastCalledWith(undefined);
+  });
+
   it('navigates up, into folders with double-click or Enter, and back to the active tab', async () => {
     const { props, view, api } = setup();
     fireEvent.doubleClick(await screen.findByText('src'));

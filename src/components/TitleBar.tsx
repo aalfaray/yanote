@@ -1,11 +1,9 @@
 import { t, useLanguage } from '../lib/i18n';
 import React from 'react';
 import { TransparencyControl } from './TransparencyControl';
-import { Pin, Minus, Square, X, Settings, History, Moon, Sun, Lightbulb, FolderTree } from 'lucide-react';
+import { Minus, Square, X, Settings, History, Moon, Sun, Lightbulb, FolderTree, NotebookPen } from 'lucide-react';
 
 interface TitleBarProps {
-  isAlwaysOnTop: boolean;
-  onToggleAlwaysOnTop: () => void;
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
   onOpenSettings: () => void;
@@ -26,21 +24,19 @@ interface TitleBarProps {
   onChangeOpacity?: (opacity: number) => void;
 }
 
-// One shared look for every titlebar control: 28px tall, 2px border, hard shadow, same press effect
+// Compact ghost controls keep the desktop titlebar usable in narrow windows.
 const BASE =
-  'h-7 shrink-0 flex items-center justify-center gap-1 border-2 rounded text-[10px] font-black leading-none cursor-pointer transition-all shadow-[2px_2px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1px_1px_0px_#000]';
+  'h-7 shrink-0 flex items-center justify-center gap-1 rounded-md text-[10px] font-medium leading-none cursor-pointer transition-colors';
 const ICON = `${BASE} w-7`;
 // Square (28x28) while the label is hidden; widens when the label shows
 const LABELED = `${BASE} min-w-7 px-[5px]`;
 const NEUTRAL =
-  'bg-white text-black border-black hover:bg-[#FFE500] dark:bg-zinc-800 dark:text-zinc-200 dark:border-zinc-600 dark:hover:bg-[#FFE500] dark:hover:text-black dark:hover:border-black';
-const ACTIVE = 'bg-[#FFE500] text-black border-black hover:bg-[#FFD700]';
-const DANGER = 'bg-[#FF6B6B] text-white border-black hover:bg-[#FF5252]';
-const ICON_PROPS = { size: 14, strokeWidth: 2.5 } as const;
+  'bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground';
+const ACTIVE = 'bg-secondary text-secondary-foreground hover:bg-accent';
+const DANGER = 'bg-transparent text-muted-foreground hover:bg-destructive hover:text-destructive-foreground';
+const ICON_PROPS = { size: 14, strokeWidth: 1.75 } as const;
 
 export const TitleBar: React.FC<TitleBarProps> = ({
-  isAlwaysOnTop,
-  onToggleAlwaysOnTop,
   isDarkMode = false,
   onToggleDarkMode,
   onOpenSettings,
@@ -71,12 +67,12 @@ export const TitleBar: React.FC<TitleBarProps> = ({
   };
 
   return (
-    <div className="titlebar-drag-region h-10 w-full bg-[#FAF8F5] dark:bg-[#18181B] border-b-2 border-black dark:border-zinc-700 flex items-center justify-between px-1 min-[420px]:px-1.5 select-none z-40 transition-colors overflow-hidden">
+    <div className="titlebar-drag-region h-10 w-full bg-background border-b border-border flex items-center justify-between px-1 min-[420px]:px-1.5 select-none z-40 transition-colors overflow-hidden">
       {/* Left: App Title & Status */}
       <div className="flex items-center gap-1 min-[420px]:gap-1.5 no-drag min-w-0 shrink">
-        <div className="h-7 flex items-center gap-1 font-black text-xs tracking-wider bg-black text-[#FFE500] dark:bg-[#FFE500] dark:text-black px-1.5 min-[480px]:px-2 border-2 border-black rounded shadow-[2px_2px_0px_#FFE500] dark:shadow-[2px_2px_0px_#000] shrink-0">
-          <span>⚡</span>
-          <span className="hidden min-[480px]:inline"> YANOTE</span>
+        <div className="h-7 flex items-center gap-1.5 font-semibold text-xs text-foreground px-1.5 min-[480px]:px-2 shrink-0">
+          <NotebookPen size={15} strokeWidth={1.75} />
+          <span className="hidden min-[480px]:inline">yanote</span>
         </div>
 
         {/* File explorer (left panel) */}
@@ -92,16 +88,6 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           </button>
         )}
 
-        {/* Superposición (Always on Top) Toggle */}
-        <button
-          onClick={onToggleAlwaysOnTop}
-          title={isAlwaysOnTop ? t("Superposición activa (Siempre encima)") : t("Activar superposición (Siempre encima)")}
-          aria-pressed={isAlwaysOnTop}
-          className={`${LABELED} min-[540px]:px-2 ${isAlwaysOnTop ? ACTIVE : NEUTRAL}`}
-        >
-          <Pin {...ICON_PROPS} className={isAlwaysOnTop ? 'fill-black rotate-45' : ''} />
-          <span className="hidden min-[540px]:inline">{isAlwaysOnTop ? t('ENCIMA') : t("FLOTANTE")}</span>
-        </button>
       </div>
 
       {/* Right: Actions & Window Controls */}
@@ -134,7 +120,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           <button onClick={onOpenIdeas} title={t("Ideas guardadas ({0})", [ideasCount])} aria-label={t("Ideas guardadas")} className={`${ICON} ${NEUTRAL} relative`}>
             <Lightbulb {...ICON_PROPS} />
             {ideasCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-[#FF6B6B] text-white text-[8.5px] leading-[14px] font-black border border-black">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-destructive text-destructive-foreground text-[8.5px] leading-[14px] font-semibold border border-border">
                 {ideasCount > 99 ? '99+' : ideasCount}
               </span>
             )}
@@ -151,14 +137,14 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           <Settings {...ICON_PROPS} />
         </button>
 
-        <div className="h-5 w-[2px] bg-black/40 dark:bg-zinc-600 shrink-0" />
+        <div className="h-4 w-px bg-border shrink-0 mx-0.5" />
 
         {/* Window controls - ALWAYS visible and never pushed off */}
         <button onClick={handleMinimize} title={t("Minimizar")} className={`${ICON} ${NEUTRAL}`}>
           <Minus {...ICON_PROPS} />
         </button>
         <button onClick={handleMaximize} title={t("Maximizar / Restaurar")} className={`${ICON} ${NEUTRAL}`}>
-          <Square size={12} strokeWidth={2.5} />
+          <Square size={12} strokeWidth={1.75} />
         </button>
         <button onClick={handleClose} title={t("Cerrar")} className={`${ICON} ${DANGER}`}>
           <X {...ICON_PROPS} />

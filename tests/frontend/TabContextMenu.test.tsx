@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { TabContextMenu } from '../../src/components/ui/TabContextMenu';
 import type { TabItem } from '../../src/types/electron';
 
-describe('Frontend: TabContextMenu (Boldkit Neubrutalist) (20% Happy / 80% Destructive)', () => {
+describe('Frontend: TabContextMenu (20% Happy / 80% Destructive)', () => {
   const dummyTab: TabItem = {
     id: 'tab-12345',
     title: 'MiDocumento.md',

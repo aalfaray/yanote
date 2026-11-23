@@ -52,8 +52,7 @@ describe('App: usage belongs to the chat provider', () => {
 
   it('does not request Claude quota for a session containing only Antigravity', async () => {
     vi.mocked(window.electronAPI!.getAppConfig).mockResolvedValue({
-      notesPath: '/notes', alwaysOnTop: false,
-      openTabs: [{ kind: 'claude', title: 'Antigravity', provider: 'antigravity' }],
+      notesPath: '/notes', openTabs: [{ kind: 'claude', title: 'Antigravity', provider: 'antigravity' }],
     });
     render(<App />);
     await screen.findAllByText('Antigravity');

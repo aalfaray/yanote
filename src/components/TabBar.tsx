@@ -187,15 +187,15 @@ export const TabBar: React.FC<TabBarProps> = ({
     : false;
 
   return (
-    <div className="h-10 w-full bg-[#EFECE6] dark:bg-[#1C1C20] border-b-2 border-black dark:border-zinc-700 flex items-center px-1 select-none gap-0.5 overflow-hidden shrink-0 transition-colors relative">
+    <div className="h-10 w-full bg-muted border-b border-border flex items-center px-1 select-none gap-0.5 overflow-hidden shrink-0 transition-colors relative">
       {/* Scroll Left Button (appears when overflowing) */}
       {canScrollLeft && (
         <button
           onClick={handleScrollLeft}
           title={t("Desplazar pestañas a la izquierda")}
-          className="h-6 w-5 flex items-center justify-center bg-white dark:bg-zinc-800 dark:text-zinc-200 border border-black dark:border-zinc-600 rounded shadow-[1px_1px_0px_#000] hover:bg-[#FFE500] dark:hover:bg-[#FFE500] dark:hover:text-black shrink-0 cursor-pointer z-10 mr-0.5"
+          className="h-6 w-5 flex items-center justify-center bg-card dark:text-foreground border border-border rounded-md shadow-sm hover:bg-accent dark:hover:text-foreground shrink-0 cursor-pointer z-10 mr-0.5"
         >
-          <ChevronLeft size={13} strokeWidth={3} />
+          <ChevronLeft size={13} strokeWidth={1.75} />
         </button>
       )}
 
@@ -226,28 +226,28 @@ export const TabBar: React.FC<TabBarProps> = ({
                   tab,
                 });
               }}
-              className={`group flex items-center gap-1.5 px-2.5 h-7 text-xs font-bold border-2 rounded transition-all cursor-pointer max-w-[170px] min-w-[90px] shrink-0 select-none ${
+              className={`group flex items-center gap-1.5 px-2.5 h-7 text-xs font-medium border rounded-md transition-all cursor-pointer max-w-[170px] min-w-[90px] shrink-0 select-none ${
                 isActive
-                  ? 'bg-white dark:bg-[#121212] shadow-[2px_2px_0px_#000] dark:shadow-[2px_2px_0px_#FFE500] text-black dark:text-white border-black dark:border-[#FFE500]'
-                  : 'bg-[#E3DFD5] dark:bg-[#27272A] hover:bg-[#D9D5CB] dark:hover:bg-[#323238] text-neutral-800 dark:text-zinc-300 opacity-80 hover:opacity-100 shadow-[1px_1px_0px_#000] border-black dark:border-zinc-700'
+                  ? 'bg-background shadow-xs text-foreground border-border'
+                  : 'bg-transparent hover:bg-accent text-muted-foreground hover:text-foreground border-transparent'
               }`}
             >
               {tab.isPinned ? (
                 <span title={t("Pestaña fijada")} className="shrink-0 flex items-center">
                   <Pin
                     size={11}
-                    strokeWidth={2.8}
-                    className="text-[#FFB800] dark:text-[#FFE500]"
+                    strokeWidth={1.75}
+                    className="text-warning dark:text-foreground"
                   />
                 </span>
               ) : tab.kind === 'claude' && tab.provider === 'antigravity' ? (
-                <Orbit size={12} strokeWidth={2.5} className="shrink-0 text-[#4285F4]" />
+                <Orbit size={12} strokeWidth={1.75} className="shrink-0 text-[#4285F4]" />
               ) : tab.kind === 'claude' ? (
-                <Sparkles size={12} strokeWidth={2.5} className="shrink-0 text-[#D97757]" />
+                <Sparkles size={12} strokeWidth={1.75} className="shrink-0 text-[#D97757]" />
               ) : tab.kind === 'terminal' ? (
-                <SquareTerminal size={12} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400" />
+                <SquareTerminal size={12} strokeWidth={1.75} className="shrink-0 text-foreground/70 dark:text-muted-foreground" />
               ) : (
-                <FileText size={12} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400" />
+                <FileText size={12} strokeWidth={1.75} className="shrink-0 text-foreground/70 dark:text-muted-foreground" />
               )}
 
               {/* Title or Edit Input */}
@@ -266,13 +266,13 @@ export const TabBar: React.FC<TabBarProps> = ({
                       if (e.key === 'Escape') setEditingTabId(null);
                     }}
                     onBlur={() => handleFinishRename(tab.id)}
-                    className="w-full text-xs font-bold bg-white dark:bg-zinc-800 dark:text-white border border-black dark:border-zinc-500 px-1 py-0 rounded focus:outline-none"
+                    className="w-full text-xs font-medium bg-card dark:text-foreground border border-border px-1 py-0 rounded-md focus:outline-none"
                   />
                   <button
                     onClick={() => handleFinishRename(tab.id)}
-                    className="p-0.5 hover:bg-neutral-200 dark:hover:bg-zinc-700 rounded"
+                    className="p-0.5 hover:bg-muted rounded-md"
                   >
-                    <Check size={11} strokeWidth={3} />
+                    <Check size={11} strokeWidth={1.75} />
                   </button>
                 </div>
               ) : (
@@ -288,7 +288,7 @@ export const TabBar: React.FC<TabBarProps> = ({
               {tab.isDirty && !isEditing && (
                 <span
                   title={t("Cambios sin guardar")}
-                  className="w-2 h-2 rounded-full bg-[#FF6B6B] border border-black shrink-0"
+                  className="w-2 h-2 rounded-full bg-destructive border border-border shrink-0"
                 />
               )}
 
@@ -299,10 +299,10 @@ export const TabBar: React.FC<TabBarProps> = ({
                     e.stopPropagation();
                     onCloseTab(tab.id);
                   }}
-                  className="w-4 h-4 rounded flex items-center justify-center opacity-40 group-hover:opacity-100 hover:bg-[#FF6B6B] hover:text-white transition-all shrink-0 cursor-pointer dark:text-zinc-300"
+                  className="w-4 h-4 rounded-md flex items-center justify-center opacity-40 group-hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground transition-all shrink-0 cursor-pointer dark:text-foreground"
                   title={t("Cerrar pestaña")}
                 >
-                  <X size={10} strokeWidth={3} />
+                  <X size={10} strokeWidth={1.75} />
                 </button>
               )}
             </div>
@@ -315,9 +315,9 @@ export const TabBar: React.FC<TabBarProps> = ({
         <button
           onClick={handleScrollRight}
           title={t("Desplazar pestañas a la derecha")}
-          className="h-6 w-5 flex items-center justify-center bg-white dark:bg-zinc-800 dark:text-zinc-200 border border-black dark:border-zinc-600 rounded shadow-[1px_1px_0px_#000] hover:bg-[#FFE500] dark:hover:bg-[#FFE500] dark:hover:text-black shrink-0 cursor-pointer z-10 ml-0.5"
+          className="h-6 w-5 flex items-center justify-center bg-card dark:text-foreground border border-border rounded-md shadow-sm hover:bg-accent dark:hover:text-foreground shrink-0 cursor-pointer z-10 ml-0.5"
         >
-          <ChevronRight size={13} strokeWidth={3} />
+          <ChevronRight size={13} strokeWidth={1.75} />
         </button>
       )}
 
@@ -326,9 +326,9 @@ export const TabBar: React.FC<TabBarProps> = ({
         <button
           onClick={onNewTab}
           title={t("Nueva nota Markdown (estilo Orca)")}
-          className="px-2 flex items-center gap-1 bg-[#FFE500] hover:bg-[#FFD700] border-2 border-black rounded-l shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] text-xs font-black cursor-pointer transition-all"
+          className="px-2 flex items-center gap-1 bg-accent hover:bg-accent border border-border rounded-l shadow-sm text-xs font-semibold cursor-pointer transition-all"
         >
-          <Plus size={14} strokeWidth={3} />
+          <Plus size={14} strokeWidth={1.75} />
           <span className="hidden sm:inline">{t("NUEVA")}</span>
         </button>
         <button
@@ -342,38 +342,38 @@ export const TabBar: React.FC<TabBarProps> = ({
           title={t("Elegir tipo de pestaña nueva")}
           aria-haspopup="menu"
           aria-expanded={isNewMenuOpen}
-          className={`px-0.5 flex items-center border-2 border-l-0 border-black rounded-r shadow-[1.5px_1.5px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer transition-all ${
-            isNewMenuOpen ? 'bg-[#FFD700]' : 'bg-[#FFE500] hover:bg-[#FFD700]'
+          className={`px-0.5 flex items-center border border-l-0 border-border rounded-r shadow-sm cursor-pointer transition-all ${
+            isNewMenuOpen ? 'bg-accent' : 'bg-accent hover:bg-accent'
           }`}
         >
-          <ChevronDown size={13} strokeWidth={3} />
+          <ChevronDown size={13} strokeWidth={1.75} />
         </button>
 
         {isNewMenuOpen && (
           <div
             role="menu"
             style={{ top: newMenuPos.top, right: newMenuPos.right }}
-            className="fixed w-52 bg-white dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-600 rounded shadow-[3px_3px_0px_#000] py-1 z-50"
+            className="fixed w-52 bg-popover text-popover-foreground border border-border rounded-md shadow-md py-1 z-50"
           >
             {[
-              { key: 'md', label: t("Nota Markdown"), hint: '.md', icon: <FileText size={14} strokeWidth={2.5} />, action: () => onNewTab() },
+              { key: 'md', label: t("Nota Markdown"), hint: '.md', icon: <FileText size={14} strokeWidth={1.75} />, action: () => onNewTab() },
               ...(onOpenFile
-                ? [{ key: 'open', label: t("Abrir archivo…"), hint: 'Ctrl+O', icon: <FolderOpen size={14} strokeWidth={2.5} />, action: () => onOpenFile() }]
+                ? [{ key: 'open', label: t("Abrir archivo…"), hint: 'Ctrl+O', icon: <FolderOpen size={14} strokeWidth={1.75} />, action: () => onOpenFile() }]
                 : []),
               ...(onNewClaude
                 ? [
-                    { key: 'claude', label: t("Chat con Claude"), hint: 'AI', icon: <Sparkles size={14} strokeWidth={2.5} className="text-[#D97757]" />, action: () => onNewClaude('claude') },
+                    { key: 'claude', label: t("Chat con Claude"), hint: 'AI', icon: <Sparkles size={14} strokeWidth={1.75} className="text-[#D97757]" />, action: () => onNewClaude('claude') },
                     {
                       key: 'antigravity',
                       label: t("Chat con Antigravity"),
                       hint: 'Gemini',
-                      icon: <Orbit size={14} strokeWidth={2.5} className="text-[#4285F4]" />,
+                      icon: <Orbit size={14} strokeWidth={1.75} className="text-[#4285F4]" />,
                       action: () => onNewClaude('antigravity'),
                     },
                   ]
                 : []),
-              { key: 'ps', label: 'PowerShell', hint: 'PS', icon: <Terminal size={14} strokeWidth={2.5} />, action: () => onNewTerminal?.('powershell') },
-              { key: 'cmd', label: t("Terminal (CMD)"), hint: 'cmd', icon: <SquareTerminal size={14} strokeWidth={2.5} />, action: () => onNewTerminal?.('cmd') },
+              { key: 'ps', label: 'PowerShell', hint: 'PS', icon: <Terminal size={14} strokeWidth={1.75} />, action: () => onNewTerminal?.('powershell') },
+              { key: 'cmd', label: t("Terminal (CMD)"), hint: 'cmd', icon: <SquareTerminal size={14} strokeWidth={1.75} />, action: () => onNewTerminal?.('cmd') },
             ].map((item) => (
               <button
                 key={item.key}
@@ -382,11 +382,11 @@ export const TabBar: React.FC<TabBarProps> = ({
                   setIsNewMenuOpen(false);
                   item.action();
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-bold text-left hover:bg-[#FFE500] hover:text-black cursor-pointer"
+                className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium text-left hover:bg-accent hover:text-foreground cursor-pointer"
               >
                 {item.icon}
                 <span className="flex-1">{item.label}</span>
-                <span className="text-[10px] font-black opacity-50">{item.hint}</span>
+                <span className="text-[10px] font-semibold opacity-50">{item.hint}</span>
               </button>
             ))}
           </div>

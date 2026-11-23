@@ -15,22 +15,22 @@ export const PinnedStrip: React.FC<{ pins: ChatPin[]; onUnpin?: (id: string) => 
   const [copied, setCopied] = useState<string | null>(null);
 
   return (
-    <div data-testid="chat-pins" className="shrink-0 border-b-2 border-black dark:border-zinc-700 bg-[#FFFBDA] dark:bg-[#26240F] text-black dark:text-zinc-100">
+    <div data-testid="chat-pins" className="shrink-0 border-b border-border bg-muted text-foreground">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="w-full h-7 px-2 flex items-center gap-1.5 text-[10.5px] font-black uppercase cursor-pointer"
+        className="w-full h-7 px-2 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase cursor-pointer"
       >
-        {open ? <ChevronDown size={12} strokeWidth={3} /> : <ChevronRight size={12} strokeWidth={3} />}
-        <Pin size={11} strokeWidth={3} /> {' '}{t("Fijados (")}{pins.length})
+        {open ? <ChevronDown size={12} strokeWidth={1.75} /> : <ChevronRight size={12} strokeWidth={1.75} />}
+        <Pin size={11} strokeWidth={1.75} /> {' '}{t("Fijados (")}{pins.length})
       </button>
       {open && (
         <ul className="max-h-[30vh] overflow-y-auto px-2 pb-2 flex flex-col gap-1.5">
           {pins.map((pin) => {
             const full = expanded === pin.id;
             return (
-              <li key={pin.id} className="flex items-start gap-1.5 p-1.5 bg-white dark:bg-[#1E1E21] border-2 border-black dark:border-zinc-600 rounded">
+              <li key={pin.id} className="flex items-start gap-1.5 p-1.5 bg-card dark:bg-muted border border-border rounded-md">
                 <button
                   type="button"
                   onClick={() => setExpanded(full ? null : pin.id)}
@@ -48,9 +48,9 @@ export const PinnedStrip: React.FC<{ pins: ChatPin[]; onUnpin?: (id: string) => 
                   }}
                   aria-label={t("Copiar fijado")}
                   title={t("Copiar")}
-                  className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-black/10 cursor-pointer"
+                  className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded-md opacity-70 hover:opacity-100 hover:bg-black/10 cursor-pointer"
                 >
-                  {copied === pin.id ? <Check size={12} strokeWidth={3} /> : <Copy size={12} strokeWidth={2.5} />}
+                  {copied === pin.id ? <Check size={12} strokeWidth={1.75} /> : <Copy size={12} strokeWidth={1.75} />}
                 </button>
                 {onUnpin && (
                   <button
@@ -58,9 +58,9 @@ export const PinnedStrip: React.FC<{ pins: ChatPin[]; onUnpin?: (id: string) => 
                     onClick={() => onUnpin(pin.id)}
                     aria-label={t("Quitar fijado")}
                     title={t("Quitar fijado")}
-                    className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded opacity-70 hover:opacity-100 hover:bg-[#FF6B6B] hover:text-white cursor-pointer"
+                    className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded-md opacity-70 hover:opacity-100 hover:bg-destructive hover:text-destructive-foreground cursor-pointer"
                   >
-                    <X size={12} strokeWidth={3} />
+                    <X size={12} strokeWidth={1.75} />
                   </button>
                 )}
               </li>

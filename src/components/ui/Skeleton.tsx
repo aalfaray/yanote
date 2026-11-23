@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 /** Decorative placeholder; the enclosing loading region announces its purpose once. */
 export function Skeleton({ className = '' }: { className?: string }) {
-  return <span aria-hidden="true" className={`block rounded bg-black/10 dark:bg-zinc-700 motion-safe:animate-pulse ${className}`} />;
+  return <span aria-hidden="true" className={`block rounded-md bg-muted motion-safe:animate-pulse ${className}`} />;
 }
 
 export function LoadingSkeleton({ label, variant = 'panel', className = '' }: {

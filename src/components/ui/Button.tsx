@@ -1,61 +1,51 @@
-import React from 'react';
-import { clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import type { ButtonHTMLAttributes } from 'react';
+import { cva } from 'class-variance-authority';
+import { cn } from '../../lib/utils';
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'purple' | 'cyan' | 'ghost';
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'default' | 'primary' | 'secondary' | 'outline' | 'destructive' | 'danger' | 'success' | 'purple' | 'cyan' | 'ghost';
   size?: 'xs' | 'sm' | 'md' | 'lg';
   active?: boolean;
 }
 
-export const Button: React.FC<ButtonProps> = ({
-  children,
-  className,
-  variant = 'secondary',
-  size = 'sm',
-  active = false,
-  disabled,
-  ...props
-}) => {
-  const variantClasses = {
-    primary: 'bg-[#FFE500] hover:bg-[#FFD700] text-black',
-    // Dark mode needs its own hover: a light hover background under light text made labels vanish
-    secondary:
-      'bg-white hover:bg-neutral-100 text-black dark:bg-zinc-700 dark:text-zinc-200 dark:border-zinc-500 dark:hover:bg-[#FFE500] dark:hover:text-black dark:hover:border-black',
-    danger: 'bg-[#FF6B6B] hover:bg-[#FF5252] text-white',
-    success: 'bg-[#78E08F] hover:bg-[#68d17f] text-black',
-    purple: 'bg-[#D8B4FE] hover:bg-[#C084FC] text-black',
-    cyan: 'bg-[#7DF9FF] hover:bg-[#5CE1E6] text-black',
-    ghost: 'bg-transparent hover:bg-neutral-200/60 text-black border-transparent shadow-none dark:text-zinc-200 dark:hover:bg-zinc-700',
-  };
+// Keep the existing variant names so every app action retains its public API.
+const primary = 'bg-primary text-primary-foreground shadow-xs hover:bg-primary/90';
+const destructive = 'bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/30';
+const buttonVariants = cva(
+  'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-colors select-none outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  {
+    variants: {
+      variant: {
+        default: primary,
+        primary,
+        secondary: 'border border-input bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground',
+        outline: 'border border-input bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground',
+        destructive,
+        danger: destructive,
+        success: 'border border-success/20 bg-success/10 text-success hover:bg-success/20',
+        purple: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        cyan: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        ghost: 'bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground',
+      },
+      size: {
+        xs: 'min-h-6 px-1.5 py-0.5 text-xs',
+        sm: 'min-h-7 px-2.5 py-1 text-xs',
+        md: 'min-h-9 px-3.5 py-1.5 text-sm',
+        lg: 'min-h-10 px-4 py-2 text-sm',
+      },
+    },
+    defaultVariants: { variant: 'secondary', size: 'sm' },
+  }
+);
 
-  const sizeClasses = {
-    xs: 'px-1.5 py-0.5 text-xs',
-    sm: 'px-2.5 py-1 text-xs font-bold',
-    md: 'px-3.5 py-1.5 text-sm font-bold',
-    lg: 'px-4 py-2 text-base font-bold',
-  };
-
-  const isGhost = variant === 'ghost';
-
+export function Button({ className, variant = 'secondary', size = 'sm', active = false, type = 'button', ...props }: ButtonProps) {
   return (
     <button
-      disabled={disabled}
-      className={twMerge(
-        clsx(
-          'inline-flex items-center justify-center gap-1.5 font-bold transition-all select-none cursor-pointer',
-          !isGhost && 'border-2 border-black rounded shadow-[2px_2px_0px_#000]',
-          !isGhost && !disabled && 'active:translate-x-[2px] active:translate-y-[2px] active:shadow-none',
-          active && !isGhost && 'translate-x-[1.5px] translate-y-[1.5px] shadow-[0.5px_0.5px_0px_#000] ring-1 ring-black',
-          disabled && 'opacity-40 cursor-not-allowed shadow-none',
-          variantClasses[variant],
-          sizeClasses[size],
-          className
-        )
-      )}
+      type={type}
+      data-slot="button"
+      data-active={active || undefined}
+      className={cn(buttonVariants({ variant, size }), active && 'ring-2 ring-ring ring-offset-1 ring-offset-background', className)}
       {...props}
-    >
-      {children}
-    </button>
+    />
   );
-};
+}

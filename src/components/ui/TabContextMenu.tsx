@@ -105,7 +105,7 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
       aria-label={t("Menú contextual de pestaña")}
       data-testid="tab-context-menu"
       style={{ left: `${clampedX}px`, top: `${clampedY}px` }}
-      className="fixed z-[999999] w-64 bg-[#FAF8F5] dark:bg-[#1C1C20] text-black dark:text-zinc-100 border-2 border-black dark:border-zinc-700 rounded shadow-[4px_4px_0px_#000] dark:shadow-[4px_4px_0px_#000] py-1 select-none text-xs font-bold animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-[999999] w-64 bg-popover text-popover-foreground border border-border rounded-md shadow-sm py-1 select-none text-xs font-medium animate-in fade-in zoom-in-95 duration-100"
       onClick={(e) => e.stopPropagation()}
     >
       {/* 1. Renombrar */}
@@ -113,29 +113,29 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         type="button"
         role="menuitem"
         onClick={() => handleAction(() => onRename(tab))}
-        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-accent hover:text-foreground transition-colors cursor-pointer group"
       >
-        <Pencil size={13} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
+        <Pencil size={13} strokeWidth={1.75} className="shrink-0 text-foreground/70 dark:text-muted-foreground group-hover:text-foreground" />
         <span>{t("Renombrar")}</span>
       </button>
 
-      <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
+      <div className="my-1 border-t border-border" />
 
       {/* 2. Fijar / Desfijar pestaña */}
       <button
         type="button"
         role="menuitem"
         onClick={() => handleAction(() => onTogglePin(tab))}
-        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-accent hover:text-foreground transition-colors cursor-pointer group"
       >
         {tab.isPinned ? (
           <>
-            <PinOff size={13} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
+            <PinOff size={13} strokeWidth={1.75} className="shrink-0 text-foreground/70 dark:text-muted-foreground group-hover:text-foreground" />
             <span>{t("Desfijar pestaña")}</span>
           </>
         ) : (
           <>
-            <Pin size={13} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
+            <Pin size={13} strokeWidth={1.75} className="shrink-0 text-foreground/70 dark:text-muted-foreground group-hover:text-foreground" />
             <span>{t("Fijar pestaña")}</span>
           </>
         )}
@@ -146,25 +146,25 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         type="button"
         role="menuitem"
         onClick={() => handleAction(() => onCopyId(tab))}
-        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group pl-[31px]"
+        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-accent hover:text-foreground transition-colors cursor-pointer group pl-[31px]"
       >
         <span>{t("Copiar ID de pestaña")}</span>
       </button>
 
-      <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
+      <div className="my-1 border-t border-border" />
 
       {/* 4. Cerrar (Ctrl+W) */}
       <button
         type="button"
         role="menuitem"
         onClick={() => handleAction(() => onCloseTab(tab))}
-        className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+        className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-accent hover:text-foreground transition-colors cursor-pointer group"
       >
         <div className="flex items-center gap-2.5">
-          <X size={13} strokeWidth={3} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
+          <X size={13} strokeWidth={1.75} className="shrink-0 text-foreground/70 dark:text-muted-foreground group-hover:text-foreground" />
           <span>{t("Cerrar")}</span>
         </div>
-        <span className="text-[10px] font-mono opacity-60 text-neutral-500 dark:text-zinc-400 group-hover:text-black">
+        <span className="text-[10px] font-mono opacity-60 text-muted-foreground group-hover:text-foreground">
           Ctrl+W
         </span>
       </button>
@@ -181,8 +181,8 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         }}
         className={`w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] transition-colors ${
           canCloseOthers
-            ? 'hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black cursor-pointer'
-            : 'opacity-40 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent'
+            ? 'hover:bg-accent hover:text-foreground cursor-pointer'
+            : 'opacity-40 cursor-not-allowed hover:bg-transparent'
         }`}
       >
         <span>{t("Cerrar otras")}</span>
@@ -193,22 +193,22 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         type="button"
         role="menuitem"
         onClick={() => handleAction(onCloseAll)}
-        className="w-full px-3 py-1.5 flex items-center justify-between pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+        className="w-full px-3 py-1.5 flex items-center justify-between pl-[31px] hover:bg-accent hover:text-foreground transition-colors cursor-pointer group"
       >
         <span>{t("Cerrar todas las pestañas del editor")}</span>
-        <span className="text-[10px] font-mono opacity-60 text-neutral-500 dark:text-zinc-400 group-hover:text-black ml-2">
+        <span className="text-[10px] font-mono opacity-60 text-muted-foreground group-hover:text-foreground ml-2">
           Ctrl+Alt+W
         </span>
       </button>
 
-      <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
+      <div className="my-1 border-t border-border" />
 
       {/* 7. Abrir vista previa de Markdown */}
       <button
         type="button"
         role="menuitem"
         onClick={() => handleAction(onTogglePreview)}
-        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-accent hover:text-foreground transition-colors cursor-pointer group"
       >
         <span>{t("Abrir vista previa de Markdown")}</span>
       </button>
@@ -219,21 +219,21 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
           type="button"
           role="menuitem"
           onClick={() => handleAction(() => onExportPdf(tab))}
-          className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+          className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left hover:bg-accent hover:text-foreground transition-colors cursor-pointer group"
         >
-          <FileDown size={13} strokeWidth={2.5} className="shrink-0 text-black/70 dark:text-zinc-400 group-hover:text-black" />
+          <FileDown size={13} strokeWidth={1.75} className="shrink-0 text-foreground/70 dark:text-muted-foreground group-hover:text-foreground" />
           <span>{t("Exportar a PDF")}</span>
         </button>
       )}
 
-      <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
+      <div className="my-1 border-t border-border" />
 
       {/* 8. Copiar ruta */}
       <button
         type="button"
         role="menuitem"
         onClick={() => handleAction(() => onCopyPath(tab))}
-        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-accent hover:text-foreground transition-colors cursor-pointer group"
       >
         <span>{t("Copiar ruta")}</span>
       </button>
@@ -243,19 +243,19 @@ export const TabContextMenu: React.FC<TabContextMenuProps> = ({
         type="button"
         role="menuitem"
         onClick={() => handleAction(() => onCopyRelativePath(tab))}
-        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-accent hover:text-foreground transition-colors cursor-pointer group"
       >
         <span>{t("Copiar ruta relativa")}</span>
       </button>
 
-      <div className="my-1 border-t border-black/15 dark:border-zinc-700" />
+      <div className="my-1 border-t border-border" />
 
       {/* 10. Revelar en el Explorador de archivos */}
       <button
         type="button"
         role="menuitem"
         onClick={() => handleAction(() => onRevealInExplorer(tab))}
-        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-[#FFE500] hover:text-black dark:hover:bg-[#FFE500] dark:hover:text-black transition-colors cursor-pointer group"
+        className="w-full px-3 py-1.5 flex items-center gap-2.5 text-left pl-[31px] hover:bg-accent hover:text-foreground transition-colors cursor-pointer group"
       >
         <span>{t("Revelar en el Explorador de archivos")}</span>
       </button>
