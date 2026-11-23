@@ -2,6 +2,7 @@ import { t, getLanguage } from '../lib/i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SpeechSegment } from '../lib/speechText';
 import { logError } from '../lib/logger';
+import { webUtteranceRate } from '../lib/speechRate';
 
 export type SpeechStatus = 'idle' | 'speaking' | 'paused';
 export type SpeechEngine = 'web' | 'native';
@@ -143,7 +144,7 @@ export function useSpeech() {
       } else {
         utterance.lang = getLanguage() === 'es' ? 'es-ES' : 'en-US';
       }
-      utterance.rate = rateRef.current;
+      utterance.rate = webUtteranceRate(rateRef.current);
       utterance.onend = () => {
         if (run === runRef.current) speakFrom(index + 1, run);
       };
