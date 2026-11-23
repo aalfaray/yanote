@@ -8,7 +8,6 @@ export interface NoteFile {
 export interface AppConfig {
   language?: import('../lib/i18n').LanguagePreference;
   notesPath: string;
-  alwaysOnTop: boolean;
   darkMode?: boolean;
   /** Window opacity 0.3–1 */
   opacity?: number;
@@ -209,8 +208,6 @@ export interface ElectronAPI {
   maximize: () => Promise<boolean>;
   close: () => Promise<void>;
   isMaximized: () => Promise<boolean>;
-  setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<boolean>;
-  getAlwaysOnTop: () => Promise<boolean>;
   /** Window opacity 0.3–1 (clamped by the main process); returns the applied value */
   setOpacity?: (opacity: number) => Promise<number>;
 

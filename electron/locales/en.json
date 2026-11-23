@@ -1,8 +1,6 @@
 {
   "🌙 Modo Oscuro Activado": "🌙 Dark mode enabled",
   "☀️ Modo Claro Activado": "☀️ Light mode enabled",
-  "📌 Superposición activada (Siempre visible)": "📌 Always on top enabled",
-  "📌 Superposición desactivada": "📌 Always on top disabled",
   "Iniciar sesión en Claude": "Sign in to Claude",
   "Iniciar sesión: {0}": "Sign in: {0}",
   "📌 Pestaña fijada: {0}": "📌 Tab pinned: {0}",
@@ -42,8 +40,6 @@
   "Guardar nota (Ctrl + S)": "Save note (Ctrl + S)",
   "Guardar": "Save",
   "Exportar la nota a PDF": "Export note to PDF",
-  "FIJADO": "PINNED",
-  "NORMAL": "NORMAL",
   "¡Ajustes guardados correctamente!": "Settings saved successfully!",
   "La nota \"{0}\" tiene cambios sin guardar.": "The note \"{0}\" has unsaved changes.",
   "¿Deseas descartar los cambios y cerrar esta pestaña de todos modos?": "Discard changes and close this tab anyway?",
@@ -269,7 +265,6 @@
   "Cargando ajustes": "Loading settings",
   "Opciones del Editor & Apariencia": "Editor & appearance",
   "Modo oscuro": "Dark mode",
-  "Iniciar siempre en modo superposición (Always on Top)": "Always start in floating mode (Always on Top)",
   "🔔 Avisarme en Windows cuando Claude termine o necesite mi respuesta": "🔔 Notify me in Windows when Claude finishes or needs my answer",
   "Cargando versión y actualizaciones": "Loading version and updates",
   "Versión portable: te avisa de nuevas versiones para descargarlas.": "Portable version: notifies you of updates to download.",
@@ -311,9 +306,6 @@
   "Iniciando terminal": "Starting terminal",
   "Leer en voz alta la última respuesta (Ctrl+Shift+Espacio). Si hay texto seleccionado, lee la selección.": "Read the last response aloud (Ctrl+Shift+Space). If text is selected, reads the selection.",
   "Leer la última respuesta": "Read the last response",
-  "Superposición activa (Siempre encima)": "Always on top enabled",
-  "Activar superposición (Siempre encima)": "Enable always on top",
-  "FLOTANTE": "FLOATING",
   "Cambiar a modo claro (Ctrl+Shift+D)": "Switch to light mode (Ctrl+Shift+D)",
   "Cambiar a modo oscuro (Ctrl+Shift+D)": "Switch to dark mode (Ctrl+Shift+D)",
   "CLARO": "LIGHT",
@@ -429,7 +421,6 @@
   "Automático (sistema)": "Automatic (system)",
   "Idioma del sistema: {0}": "System language: {0}",
   "Se aplica a la interfaz y al corrector ortográfico.": "Applies to the interface and spellchecker.",
-  "ENCIMA": "ON TOP",
   "Guardando...": "Saving...",
   "Buscando…": "Checking…",
   "Guardar como": "Save as",
@@ -513,5 +504,7 @@
   "Ninguna otra cuenta con sesión iniciada tiene cuota disponible ahora.": "No other signed-in account has quota available right now.",
   "Cambiar de cuenta automáticamente al llegar al límite": "Switch accounts automatically when the limit is reached",
   "Sigue con la cuenta con sesión iniciada que tenga más cuota libre.": "Continues with the signed-in account that has the most quota left.",
-  "Si quieres que yanote cambie de cuenta solo la próxima vez, actívalo en «Cambiar de cuenta».": "If you want yanote to switch accounts by itself next time, turn it on in «Switch account»."
+  "Si quieres que yanote cambie de cuenta solo la próxima vez, actívalo en «Cambiar de cuenta».": "If you want yanote to switch accounts by itself next time, turn it on in «Switch account».",
+  "Los chats y terminales nuevos (+) se abren en:": "New chats and terminals (+) open in:",
+  "Elige una carpeta en el árbol para abrir ahí los chats y terminales nuevos": "Pick a folder in the tree to open new chats and terminals there"
 }

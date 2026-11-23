@@ -15,7 +15,7 @@ function clampOpacity(value) {
   return Math.min(MAX_OPACITY, Math.max(MIN_OPACITY, Math.round(n * 100) / 100));
 }
 
-const LEGACY_KEYS = ['githubRepo', 'githubBranch', 'githubToken', 'autoSyncOnSave', 'welcomeSeen'];
+const LEGACY_KEYS = ['githubRepo', 'githubBranch', 'githubToken', 'autoSyncOnSave', 'welcomeSeen', 'alwaysOnTop'];
 
 function getBaseDataDir(env = process.env, execPath = process.execPath, defaultUserData = '') {
   if (env.PORTABLE_EXECUTABLE_DIR) {
@@ -120,7 +120,6 @@ function loadConfig(configFilePath, defaultNotesPath) {
       return {
         notesPath: parsed.notesPath || defaultNotesPath,
         language: normalizeLanguage(parsed.language),
-        alwaysOnTop: Boolean(parsed.alwaysOnTop),
         notifyClaude: parsed.notifyClaude !== false,
         ideas: sanitizeIdeas(parsed.ideas),
         claudeAccounts: Array.isArray(parsed.claudeAccounts) ? parsed.claudeAccounts : [],
@@ -144,7 +143,6 @@ function loadConfig(configFilePath, defaultNotesPath) {
   return {
     notesPath: defaultNotesPath,
     language: 'auto',
-    alwaysOnTop: false,
     notifyClaude: true,
     ideas: [],
     claudeAccounts: [],

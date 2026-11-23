@@ -32,30 +32,31 @@
   --radius: 0.625rem;
 }
 
+/* Dark mode: One Dark Pro palette (VS Code "One Dark Pro" theme). */
 .dark {
   color-scheme: dark;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.65 0.2 25);
-  --destructive-foreground: oklch(0.145 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --success: oklch(0.76 0.14 155);
-  --warning: oklch(0.78 0.13 80);
-  --info: oklch(0.75 0.12 250);
+  --background: #282c34;         /* editor.background */
+  --foreground: #abb2bf;         /* editor.foreground */
+  --card: #21252b;               /* sideBar / titleBar / statusBar */
+  --card-foreground: #abb2bf;
+  --popover: #21252b;            /* editorWidget / menus */
+  --popover-foreground: #abb2bf;
+  --primary: #61afef;            /* blue accent */
+  --primary-foreground: #282c34;
+  --secondary: #2c313a;          /* list.activeSelectionBackground */
+  --secondary-foreground: #d7dae0;
+  --muted: #2c313a;
+  --muted-foreground: #7f848e;   /* comments / descriptions */
+  --accent: #2c313a;             /* list.hoverBackground */
+  --accent-foreground: #d7dae0;
+  --destructive: #e06c75;        /* red */
+  --destructive-foreground: #282c34;
+  --border: #3e4452;             /* panel / focus borders */
+  --input: #3e4452;
+  --ring: #528bff;               /* editorCursor */
+  --success: #98c379;            /* green */
+  --warning: #e5c07b;            /* yellow */
+  --info: #61afef;               /* blue */
 }
 
 @theme inline {
@@ -351,11 +352,13 @@
 .cm-activeLine, .cm-activeLineGutter { background: var(--accent) !important; }
 .cm-cursor { border-left-color: var(--foreground) !important; }
 .cm-selectionBackground { background: color-mix(in oklch, var(--foreground) 15%, transparent) !important; }
-.dark .tok-keyword, .dark .tok-operator { color: #fda4af !important; }
-.dark .tok-string { color: #a7f3d0 !important; }
-.dark .tok-number { color: #93c5fd !important; }
+.dark .cm-selectionBackground { background: #67769660 !important; }
+.dark .tok-keyword { color: #c678dd !important; }
+.dark .tok-operator { color: #56b6c2 !important; }
+.dark .tok-string { color: #98c379 !important; }
+.dark .tok-number { color: #d19a66 !important; }
 .dark .tok-comment { color: var(--muted-foreground) !important; font-style: italic !important; }
-.dark .tok-heading { color: var(--foreground) !important; font-weight: 600 !important; }
+.dark .tok-heading { color: #e06c75 !important; font-weight: 600 !important; }
 .dark .tok-link { color: var(--info) !important; text-decoration: underline !important; }
 .mdxeditor-content [data-tts-active] { background: var(--accent) !important; box-shadow: -3px 0 0 var(--ring) !important; border-radius: 2px; transition: background 150ms ease; }
 

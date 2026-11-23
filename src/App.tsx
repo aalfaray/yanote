@@ -63,7 +63,6 @@ export const App: React.FC = () => {
   const activeAccountRef = useRef('default');
 
   // App & Window State
-  const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [notesDir, setNotesDir] = useState<string>('');
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
@@ -77,6 +76,8 @@ export const App: React.FC = () => {
   const [explorerWidth, setExplorerWidth] = useState(240);
   const [explorerFolder, setExplorerFolder] = useState<string | null>(null);
   const explorerFolderChanged = useRef(false);
+  // Folder picked in the explorer: where the + button opens new chats and terminals
+  const [explorerTarget, setExplorerTarget] = useState<string | undefined>(undefined);
   const explorerChanged = useRef(false);
   const [ideas, setIdeas] = useState<SavedIdea[]>([]);
   const ideasRef = useRef<SavedIdea[]>([]);
@@ -90,7 +91,7 @@ export const App: React.FC = () => {
   const [closingTab, setClosingTab] = useState<TabItem | null>(null);
   const [isQuitConfirmOpen, setIsQuitConfirmOpen] = useState(false);
   const [windowOpacity, setWindowOpacity] = useState(1);
-  const appearanceChanged = useRef({ top: false, dark: false, opacity: false });
+  const appearanceChanged = useRef({ dark: false, opacity: false });
   // Tab that should receive keyboard focus as soon as it renders (newly created tabs)
   const [focusTabId, setFocusTabId] = useState<string | null>(null);
   const clearFocusRequest = useCallback(() => setFocusTabId(null), []);
@@ -139,7 +140,6 @@ export const App: React.FC = () => {
             recentFilesRef.current = config.recentFiles;
             setRecentFiles(config.recentFiles);
           }
-          if (!appearanceChanged.current.top) setIsAlwaysOnTop(config.alwaysOnTop || false);
           notifyClaudeRef.current = config.notifyClaude !== false;
           if (typeof config.activeClaudeAccount === 'string') activeAccountRef.current = config.activeClaudeAccount;
           if (!appearanceChanged.current.opacity && typeof config.opacity === 'number') setWindowOpacity(config.opacity);
@@ -248,22 +248,6 @@ export const App: React.FC = () => {
       logError('App.setOpacity', err);
     });
   }, []);
-
-  // Superposición / Always on Top Toggle
-  const handleToggleAlwaysOnTop = async () => {
-    appearanceChanged.current.top = true;
-    if (window.electronAPI) {
-      const nextState = !isAlwaysOnTop;
-      const res = await window.electronAPI.setAlwaysOnTop(nextState);
-      setIsAlwaysOnTop(res);
-      setNotification({
-        type: 'info',
-        text: res ? t("📌 Superposición activada (Siempre visible)") : t("📌 Superposición desactivada"),
-      });
-    } else {
-      setIsAlwaysOnTop(!isAlwaysOnTop);
-    }
-  };
 
   // Tab Management (Orca Style)
   // Ids are generated and activated OUTSIDE the state updaters: StrictMode runs updaters
@@ -912,12 +896,29 @@ export const App: React.FC = () => {
   const explorerRoot =
     explorerFolder || (activeTab?.kind === 'terminal' || activeTab?.kind === 'claude' ? activeTab.cwd : parentDir(activeTab?.path ?? null)) || notesDir || undefined;
 
+  const navigateExplorer = (folder: string | null) => {
+    explorerFolderChanged.current = true;
+    setExplorerFolder(folder);
+    window.electronAPI?.saveAppConfig({ explorerFolder: folder }).catch((err) => logError('App.saveExplorerFolder', err));
+  };
+
+  // Opening a tab from the explorer must not move it: while it follows the active tab, the new
+  // tab would take it to that tab's folder and the user would lose where they were browsing.
+  const keepExplorerPlace = () => {
+    if (isExplorerOpen && !explorerFolder && explorerRoot) navigateExplorer(explorerRoot);
+  };
+
+  /** With the explorer open, the + button opens chats and terminals in the folder picked there */
+  const explorerTargetFolder = () => {
+    if (!isExplorerOpen || !explorerTarget) return undefined;
+    keepExplorerPlace();
+    return explorerTarget;
+  };
+
   return (
     <div className="w-screen h-screen flex flex-col bg-background overflow-hidden border border-border transition-colors">
-      {/* 1. Custom Frameless Titlebar with Superposición Toggle */}
+      {/* 1. Custom Frameless Titlebar */}
       <TitleBar
-        isAlwaysOnTop={isAlwaysOnTop}
-        onToggleAlwaysOnTop={handleToggleAlwaysOnTop}
         isDarkMode={isDarkMode}
         onToggleDarkMode={handleToggleDarkMode}
         onOpenSettings={() => setIsSettingsOpen(true)}
@@ -938,8 +939,11 @@ export const App: React.FC = () => {
         onSelectTab={handleSelectTab}
         onCloseTab={handleCloseTab}
         onNewTab={handleNewTab}
-        onNewTerminal={handleNewTerminal}
-        onNewClaude={(provider) => handleNewClaude(undefined, undefined, provider)}
+        onNewTerminal={(shell) => {
+          const cwd = explorerTargetFolder();
+          handleNewTerminal(shell, cwd ? { cwd } : {});
+        }}
+        onNewClaude={(provider) => handleNewClaude(explorerTargetFolder(), undefined, provider)}
         onOpenFile={handleOpenFile}
         onRenameTab={handleRenameTab}
         onTogglePinTab={handleTogglePinTab}
@@ -958,11 +962,8 @@ export const App: React.FC = () => {
         <FileExplorer
           root={explorerRoot}
           followsActiveTab={!explorerFolder}
-          onNavigateFolder={(folder) => {
-            explorerFolderChanged.current = true;
-            setExplorerFolder(folder);
-            window.electronAPI?.saveAppConfig({ explorerFolder: folder }).catch((err) => logError('App.saveExplorerFolder', err));
-          }}
+          onNavigateFolder={navigateExplorer}
+          onTargetFolderChange={setExplorerTarget}
           tabTitles={Object.fromEntries(tabs.map((t) => [t.id, t.title]))}
           activeTabId={activeTab?.id}
           openPaths={tabs.filter((t) => t.path).map((t) => t.path as string)}
@@ -974,8 +975,14 @@ export const App: React.FC = () => {
           onClose={handleToggleExplorer}
           onOpenNote={(path, name) => void handleOpenRecent({ path, name, openedAt: Date.now() })}
           onFocusTab={setActiveTabId}
-          onNewChat={(folder) => handleNewClaude(folder)}
-          onNewTerminal={(folder) => handleNewTerminal('powershell', { cwd: folder })}
+          onNewChat={(folder) => {
+            keepExplorerPlace();
+            handleNewClaude(folder);
+          }}
+          onNewTerminal={(folder) => {
+            keepExplorerPlace();
+            handleNewTerminal('powershell', { cwd: folder });
+          }}
           onNotify={(text, type) => setNotification({ text, type })}
         />
       )}
@@ -1122,14 +1129,6 @@ export const App: React.FC = () => {
           {isClaudeCodeActive && <ClaudeUsageMeter usage={claudeUsage} />}
           {isAntigravityActive && <AntigravityUsageMeter usage={antigravityUsage} />}
 
-          {/* Superposición Status Badge */}
-          <span
-            className={`h-5 px-1.5 items-center leading-none rounded-md border border-border dark:border-border shadow-sm font-semibold text-[10px] shrink-0 hidden min-[440px]:inline-flex ${
-              isAlwaysOnTop ? 'bg-success/15 text-foreground' : 'bg-muted text-muted-foreground dark:text-foreground'
-            }`}
-          >
-            {isAlwaysOnTop ? t("FIJADO") : t("NORMAL")}
-          </span>
         </div>
       </div>
 

@@ -36,11 +36,15 @@ try {
 }
 `;
 
-/** Maps a Web Speech style rate (0.5 – 2, 1 = normal) to the SAPI range (-10 – 10, 0 = normal). */
+/**
+ * Maps a speed multiplier (0.75, 1, 2…) to the SAPI step (-10 – 10). The SAPI scale is
+ * exponential (+10 = 3x, -10 = x/3), so x2 is step 10·log3(2) ≈ 6. Same formula as
+ * sapiStepFor in src/lib/speechRate.ts, which the web engine uses to match this speed.
+ */
 function toSapiRate(rate) {
   const value = Number(rate);
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(-10, Math.min(10, Math.round((value - 1) * 10)));
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.max(-10, Math.min(10, Math.round((10 * Math.log(value)) / Math.log(3)))) || 0;
 }
 
 function encodeRequest({ segments, start = 0, rate = 1, language }) {

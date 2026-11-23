@@ -36,7 +36,7 @@ describe('App: Windows notifications for Claude chats', () => {
   let focusTab: (id: string) => void = () => {};
   const setup = (config: object = {}) => {
     window.electronAPI = {
-      getAppConfig: vi.fn().mockResolvedValue({ notesPath: '/n', alwaysOnTop: false, welcomeSeen: true, ...config }),
+      getAppConfig: vi.fn().mockResolvedValue({ notesPath: '/n', welcomeSeen: true, ...config }),
       saveAppConfig: vi.fn().mockResolvedValue({}),
       getNotesPath: vi.fn().mockResolvedValue('/n'),
       listNotes: vi.fn().mockResolvedValue({ success: true, notes: [] }),

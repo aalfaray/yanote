@@ -85,7 +85,6 @@ describe('App: opens with the tabs of last time', () => {
     window.electronAPI = {
       getAppConfig: vi.fn().mockResolvedValue({
         notesPath: '/n',
-        alwaysOnTop: false,
         welcomeSeen: true,
         openTabs: [
           ...toSavedTabs(tabs, ['tab-welcome']),
@@ -152,5 +151,28 @@ describe('App: opens with the tabs of last time', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Seguir la carpeta de la pestaña activa' }));
     await waitFor(() => expect(screen.getByTestId('explorer-location')).toHaveAttribute('title', 'C:\\p'));
     expect(window.electronAPI!.saveAppConfig).toHaveBeenCalledWith({ explorerFolder: null });
+  });
+
+  it('opens chats and terminals from the + menu in the folder picked in the explorer, without moving it', async () => {
+    window.electronAPI!.getAppConfig = vi.fn().mockResolvedValue({
+      language: 'es', explorerOpen: true,
+      openTabs: [{ kind: 'note', path: 'C:\\p\\plan.md', title: 'plan.md', content: 'pending', isDirty: true }],
+    });
+    window.electronAPI!.treeList = vi.fn(async (folder) => ({ success: true, entries: folder === 'C:\\p' ? [{ name: 'api', path: 'C:\\p\\api', isDir: true }] : [] }));
+    render(<App />);
+    await waitFor(() => expect(screen.getByTestId('explorer-location')).toHaveAttribute('title', 'C:\\p'));
+    fireEvent.click(await screen.findByText('api'));
+    expect(screen.getByTestId('explorer-chat-folder')).toHaveTextContent('C:\\p\\api');
+
+    fireEvent.click(screen.getByTitle('Elegir tipo de pestaña nueva'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /Chat con Claude/ }));
+    expect(await screen.findByTestId(/^chat-claude-/)).toHaveAttribute('data-cwd', 'C:\\p\\api');
+    // The explorer stays where the user was browsing instead of jumping to the chat's folder
+    expect(screen.getByTestId('explorer-location')).toHaveAttribute('title', 'C:\\p');
+    expect(screen.getByTestId('explorer-chat-folder')).toHaveTextContent('C:\\p\\api');
+
+    fireEvent.click(screen.getByTitle('Elegir tipo de pestaña nueva'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /PowerShell/ }));
+    expect(await screen.findByTestId(/^term-term-/)).toHaveAttribute('data-cwd', 'C:\\p\\api');
   });
 });

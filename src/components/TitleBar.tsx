@@ -1,11 +1,9 @@
 import { t, useLanguage } from '../lib/i18n';
 import React from 'react';
 import { TransparencyControl } from './TransparencyControl';
-import { Pin, Minus, Square, X, Settings, History, Moon, Sun, Lightbulb, FolderTree, NotebookPen } from 'lucide-react';
+import { Minus, Square, X, Settings, History, Moon, Sun, Lightbulb, FolderTree, NotebookPen } from 'lucide-react';
 
 interface TitleBarProps {
-  isAlwaysOnTop: boolean;
-  onToggleAlwaysOnTop: () => void;
   isDarkMode?: boolean;
   onToggleDarkMode?: () => void;
   onOpenSettings: () => void;
@@ -39,8 +37,6 @@ const DANGER = 'bg-transparent text-muted-foreground hover:bg-destructive hover:
 const ICON_PROPS = { size: 14, strokeWidth: 1.75 } as const;
 
 export const TitleBar: React.FC<TitleBarProps> = ({
-  isAlwaysOnTop,
-  onToggleAlwaysOnTop,
   isDarkMode = false,
   onToggleDarkMode,
   onOpenSettings,
@@ -92,16 +88,6 @@ export const TitleBar: React.FC<TitleBarProps> = ({
           </button>
         )}
 
-        {/* Superposición (Always on Top) Toggle */}
-        <button
-          onClick={onToggleAlwaysOnTop}
-          title={isAlwaysOnTop ? t("Superposición activa (Siempre encima)") : t("Activar superposición (Siempre encima)")}
-          aria-pressed={isAlwaysOnTop}
-          className={`${LABELED} min-[540px]:px-2 ${isAlwaysOnTop ? ACTIVE : NEUTRAL}`}
-        >
-          <Pin {...ICON_PROPS} className={isAlwaysOnTop ? 'fill-current rotate-45' : ''} />
-          <span className="hidden min-[540px]:inline">{isAlwaysOnTop ? t('ENCIMA') : t("FLOTANTE")}</span>
-        </button>
       </div>
 
       {/* Right: Actions & Window Controls */}
