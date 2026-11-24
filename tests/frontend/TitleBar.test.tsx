@@ -21,7 +21,7 @@ describe('Frontend: TitleBar (20% Happy / 80% Destructive)', () => {
       />
     );
 
-    expect(screen.getByText(/YANOTE/i)).toBeInTheDocument();
+    expect(screen.getByText('YANOTE')).toBeInTheDocument();
     expect(screen.queryByTitle(/superposici/i)).not.toBeInTheDocument();
   });
 

@@ -17,6 +17,8 @@ Un editor de notas Markdown de escritorio **portable**, con pestañas múltiples
 
 ## ✨ Características Principales
 
+**Chat con Codex:** abre el menú de `+ NUEVA` y elige **Chat con Codex**. yanote incluye el [SDK oficial de Codex](https://developers.openai.com/codex/sdk/) y su ejecutable. Usa **Iniciar sesión en Codex** para autenticarte mediante el acceso oficial; si ya usas Codex, se conserva su sesión local. Puedes adjuntar imágenes, elegir modelos disponibles en la caché de Codex, cambiar el esfuerzo de razonamiento, detener una respuesta y retomar conversaciones después de reiniciar. Empieza en **Solo lectura**; **Editar carpeta** permite cambios dentro de la carpeta de trabajo y **Acceso total** permite cambios fuera de ella. Las operaciones que excedan el modo elegido fallan sin ampliar permisos automáticamente.
+
 1. **Interfaz basada en shadcn/ui**
    - Paleta neutra en modo claro y colores del tema **One Dark** (VS Code) en modo oscuro, bordes finos, sombras suaves y esquinas redondeadas.
    - Controles con estados de foco y selección consistentes para usar el ratón o el teclado.

@@ -145,6 +145,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('claude:event', listener);
   },
 
+  // Codex SDK chat
+  codexStart: (options) => ipcRenderer.invoke('codex:start', options),
+  codexSend: (id, payload) => ipcRenderer.invoke('codex:send', id, payload),
+  codexInterrupt: (id) => ipcRenderer.invoke('codex:interrupt', id),
+  codexSetPermissionMode: (id, mode) => ipcRenderer.invoke('codex:setPermissionMode', id, mode),
+  codexSetModel: (id, model) => ipcRenderer.invoke('codex:setModel', id, model),
+  codexSetEffort: (id, level) => ipcRenderer.invoke('codex:setEffort', id, level),
+  codexStop: (id) => ipcRenderer.invoke('codex:stop', id),
+  codexHistory: (sessionId) => ipcRenderer.invoke('codex:history', sessionId),
+  codexLoginCommand: () => ipcRenderer.invoke('codex:loginCommand'),
+  onCodexEvent: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('codex:event', listener);
+    return () => ipcRenderer.removeListener('codex:event', listener);
+  },
+
   // Antigravity CLI (Gemini) chat over ACP
   agyStart: (options) => ipcRenderer.invoke('agy:start', options),
   agySend: (id, payload) => ipcRenderer.invoke('agy:send', id, payload),
@@ -159,5 +175,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('agy:event', listener);
     return () => ipcRenderer.removeListener('agy:event', listener);
+  },
+
+  // Orca Mobile: the phone reads and writes yanote's chat tabs
+  mobileStatus: () => ipcRenderer.invoke('mobile:status'),
+  mobileSetEnabled: (enabled) => ipcRenderer.invoke('mobile:setEnabled', enabled),
+  mobileCreatePairing: (address) => ipcRenderer.invoke('mobile:createPairing', address),
+  mobileRevokeDevice: (id) => ipcRenderer.invoke('mobile:revokeDevice', id),
+  mobilePublishTabs: (tabs) => ipcRenderer.send('mobile:publishTabs', tabs),
+  mobilePublishChat: (tabId, snapshot) => ipcRenderer.send('mobile:publishChat', tabId, snapshot),
+  mobilePublishNotes: (notes) => ipcRenderer.send('mobile:publishNotes', notes),
+  mobileActionResult: (reqId, result) => ipcRenderer.send('mobile:actionResult', reqId, result),
+  onMobileAction: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('mobile:action', listener);
+    return () => ipcRenderer.removeListener('mobile:action', listener);
   },
 });

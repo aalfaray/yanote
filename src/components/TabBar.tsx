@@ -1,8 +1,9 @@
 import { t, useLanguage } from '../lib/i18n';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Plus, X, FileText, Check, ChevronLeft, ChevronRight, ChevronDown, Pin, SquareTerminal, Terminal, FolderOpen, Sparkles, Orbit } from 'lucide-react';
+import { Plus, X, FileText, Check, ChevronLeft, ChevronRight, ChevronDown, Pin, SquareTerminal, Terminal, FolderOpen, Sparkles, Orbit, Bot } from 'lucide-react';
 import type { ChatProvider, TabItem, TerminalShell } from '../types/electron';
 import { TabContextMenu } from './ui/TabContextMenu';
+import { FAST_SCROLL_MULTIPLIER } from '../lib/fastScroll';
 
 interface TabBarProps {
   tabs: TabItem[];
@@ -11,7 +12,7 @@ interface TabBarProps {
   onCloseTab: (id: string) => void;
   onNewTab: () => void;
   onNewTerminal?: (shell: TerminalShell) => void;
-  /** Opens a chat with Claude Code, or Antigravity CLI (Gemini), as a structured session instead of the TUI */
+  /** Opens a structured chat with the selected provider */
 
   onNewClaude?: (provider?: ChatProvider) => void;
   /** Browse the disk and open an existing .md file */
@@ -131,7 +132,8 @@ export const TabBar: React.FC<TabBarProps> = ({
   // Convert vertical mouse wheel into horizontal scroll
   const handleWheel = (e: React.WheelEvent) => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollLeft += e.deltaY || e.deltaX;
+      const speed = e.altKey && !e.ctrlKey && !e.metaKey ? FAST_SCROLL_MULTIPLIER : 1;
+      scrollContainerRef.current.scrollLeft += (e.deltaY || e.deltaX) * speed;
       checkScroll();
     }
   };
@@ -202,6 +204,7 @@ export const TabBar: React.FC<TabBarProps> = ({
       {/* Tab List with horizontal mousewheel and hidden native scrollbars */}
       <div
         ref={scrollContainerRef}
+        data-horizontal-wheel
         onWheel={handleWheel}
         onScroll={checkScroll}
         className="flex items-center gap-1.5 flex-1 min-w-0 overflow-x-auto no-scrollbar h-full py-1 px-0.5 scroll-smooth"
@@ -240,6 +243,8 @@ export const TabBar: React.FC<TabBarProps> = ({
                     className="text-warning dark:text-foreground"
                   />
                 </span>
+              ) : tab.kind === 'claude' && tab.provider === 'codex' ? (
+                <Bot size={12} strokeWidth={1.75} className="shrink-0 text-foreground" />
               ) : tab.kind === 'claude' && tab.provider === 'antigravity' ? (
                 <Orbit size={12} strokeWidth={1.75} className="shrink-0 text-[#4285F4]" />
               ) : tab.kind === 'claude' ? (
@@ -363,6 +368,7 @@ export const TabBar: React.FC<TabBarProps> = ({
               ...(onNewClaude
                 ? [
                     { key: 'claude', label: t("Chat con Claude"), hint: 'AI', icon: <Sparkles size={14} strokeWidth={1.75} className="text-[#D97757]" />, action: () => onNewClaude('claude') },
+                    { key: 'codex', label: t("Chat con Codex"), hint: 'AI', icon: <Bot size={14} strokeWidth={1.75} />, action: () => onNewClaude('codex') },
                     {
                       key: 'antigravity',
                       label: t("Chat con Antigravity"),

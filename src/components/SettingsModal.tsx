@@ -3,9 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { Shield, Save, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
+import { Select } from './ui/Select';
 import type { AppConfig } from '../types/electron';
 import { logError } from '../lib/logger';
 import { LoadingSkeleton } from './ui/Skeleton';
+import { MobileRemoteSection } from './MobileRemoteSection';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -138,16 +140,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <span className="font-semibold flex items-center gap-1.5 uppercase text-foreground">
             <Shield size={14} strokeWidth={1.75} /> {' '}{t("Opciones del Editor & Apariencia")}</span>
 
-          <label className="flex flex-col gap-1 font-medium mb-2">
-            {t('Idioma de la aplicación')}
-            <select aria-label={t('Idioma de la aplicación')} value={languagePreference} onChange={(event) => setLanguagePreference(event.target.value as LanguagePreference)} className="h-8 px-2 bg-card border border-border rounded-md">
+          <div className="flex flex-col gap-1 font-medium mb-2">
+            <label htmlFor="app-language-select" className="text-xs font-medium text-foreground">
+              {t('Idioma de la aplicación')}
+            </label>
+            <Select
+              id="app-language-select"
+              size="md"
+              aria-label={t('Idioma de la aplicación')}
+              value={languagePreference}
+              onChange={(event) => setLanguagePreference(event.target.value as LanguagePreference)}
+              className="w-full"
+            >
               <option value="auto">{t('Automático (sistema)')}</option>
               <option value="es">Español</option>
               <option value="en">English</option>
-            </select>
+            </Select>
             <span className="text-[10px] font-medium opacity-60">{t('Idioma del sistema: {0}', [getSystemLanguages()[0] || 'en'])}</span>
             <span className="text-[10px] font-medium opacity-60">{t('Se aplica a la interfaz y al corrector ortográfico.')}</span>
-          </label>
+          </div>
 
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -172,12 +183,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </label>
         </fieldset>}
 
+        {/* Section: chats from the phone (applies at once, not on Save) */}
+        {configLoaded && <MobileRemoteSection isOpen={isOpen} />}
+
         {/* Section: Version & updates */}
         {aboutLoading && !version && <LoadingSkeleton label={t("Cargando versión y actualizaciones")} className="p-3" />}
         {version && (
           <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-card border border-border rounded-md shadow-sm">
             <div className="flex flex-col">
-              <span className="font-semibold uppercase text-foreground">yanote v{version}</span>
+              <span className="font-semibold uppercase text-foreground">YANOTE v{version}</span>
               <span className="text-[10px] text-muted-foreground font-medium">
                 {updateMode === 'portable'
                   ? t("Versión portable: te avisa de nuevas versiones para descargarlas.")

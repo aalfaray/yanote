@@ -4,8 +4,8 @@ import type { ChatProvider, ClaudeEffortLevel, ClaudeEvent, ClaudeImageInput, Cl
 type Result = Promise<{ success: boolean; error?: string }>;
 
 /**
- * What a chat tab needs from its agent. Claude (Agent SDK) and Antigravity (ACP) both speak
- * the same event shapes, so one chat view serves both.
+ * What a chat tab needs from its agent. Each backend adapts its provider's SDK or
+ * protocol to the same event shapes, so one chat view serves all providers.
  */
 
 export interface ChatBackend {
@@ -32,12 +32,30 @@ export interface ChatBackend {
 
 const unsupported = () => Promise.resolve({ success: false, error: t("Esta versión de yanote no permite enviar mensajes a este chat") });
 
-export const PROVIDER_LABELS: Record<ChatProvider, string> = { claude: 'Claude', antigravity: 'Antigravity' };
+export const PROVIDER_LABELS: Record<ChatProvider, string> = { claude: 'Claude', antigravity: 'Antigravity', codex: 'Codex' };
 
 /** The backend for a provider, or null outside Electron / when the build lacks it. */
 
 export function getChatBackend(api: ElectronAPI | undefined, provider: ChatProvider = 'claude'): ChatBackend | null {
   if (!api) return null;
+  if (provider === 'codex') {
+    if (!api.codexStart) return null;
+    return {
+      provider,
+      label: 'Codex',
+      source: 'Codex SDK',
+      loginCommand: 'codex login',
+      start: (o) => api.codexStart!(o),
+      send: (id, p) => api.codexSend ? api.codexSend(id, p) : unsupported(),
+      respondPermission: () => undefined,
+      interrupt: (id) => api.codexInterrupt?.(id),
+      setPermissionMode: (id, m) => api.codexSetPermissionMode?.(id, m),
+      setModel: (id, m) => api.codexSetModel?.(id, m),
+      setEffort: (id, l) => api.codexSetEffort?.(id, l),
+      stop: (id) => api.codexStop?.(id),
+      onEvent: (cb) => api.onCodexEvent?.(cb),
+    };
+  }
   if (provider === 'antigravity') {
     if (!api.agyStart) return null;
     return {

@@ -23,6 +23,8 @@ export interface AppConfig {
   ideas?: SavedIdea[];
   /** Windows notification when a Claude chat finishes or waits for you (default on) */
   notifyClaude?: boolean;
+  /** Orca Mobile can reach the chat tabs over the local network (default off) */
+  mobileRemoteEnabled?: boolean;
   /** History of opened files, newest first */
   recentFiles?: RecentFile[];
   /** File explorer side panel: shown, and its width in px */
@@ -95,6 +97,8 @@ export interface TabItem {
   sessionId?: string;
   /** Agent behind a chat tab (kind === 'claude'); Claude when absent */
   provider?: ChatProvider;
+  /** Bumped when the note's text was replaced from outside the editor (saved from the phone) */
+  revision?: number;
 }
 
 export type TabKind = 'markdown' | 'terminal' | 'claude';
@@ -121,9 +125,9 @@ export interface ChatModeInfo {
 }
 
 /** Which agent a chat tab talks to */
-export type ChatProvider = 'claude' | 'antigravity';
+export type ChatProvider = 'claude' | 'antigravity' | 'codex';
 
-export type ClaudeEffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type ClaudeEffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra';
 
 export interface ClaudeModelInfo {
   value: string;
@@ -147,6 +151,7 @@ export interface ClaudePermissionRequest {
 }
 
 export type ClaudeEvent =
+  | { id: string; type: 'turn_started' }
   | { id: string; type: 'message'; message: Record<string, unknown> }
   | ({ id: string; type: 'permission' } & ClaudePermissionRequest)
   | { id: string; type: 'permission_cancelled'; requestId: string }
@@ -321,6 +326,18 @@ export interface ElectronAPI {
   };
   onClaudeEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
 
+  // Codex SDK chat — same renderer events as Claude
+  codexStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: string; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
+  codexSend?: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => ClaudeResult;
+  codexInterrupt?: (id: string) => ClaudeResult;
+  codexSetPermissionMode?: (id: string, mode: string) => ClaudeResult;
+  codexSetModel?: (id: string, model: string | null) => ClaudeResult;
+  codexSetEffort?: (id: string, level: ClaudeEffortLevel | null) => ClaudeResult;
+  codexStop?: (id: string) => Promise<boolean>;
+  codexHistory?: (sessionId: string) => Promise<Record<string, unknown>[]>;
+  codexLoginCommand?: () => Promise<string>;
+  onCodexEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
+
   // Antigravity CLI (Gemini) chat over ACP — same events as Claude
   agyStart?: (options: { id: string; cwd?: string; resume?: string; permissionMode?: string; model?: string }) => Promise<{ success: boolean; reused?: boolean; error?: string; executable?: string; source?: 'user' | 'bundled' | 'sdk' }>;
   agySend?: (id: string, payload: { text: string; images?: ClaudeImageInput[] }) => ClaudeResult;
@@ -335,7 +352,89 @@ export interface ElectronAPI {
   onAgyEvent?: (callback: (event: ClaudeEvent) => void) => () => void;
   /** Saves the clipboard image as a temp PNG and returns its path; null when there is no image */
   saveClipboardImage?: () => Promise<string | null>;
+
+  /* Orca Mobile: the phone reads and writes the chat tabs */
+  mobileStatus?: () => Promise<MobileRemoteStatus>;
+  mobileSetEnabled?: (enabled: boolean) => Promise<MobileRemoteStatus>;
+  mobileCreatePairing?: (address?: string) => Promise<MobilePairing>;
+  mobileRevokeDevice?: (id: string) => Promise<boolean>;
+  mobilePublishTabs?: (tabs: MobileChatTab[]) => void;
+  mobilePublishChat?: (tabId: string, snapshot: MobileChatSnapshot) => void;
+  mobilePublishNotes?: (notes: MobileOpenNote[]) => void;
+  mobileActionResult?: (reqId: number, result: { success: boolean; error?: string }) => void;
+  onMobileAction?: (callback: (action: MobileAction) => void) => () => void;
 }
+
+export interface MobileRemoteDevice {
+  id: string;
+  name: string;
+  createdAt: number;
+  lastSeenAt: number | null;
+  connected: boolean;
+}
+
+export interface MobileRemoteStatus {
+  enabled: boolean;
+  running: boolean;
+  port: number;
+  error: string | null;
+  addresses: { name: string; address: string; kind: 'lan' | 'tailscale' | 'other' }[];
+  devices: MobileRemoteDevice[];
+}
+
+export interface MobilePairing {
+  success: boolean;
+  error?: string;
+  url?: string;
+  qrDataUrl?: string | null;
+  endpoint?: string;
+}
+
+export interface MobileChatTab {
+  tabId: string;
+  title: string;
+  provider: ChatProvider;
+  active: boolean;
+}
+
+/** A chat item trimmed for the phone (no images, long tool output cut) */
+export type MobileChatItem =
+  | { kind: 'user'; id: string; text: string; imageCount: number }
+  | { kind: 'text' | 'thinking'; id: string; text: string; streaming: boolean }
+  | { kind: 'tool'; id: string; name: string; summary: string; result?: string; isError?: boolean; done: boolean }
+  | { kind: 'permission'; id: string; toolName: string; title?: string; summary: string; status: 'pending' | 'allowed' | 'denied' | 'cancelled' }
+  | { kind: 'result'; id: string; isError: boolean; durationMs: number }
+  | { kind: 'notice'; id: string; text: string; tone: 'info' | 'error' };
+
+export interface MobileChatSnapshot {
+  items: MobileChatItem[];
+  meta: { running: boolean; ended: boolean; starting: boolean; model?: string };
+}
+
+/** A note tab open in yanote, as the phone sees it */
+export interface MobileOpenNote {
+  path: string;
+  title: string;
+  isDirty: boolean;
+}
+
+/** A note in the notes folder, as the phone lists it */
+export interface MobileNoteFile {
+  path: string;
+  name: string;
+  folder: string;
+  mtime: number;
+  size: number;
+  open: boolean;
+  dirty: boolean;
+}
+
+export type MobileAction =
+  | { reqId: number; type: 'send'; tabId: string; text: string }
+  | { reqId: number; type: 'decide'; tabId: string; requestId: string; behavior: 'allow' | 'deny' }
+  | { reqId: number; type: 'interrupt'; tabId: string }
+  /** A note was saved from the phone: its open tab shows the new text */
+  | { reqId: number; type: 'noteSaved'; path: string; content: string };
 
 /** One plan window from /usage: percent used (0-100) and when it resets (ISO) */
 export interface ClaudeUsageWindow {

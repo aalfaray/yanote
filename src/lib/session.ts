@@ -50,7 +50,7 @@ export function restoreTab(saved: SavedTab, id: string): TabItem | null {
         sessionId: saved.sessionId,
         accountId: saved.accountId,
         chatPins: saved.pins,
-        ...(saved.provider === 'antigravity' ? { provider: 'antigravity' as const } : {}),
+        ...(saved.provider === 'antigravity' || saved.provider === 'codex' ? { provider: saved.provider } : {}),
       };
     case 'scratch':
       // Never saved to disk: it still counts as unsaved

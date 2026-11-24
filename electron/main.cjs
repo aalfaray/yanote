@@ -9,6 +9,7 @@ const { createTerminalService } = require('./services/terminalService.cjs');
 const { savePastedImage } = require('./services/clipboardImageService.cjs');
 const { createClaudeChatService, findClaudeExecutable, findBundledExecutable } = require('./services/claudeChatService.cjs');
 const { createAntigravityChatService } = require('./services/antigravityChatService.cjs');
+const { createCodexChatService } = require('./services/codexChatService.cjs');
 const { createAntigravityUsageService } = require('./services/antigravityUsageService.cjs');
 const { createExportService } = require('./services/exportService.cjs');
 const { createClaudeAccountService } = require('./services/claudeAccountService.cjs');
@@ -23,6 +24,7 @@ const fileTreeService = require('./services/fileTreeService.cjs');
 const { createEditCommandService } = require('./services/editCommandService.cjs');
 const { createSpellcheckService } = require('./services/spellcheckService.cjs');
 const { createLanguageService } = require('./services/languageService.cjs');
+const { createMobileRemoteService } = require('./services/mobileRemoteService.cjs');
 
 // E2E tests (Playwright) run on a throwaway data folder so they never touch the user's notes or settings
 if (process.env.YANOTE_USER_DATA) {
@@ -55,6 +57,7 @@ const terminalService = createTerminalService();
 // Bundled Claude Code is the fallback when the user has none installed
 const claudeChatService = createClaudeChatService({ requireInstalledCli: app.isPackaged });
 const agyChatService = createAntigravityChatService();
+const codexChatService = createCodexChatService();
 const agyUsageService = createAntigravityUsageService();
 const fileTreeWatcher = fileTreeService.createFileTreeWatcher();
 let updateService = null;
@@ -81,6 +84,35 @@ function updateConfig(newConfig) {
   if (mainWindow && newConfig.darkMode !== undefined) mainWindow.setBackgroundColor(windowBackground());
   if (mainWindow && newConfig.language !== undefined) spellcheckService.configure(mainWindow.webContents.session, languageService.info().language);
   return appConfig;
+}
+
+// Orca Mobile app -> yanote's chat tabs. Phone actions run in the renderer, through the same
+// code as typing in the tab, so the desktop transcript and the phone always agree.
+const pendingMobileActions = new Map();
+let nextMobileAction = 1;
+const mobileRemoteService = createMobileRemoteService({
+  dataDir,
+  bundleDir: path.join(__dirname, '..', 'dist', 'mobile-web'),
+  appVersion: app.getVersion(),
+  getNotesRoot: () => appConfig.notesPath,
+  requestAction: (action) =>
+    new Promise((resolve) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return resolve({ success: false, error: 'yanote no tiene la ventana abierta' });
+      const reqId = nextMobileAction++;
+      const timer = setTimeout(() => {
+        pendingMobileActions.delete(reqId);
+        resolve({ success: false, error: 'yanote no respondió a tiempo' });
+      }, 15000);
+      pendingMobileActions.set(reqId, (result) => {
+        clearTimeout(timer);
+        resolve(result);
+      });
+      mainWindow.webContents.send('mobile:action', { reqId, ...action });
+    }),
+});
+
+function mobileStatus() {
+  return { enabled: appConfig.mobileRemoteEnabled === true, ...mobileRemoteService.status() };
 }
 
 // Several Claude accounts, each one a Claude Code config folder under the app's data
@@ -147,6 +179,7 @@ function createWindow() {
     claudeChatService.stopAll();
     accountUsageService.stopAll();
     agyChatService.stopAll();
+    codexChatService.stopAll();
     fileTreeWatcher.unwatchAll();
     mainWindow = null;
   });
@@ -183,7 +216,10 @@ function setupUpdates() {
   updateTimer = setInterval(() => updateService.check(), UPDATE_CHECK_INTERVAL_MS);
 }
 
-app.on('before-quit', () => clearInterval(updateTimer));
+app.on('before-quit', () => {
+  clearInterval(updateTimer);
+  void mobileRemoteService.stop();
+});
 
 // Folder/file yanote was launched with, waiting for the renderer to ask for it
 let pendingOpenTarget = parseOpenTarget(process.argv, { skip: ARG_SKIP });
@@ -223,6 +259,7 @@ app.whenReady().then(async () => {
   if (!hasInstanceLock) return;
   fileService.ensureNotesDir(appConfig.notesPath);
   createWindow();
+  if (appConfig.mobileRemoteEnabled) void mobileRemoteService.start();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -521,6 +558,21 @@ ipc.handle('export:saveText', (_, options) => exportService.saveText(options));
 ipc.handle('shell:openPath', (_, filePath) => (typeof filePath === 'string' && filePath ? shell.openPath(filePath) : ''));
 
 // Antigravity CLI (Gemini) chats: same renderer contract as Claude, driven over ACP
+ipc.handle('codex:start', (event, options) => {
+  const sender = event.sender;
+  return codexChatService.start({ ...options, fallbackCwd: appConfig.notesPath }, (chatEvent) => {
+    if (!sender.isDestroyed()) sender.send('codex:event', chatEvent);
+  });
+});
+ipc.handle('codex:send', (_, id, payload) => codexChatService.sendMessage(id, payload));
+ipc.handle('codex:interrupt', (_, id) => codexChatService.interrupt(id));
+ipc.handle('codex:setPermissionMode', (_, id, mode) => codexChatService.setPermissionMode(id, mode));
+ipc.handle('codex:setModel', (_, id, model) => codexChatService.setModel(id, model));
+ipc.handle('codex:setEffort', (_, id, level) => codexChatService.setEffort(id, level));
+ipc.handle('codex:stop', (_, id) => codexChatService.stop(id));
+ipc.handle('codex:history', (_, id) => codexChatService.readHistory(id));
+ipc.handle('codex:loginCommand', () => codexChatService.loginCommand());
+
 ipc.handle('agy:start', (event, options) => {
   const sender = event.sender;
   return agyChatService.start({ ...options, fallbackCwd: appConfig.notesPath }, (chatEvent) => {
@@ -535,6 +587,27 @@ ipc.handle('agy:setModel', (_, id, model) => agyChatService.setModel(id, model))
 ipc.handle('agy:setEffort', (_, id, level) => agyChatService.setEffort(id, level));
 ipc.handle('agy:stop', (_, id) => agyChatService.stop(id));
 ipc.handle('agy:usage', (_, id, force) => agyUsageService.usage(agyChatService.modelOf(id), force === true));
+
+// IPC - Orca Mobile (chats from the phone)
+ipc.handle('mobile:status', () => mobileStatus());
+ipc.handle('mobile:setEnabled', async (_, enabled) => {
+  updateConfig({ mobileRemoteEnabled: enabled === true });
+  const res = enabled === true ? await mobileRemoteService.start() : (await mobileRemoteService.stop(), { success: true });
+  return { ...mobileStatus(), ...(res.success ? {} : { error: res.error }) };
+});
+ipc.handle('mobile:createPairing', (_, address) =>
+  mobileRemoteService.isRunning() ? mobileRemoteService.createPairing({ address }) : { success: false, error: 'Activa primero el acceso desde el móvil' }
+);
+ipc.handle('mobile:revokeDevice', (_, id) => mobileRemoteService.revokeDevice(id));
+ipc.on('mobile:publishTabs', (_, tabs) => mobileRemoteService.publishTabs(tabs));
+ipc.on('mobile:publishChat', (_, tabId, snapshot) => mobileRemoteService.publishChat(tabId, snapshot));
+ipc.on('mobile:publishNotes', (_, notes) => mobileRemoteService.publishNotes(notes));
+ipc.on('mobile:actionResult', (_, reqId, result) => {
+  const finish = pendingMobileActions.get(reqId);
+  if (!finish) return;
+  pendingMobileActions.delete(reqId);
+  finish(result && typeof result === 'object' ? result : { success: false });
+});
 
 // IPC - App version & updates
 ipc.handle('app:getVersion', () => app.getVersion());

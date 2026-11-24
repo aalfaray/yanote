@@ -50,12 +50,13 @@ describe('App: usage belongs to the chat provider', () => {
     expect(screen.queryByTestId('antigravity-usage')).not.toBeInTheDocument();
   });
 
-  it('does not request Claude quota for a session containing only Antigravity', async () => {
+  it.each(['antigravity', 'codex'] as const)('does not request Claude quota for a session containing only %s', async (provider) => {
     vi.mocked(window.electronAPI!.getAppConfig).mockResolvedValue({
-      notesPath: '/notes', openTabs: [{ kind: 'claude', title: 'Antigravity', provider: 'antigravity' }],
+      notesPath: '/notes',
+      openTabs: [{ kind: 'claude', title: provider, provider }],
     });
     render(<App />);
-    await screen.findAllByText('Antigravity');
+    await screen.findAllByText(provider);
     expect(vi.mocked(useClaudeUsage).mock.lastCall).toEqual([[], undefined]);
     expect(screen.queryByTestId('claude-usage')).not.toBeInTheDocument();
   });

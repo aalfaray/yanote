@@ -22,6 +22,7 @@ import {
   Download,
   UserRound,
   ChevronDown,
+  Bot,
 } from 'lucide-react';
 import type { ChatPin, ChatProvider, ClaudeEffortLevel, ClaudeImageInput, ClaudePermissionMode, ClaudePermissionRequest } from '../types/electron';
 import { getChatBackend, PROVIDER_LABELS } from '../lib/chatBackends';
@@ -53,11 +54,13 @@ import { useReadAloudRequests } from '../hooks/useReadAloudRequests';
 import { useSpeech } from '../hooks/useSpeech';
 import { SpeechPlayerBar } from './SpeechControls';
 import { DismissButton } from './ui/DismissButton';
+import { Select } from './ui/Select';
 import { ClaudeAccountMenu } from './ClaudeAccountMenu';
 import { LoadingSkeleton } from './ui/Skeleton';
 import { PinnedStrip } from './ChatPinnedStrip';
 import { reportAgent, deriveFileActivity } from '../lib/agentActivity';
 import { useDraftHistory } from '../hooks/useDraftHistory';
+import { publishMobileChat, registerMobileChat, toMobileItems } from '../lib/mobileMirror';
 
 interface ClaudeChatViewProps {
   tabId: string;
@@ -70,6 +73,7 @@ interface ClaudeChatViewProps {
   /** Opens Claude Code's own sign-in (`claude auth login`) for that account */
 
   onLogin?: (account: { id: string; name: string }) => void;
+  onProviderLogin?: () => void;
   /** Claude account this chat uses (see ClaudeAccountMenu); the main one when missing */
 
   accountId?: string;
@@ -83,7 +87,7 @@ interface ClaudeChatViewProps {
 
   pins?: ChatPin[];
   onUnpin?: (pinId: string) => void;
-  /** Agent behind this chat: Claude Code (default) or Antigravity CLI (Gemini) */
+  /** Agent behind this chat: Claude Code (default), Codex SDK or Antigravity CLI */
 
   provider?: ChatProvider;
 }
@@ -468,6 +472,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   onSessionId,
   resumeSessionId,
   onLogin,
+  onProviderLogin,
   accountId: initialAccountId,
   onAccountChange,
   initialDraft,
@@ -484,10 +489,10 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const [images, setImages] = useState<(ClaudeImageInput & { url: string })[]>([]);
   // Claude's last mode/model carry over to new chats; other agents have their own sets
   const isClaude = provider === 'claude';
-  const [mode, setMode] = useState<string>(() => (isClaude ? loadChatPrefs().mode : undefined) ?? 'default');
+  const [mode, setMode] = useState<string>(() => (isClaude ? loadChatPrefs().mode : undefined) ?? (provider === 'codex' ? 'read-only' : 'default'));
   const [cmdIndex, setCmdIndex] = useState(0);
   const [starting, setStarting] = useState(true);
-  const [historyLoading, setHistoryLoading] = useState(Boolean(provider === 'claude' && resumeSessionId && window.electronAPI?.claudeHistory));
+  const [historyLoading, setHistoryLoading] = useState(Boolean(resumeSessionId && (provider === 'claude' ? window.electronAPI?.claudeHistory : provider === 'codex' ? window.electronAPI?.codexHistory : false)));
   const [restartKey, setRestartKey] = useState(0);
   const [selectedModel, setSelectedModel] = useState(() => (isClaude ? loadChatPrefs().model : undefined) ?? '');
   // Read by the start effect: a restarted process (Reanudar, other account) keeps the picked model
@@ -524,7 +529,9 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const backend = useMemo(() => getChatBackend(api, provider), [api, provider]);
   const agentName = PROVIDER_LABELS[provider];
   // Claude's modes are built in; Antigravity reports its own
-  const modes = provider === 'claude' || !state.modes?.length ? getModes() : state.modes.map((m) => ({ value: m.id, label: m.name, hint: m.description || m.name }));
+  const modes = state.modes?.length && !isClaude
+    ? state.modes.map((m) => ({ value: m.id, label: provider === 'codex' ? t(m.name) : m.name, hint: provider === 'codex' ? t(m.description || m.name) : m.description || m.name }))
+    : provider === 'codex' ? [{ value: 'read-only', label: t("Solo lectura"), hint: '' }] : getModes();
 
   // Start (or resume) the agent process for this tab
   useEffect(() => {
@@ -663,11 +670,13 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     };
   }, [api, isClaude, accountId, cwd]);
 
-  // A chat restored after a restart: show the conversation so far (Claude resumes it on the next message)
+  // Show the saved transcript; the SDK resumes the conversation on the next message.
   useEffect(() => {
-    if (!isClaude || !resumeSessionId || !api?.claudeHistory) return;
+    if (!resumeSessionId) return;
+    const loadHistory = isClaude ? api?.claudeHistory?.(resumeSessionId, accountRef.current) : provider === 'codex' ? api?.codexHistory?.(resumeSessionId) : undefined;
+    if (!loadHistory) return;
     let cancelled = false;
-    void api.claudeHistory(resumeSessionId, accountRef.current).then((messages) => {
+    void loadHistory.then((messages) => {
       if (!cancelled && Array.isArray(messages) && messages.length) dispatch({ type: 'history', messages });
     }).catch((err) => {
       if (!cancelled) dispatch({ type: 'notice', text: t("No se pudo cargar el historial anterior."), tone: 'error' });
@@ -803,6 +812,11 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       setAccountMenuOpen(true);
       return;
     }
+    if (provider === 'codex' && /^\/login\s*$/i.test(text)) {
+      resetDraft('');
+      onProviderLogin?.();
+      return;
+    }
     if ((!text && images.length === 0) || !backend || starting || state.ended) return;
     const payload = { text, images: images.map(({ data, mediaType }) => ({ data, mediaType })) };
     // A new message from the user: every account may be tried again if a limit shows up
@@ -820,7 +834,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
       setDraft((current) => current || text);
       setImages((current) => current.length ? current : images);
     }
-  }, [draft, images, backend, tabId, starting, state.ended, isClaude, setDraft, resetDraft]);
+  }, [draft, images, backend, tabId, starting, state.ended, isClaude, provider, onProviderLogin, setDraft, resetDraft]);
 
   const interrupt = useCallback(() => {
     backend?.interrupt(tabId);
@@ -833,6 +847,49 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     },
     [backend, tabId]
   );
+
+  /** A message typed on the phone (Orca Mobile): the same steps as Enter, without the draft. */
+  const sendFromPhone = useCallback(
+    async (text: string): Promise<{ success: boolean; error?: string }> => {
+      if (!backend) return { success: false, error: t("Este chat no puede recibir mensajes") };
+      if (starting) return { success: false, error: t("El chat todavía se está iniciando") };
+      if (state.ended) return { success: false, error: t("Este chat terminó: reanúdalo en el ordenador") };
+      triedAccountsRef.current.clear();
+      setAutoSwitch('idle');
+      dispatch({ type: 'send', text, imageCount: 0 });
+      stickRef.current = true;
+      try {
+        const res = await backend.send(tabId, { text, images: [] });
+        if (!res.success) throw new Error(res.error || t("No se pudo enviar el mensaje"));
+        return { success: true };
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        dispatch({ type: 'event', event: { id: tabId, type: 'error', error } });
+        return { success: false, error };
+      }
+    },
+    [backend, tabId, starting, state.ended]
+  );
+
+  const mobileRef = useRef({ sendFromPhone, decide, interrupt });
+  mobileRef.current = { sendFromPhone, decide, interrupt };
+  useEffect(
+    () =>
+      registerMobileChat(tabId, {
+        send: (text) => mobileRef.current.sendFromPhone(text),
+        decide: (requestId, behavior) => mobileRef.current.decide(requestId, { behavior }),
+        interrupt: () => mobileRef.current.interrupt(),
+      }),
+    [tabId]
+  );
+  const modelShown = state.appliedModel || state.model;
+  useEffect(() => {
+    const items = state.items;
+    publishMobileChat(tabId, () => ({
+      items: toMobileItems(items),
+      meta: { running: state.running, ended: state.ended, starting, ...(modelShown ? { model: modelShown } : {}) },
+    }));
+  }, [tabId, state.items, state.running, state.ended, starting, modelShown]);
 
   const changeMode = async (next: string) => {
     setMode(next);
@@ -953,7 +1010,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
   const streamingSomething = state.items.some((i) => (i.kind === 'text' || i.kind === 'thinking') && i.streaming);
   const cwdPath = (state.cwd || cwd || '').trim();
   // What Claude will really use next turn (its resolved settings), falling back to what it last reported
-  const shownModelId = state.appliedModel || state.model;
+  const shownModelId = provider === 'codex' ? (selectedModel && selectedModel !== 'default' ? selectedModel : '') : state.appliedModel || state.model;
   // Claude ids read better formatted; other agents (Antigravity) report their own display names
   const shownModel = shownModelId?.startsWith('claude-')
     ? modelLabel(shownModelId)
@@ -989,7 +1046,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
     >
       {/* Session strip */}
       <div className="h-8 shrink-0 flex items-center gap-1.5 px-2 border-b border-border text-[10.5px] font-semibold overflow-hidden whitespace-nowrap">
-        <Sparkles size={13} strokeWidth={1.75} className="shrink-0 text-[#D97757]" />
+        {provider === 'codex' ? <Bot size={13} strokeWidth={1.75} className="shrink-0" /> : <Sparkles size={13} strokeWidth={1.75} className="shrink-0 text-[#D97757]" />}
         {/* Full working folder; when it doesn't fit it trims from the left so the folder name stays visible */}
         <span className="truncate min-w-0 [direction:rtl] text-left" title={cwdPath || agentName} data-testid="claude-cwd">
           <bdi dir="ltr">{cwdPath || agentName}</bdi>
@@ -1006,6 +1063,11 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
         )}
         {!shownModel && (starting || defaultsLoading) && <LoadingSkeleton label={t("Cargando modelo del chat")} variant="line" className="hidden min-[360px]:flex" />}
         <span className="flex-1" />
+        {provider === 'codex' && onProviderLogin && (
+          <button type="button" onClick={onProviderLogin} title={t("Iniciar sesión en Codex")} aria-label={t("Iniciar sesión en Codex")} className={`${btn} h-6 px-1.5 bg-card dark:bg-muted`}>
+            <UserRound size={11} strokeWidth={1.75} />
+          </button>
+        )}
         {isClaude && (
           <button
             type="button"
@@ -1091,10 +1153,10 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
           )}
           {visible.length === 0 && !starting && !historyLoading && (
             <div className="pt-10 text-center space-y-2">
-              <Sparkles size={28} strokeWidth={2} className="mx-auto text-[#D97757]" />
+              {provider === 'codex' ? <Bot size={28} strokeWidth={2} className="mx-auto" /> : <Sparkles size={28} strokeWidth={2} className="mx-auto text-[#D97757]" />}
               <div className="text-sm font-semibold">{t("¿En qué te ayudo?")}</div>
               <div className="text-[11px] opacity-60">
-                {t("Trabaja en")}{' '}<span className="font-mono">{state.cwd || cwd || t("la carpeta de notas")}</span>{t(". Escribe")}{' '}<span className="font-mono">/</span> {' '}{t("para ver comandos.")}</div>
+                {t("Trabaja en")}{' '}<span className="font-mono">{state.cwd || cwd || t("la carpeta de notas")}</span>{provider !== 'codex' && <>{t(". Escribe")}{' '}<span className="font-mono">/</span> {' '}{t("para ver comandos.")}</>}</div>
             </div>
           )}
 
@@ -1176,11 +1238,11 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
           {state.authRequired && (
             <div className={`${card} p-3 space-y-2 bg-muted`} role="alert">
               <div className="flex items-center gap-1.5 text-[13px] font-semibold">
-                <ShieldCheck size={15} strokeWidth={1.75} /> {' '}{t("Inicia sesión en Claude")}</div>
+                <ShieldCheck size={15} strokeWidth={1.75} /> {' '}{provider === 'codex' ? t("Iniciar sesión en Codex") : t("Inicia sesión en Claude")}</div>
               <p className="text-[12px] opacity-80">
-                {t("El chat usa Claude Code con tu propia cuenta: tu suscripción de Claude o una API key de Anthropic. Se abrirá una terminal con el inicio de sesión oficial de Claude Code, que continúa en tu navegador. yanote no ve tus credenciales.")}</p>
+                {provider === 'codex' ? t("Inicia sesión con tu cuenta de ChatGPT mediante el acceso oficial de Codex. Después vuelve a este chat y pulsa reintentar.") : t("El chat usa Claude Code con tu propia cuenta: tu suscripción de Claude o una API key de Anthropic. Se abrirá una terminal con el inicio de sesión oficial de Claude Code, que continúa en tu navegador. yanote no ve tus credenciales.")}</p>
               <div className="flex flex-wrap gap-1.5">
-                <button type="button" onClick={() => onLogin?.({ id: accountId, name: accountName })} className={`${btn} h-7 px-2.5 bg-accent text-foreground`}>
+                <button type="button" onClick={() => provider === 'codex' ? onProviderLogin?.() : onLogin?.({ id: accountId, name: accountName })} className={`${btn} h-7 px-2.5 bg-accent text-foreground`}>
                   {t("Iniciar sesión")}{accountId !== 'default' ? ` (${accountName})` : ''}
                 </button>
                 {isClaude && (
@@ -1306,7 +1368,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                   void addFiles(files);
                 }
               }}
-              placeholder={state.ended ? t("Sesión terminada — pulsa Reanudar") : state.running ? t("Escribe para encolar otro mensaje…") : t("Pregúntale a {0}… ( / comandos )", [agentName])}
+              placeholder={state.ended ? t("Sesión terminada — pulsa Reanudar") : state.running ? t("Escribe para encolar otro mensaje…") : provider === 'codex' ? t("Pregúntale a Codex…") : t("Pregúntale a {0}… ( / comandos )", [agentName])}
               disabled={state.ended}
               aria-label={t("Mensaje para {0}", [agentName])}
               className="w-full resize-none bg-transparent outline-none text-[13px] leading-snug px-1 py-0.5 placeholder:text-foreground/40 dark:placeholder:text-muted-foreground"
@@ -1314,14 +1376,15 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
             <div className="flex items-end gap-1 mt-1">
               {/* Pickers wrap onto a second line on narrow windows; send/stop stay pinned right */}
               <div className="flex flex-1 min-w-0 flex-wrap items-center gap-1">
-              <select
+              <Select
+                size="xs"
                 value={mode}
                 onChange={(e) => void changeMode(e.target.value)}
                 title={modes.find((m) => m.value === mode)?.hint}
                 aria-label={t("Modo de permisos")}
-                className={`h-6 max-w-[9.5rem] px-1 text-[10.5px] font-semibold border border-border dark:border-border rounded-md cursor-pointer outline-none ${
-                  mode === 'bypassPermissions'
-                    ? 'bg-destructive text-destructive-foreground'
+                className={`max-w-[9.5rem] px-1 font-semibold ${
+                  mode === 'bypassPermissions' || mode === 'danger-full-access'
+                    ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
                     : mode === 'plan'
                     ? 'bg-secondary text-foreground'
                     : mode === 'acceptEdits' || mode === 'accept-edits' || mode === 'auto'
@@ -1330,35 +1393,37 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                 }`}
               >
                 {modes.map((m) => (
-                  <option key={m.value} value={m.value}>
+                  <option key={m.value} value={m.value} title={m.hint}>
                     {m.label}
                   </option>
                 ))}
-              </select>
+              </Select>
               {state.models.length > 0 && (
-                <select
+                <Select
+                  size="xs"
                   value={selectedModel || modelInfo?.value || ''}
                   onChange={(e) => void changeModel(e.target.value)}
                   aria-label={t("Modelo")}
                   title={modelInfo?.description || t("Modelo")}
-                  className="h-6 max-w-[9.5rem] px-1 text-[10.5px] font-semibold border border-border rounded-md cursor-pointer outline-none bg-card dark:bg-muted"
+                  className="max-w-[9.5rem] px-1 font-semibold bg-card dark:bg-muted"
                 >
                   {!modelInfo && <option value="">{t("Modelo")}</option>}
                   {state.models.map((m) => (
-                    <option key={m.value} value={m.value}>
+                    <option key={m.value} value={m.value} title={m.description}>
                       {modelOptionLabel(m)}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
               {starting && state.models.length === 0 && <LoadingSkeleton label={t("Cargando modelos disponibles")} variant="line" className="max-w-24 py-1.5" />}
               {effortLevels.length > 0 && (
-                <select
+                <Select
+                  size="xs"
                   value={shownEffort}
                   onChange={(e) => void changeEffort(e.target.value as ClaudeEffortLevel | '')}
                   aria-label={t("Esfuerzo")}
                   title={t("Esfuerzo de razonamiento para {0} (se recuerda por modelo)", [modelInfo?.displayName ?? t("este modelo")])}
-                  className={`h-6 max-w-[7rem] px-1 text-[10.5px] font-semibold border border-border dark:border-border rounded-md cursor-pointer outline-none ${
+                  className={`max-w-[7rem] px-1 font-semibold ${
                     shownEffort === 'max' || shownEffort === 'xhigh' ? 'bg-secondary text-foreground' : 'bg-card dark:bg-muted'
                   }`}
                 >
@@ -1368,7 +1433,7 @@ export const ClaudeChatView: React.FC<ClaudeChatViewProps> = ({
                       {EFFORT_LABELS[l]}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
               <label title={t("Adjuntar imagen")} className={`${btn} h-6 w-6 bg-card dark:bg-muted`}>
                 <ImagePlus size={12} strokeWidth={1.75} />

@@ -163,7 +163,7 @@ function onStreamEvent(state: ChatState, msg: Json): ChatState {
     };
   }
 
-  const current = state.currentMsg;
+  const current = str(msg.message_id) || state.currentMsg;
   if (!current) return state;
   const index = Number(ev.index ?? -1);
 
@@ -391,6 +391,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'event': {
       const ev = action.event;
       switch (ev.type) {
+        case 'turn_started':
+          return { ...state, running: true, ended: false };
         case 'message':
           return onMessage(state, ev.message);
         case 'permission': {
@@ -531,6 +533,7 @@ export const EFFORT_LABELS: Record<ClaudeEffortLevel, string> = {
   get high() { return t("Alto"); },
   get xhigh() { return t("Muy alto"); },
   get max() { return t("Máximo"); },
+  get ultra() { return 'Ultra'; },
 };
 
 /**

@@ -76,7 +76,7 @@ function sanitizeOpenTabs(list) {
         ...(typeof t.sessionId === 'string' && /^[\w-]{1,100}$/.test(t.sessionId) ? { sessionId: t.sessionId } : {}),
         ...(typeof t.accountId === 'string' && /^[\w-]{1,64}$/.test(t.accountId) ? { accountId: t.accountId } : {}),
         ...(pins.length ? { pins } : {}),
-        ...(t.provider === 'antigravity' ? { provider: 'antigravity' } : {}),
+        ...(t.provider === 'antigravity' || t.provider === 'codex' ? { provider: t.provider } : {}),
       });
     } else {
       continue;
@@ -121,6 +121,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
         notesPath: parsed.notesPath || defaultNotesPath,
         language: normalizeLanguage(parsed.language),
         notifyClaude: parsed.notifyClaude !== false,
+        mobileRemoteEnabled: parsed.mobileRemoteEnabled === true,
         ideas: sanitizeIdeas(parsed.ideas),
         claudeAccounts: Array.isArray(parsed.claudeAccounts) ? parsed.claudeAccounts : [],
         activeClaudeAccount: typeof parsed.activeClaudeAccount === 'string' ? parsed.activeClaudeAccount : 'default',
@@ -144,6 +145,7 @@ function loadConfig(configFilePath, defaultNotesPath) {
     notesPath: defaultNotesPath,
     language: 'auto',
     notifyClaude: true,
+    mobileRemoteEnabled: false,
     ideas: [],
     claudeAccounts: [],
     activeClaudeAccount: 'default',

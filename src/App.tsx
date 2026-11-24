@@ -19,10 +19,12 @@ import { AntigravityUsageMeter } from './components/AntigravityUsageMeter';
 import { useAntigravityUsage } from './hooks/useAntigravityUsage';
 import { LoadingSkeleton } from './components/ui/Skeleton';
 import { chatNotificationFor } from './lib/claudeNotify';
+import { PROVIDER_LABELS } from './lib/chatBackends';
 import { DismissButton } from './components/ui/DismissButton';
 import { IdeasDrawer } from './components/IdeasDrawer';
 import { addIdea, removeIdea } from './lib/ideas';
 import { toSavedTabs, restoreTab } from './lib/session';
+import { installMobileActions, publishMobileNotes, publishMobileTabs } from './lib/mobileMirror';
 import { useAppContextMenu } from './hooks/useAppContextMenu';
 import { readAloudTarget, requestReadAloud } from './lib/readAloud';
 import { logError } from './lib/logger';
@@ -55,6 +57,29 @@ export const App: React.FC = () => {
     },
   ]);
   const [activeTabId, setActiveTabId] = useState<string>(STARTUP_TAB_ID);
+
+  // Orca Mobile: the phone lists the chat tabs and acts on them, and reads/edits the notes
+  useEffect(
+    () =>
+      installMobileActions((path, content) => {
+        const same = (p: string | null) => Boolean(p) && p!.toLowerCase() === path.toLowerCase();
+        // Only clean tabs: the main process refuses phone saves over unsaved desktop edits
+        setTabs((prev) => prev.map((tab) => (same(tab.path) && !tab.isDirty ? { ...tab, content, revision: (tab.revision ?? 0) + 1 } : tab)));
+      }),
+    []
+  );
+  useEffect(() => {
+    publishMobileTabs(
+      tabs
+        .filter((tab) => tab.kind === 'claude')
+        .map((tab) => ({ tabId: tab.id, title: tab.title, provider: tab.provider ?? 'claude', active: tab.id === activeTabId }))
+    );
+    publishMobileNotes(
+      tabs
+        .filter((tab) => tab.kind !== 'claude' && tab.kind !== 'terminal' && tab.path)
+        .map((tab) => ({ path: tab.path!, title: tab.title, isDirty: Boolean(tab.isDirty) }))
+    );
+  }, [tabs, activeTabId]);
   // Set once the previous session is restored: saving before that would wipe it
   const [sessionReady, setSessionReady] = useState(!window.electronAPI);
   // Settings > "Avisarme cuando Claude termine" (on by default)
@@ -295,14 +320,14 @@ export const App: React.FC = () => {
   };
 
   const handleNewClaude = (folder?: string, initialDraft?: string, provider: ChatProvider = 'claude') => {
-    const newId = `${provider === 'antigravity' ? 'agy' : 'claude'}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const newId = `${provider}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     // Same folder rule as terminals: where the active note lives, else the notes folder
     const current = tabs.find((t) => t.id === activeTabId);
     const cwd =
       folder ??
       (current?.kind === 'terminal' || current?.kind === 'claude' ? current.cwd : parentDir(current?.path ?? null) ?? undefined);
     setTabs((prev) => {
-      const baseName = provider === 'antigravity' ? 'Antigravity' : 'Claude';
+      const baseName = PROVIDER_LABELS[provider];
       const count = prev.filter((t) => t.kind === 'claude' && (t.provider ?? 'claude') === provider).length + 1;
       return [
         ...prev,
@@ -331,6 +356,13 @@ export const App: React.FC = () => {
     const command = (await window.electronAPI?.claudeAccounts?.loginCommand(account.id)) || 'claude auth login';
     const title = account.id === 'default' ? t("Iniciar sesión en Claude") : t("Iniciar sesión: {0}", [account.name]);
     handleNewTerminal('powershell', { title, initialCommand: command });
+  };
+
+  const handleCodexLogin = async (cwd?: string) => {
+    try {
+      const command = await window.electronAPI?.codexLoginCommand?.();
+      if (command) handleNewTerminal('powershell', { title: t("Iniciar sesión en Codex"), initialCommand: command, cwd });
+    } catch (err) { logError('App.codexLogin', err); }
   };
 
   // A chat moved to another account: remember it on the tab and for the next chats
@@ -885,8 +917,8 @@ export const App: React.FC = () => {
   }, []);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
-  const claudeTabIds = tabs.filter((t) => t.kind === 'claude' && t.provider !== 'antigravity').map((t) => t.id);
-  const isClaudeCodeActive = activeTab?.kind === 'claude' && activeTab.provider !== 'antigravity';
+  const claudeTabIds = tabs.filter((t) => t.kind === 'claude' && (t.provider ?? 'claude') === 'claude').map((t) => t.id);
+  const isClaudeCodeActive = activeTab?.kind === 'claude' && (activeTab.provider ?? 'claude') === 'claude';
   const claudeUsage = useClaudeUsage(claudeTabIds, isClaudeCodeActive ? activeTab.id : undefined);
   const isAntigravityActive = activeTab?.kind === 'claude' && activeTab.provider === 'antigravity';
   const antigravityUsage = useAntigravityUsage(isAntigravityActive ? activeTab.id : undefined);
@@ -1014,6 +1046,7 @@ export const App: React.FC = () => {
               isActive={t.id === activeTab?.id}
               provider={t.provider ?? 'claude'}
               onLogin={(a) => void handleClaudeLogin(a)}
+              onProviderLogin={() => void handleCodexLogin(t.cwd)}
               accountId={t.accountId}
               initialDraft={t.initialDraft}
               pins={t.chatPins}
@@ -1028,6 +1061,8 @@ export const App: React.FC = () => {
           <LoadingSkeleton label={t("Restaurando sesión")} className="p-5 max-w-3xl w-full mx-auto" />
         ) : isTerminalActive ? null : activeTab ? (
           <Editor
+            // A note saved from the phone replaces the text: start the editor over with it
+            key={`revision-${activeTab.revision ?? 0}`}
             tabId={activeTab.id}
             markdown={activeTab.content}
             onChange={handleContentChange}

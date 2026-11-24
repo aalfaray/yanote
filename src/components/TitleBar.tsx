@@ -72,7 +72,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({
       <div className="flex items-center gap-1 min-[420px]:gap-1.5 no-drag min-w-0 shrink">
         <div className="h-7 flex items-center gap-1.5 font-semibold text-xs text-foreground px-1.5 min-[480px]:px-2 shrink-0">
           <NotebookPen size={15} strokeWidth={1.75} />
-          <span className="hidden min-[480px]:inline">yanote</span>
+          <span className="hidden min-[480px]:inline">YANOTE</span>
         </div>
 
         {/* File explorer (left panel) */}
