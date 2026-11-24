@@ -1,5 +1,11 @@
 # Cambios de yanote
 
+## v1.8.0
+
+- Chat con Codex desde «+ NUEVA»: inicio de sesión, imágenes, elección de modelo y esfuerzo de razonamiento, y conversaciones que se retoman tras reiniciar. Permisos: Solo lectura, Editar carpeta o Acceso total.
+- Acceso desde el teléfono con Orca Mobile a los chats de Claude, Codex y Antigravity: emparejado con código QR, en la misma Wi‑Fi o por Tailscale.
+- Manteniendo Alt, el editor y las pestañas se desplazan más rápido.
+
 ## v1.7.0
 
 - Modo oscuro con los colores del tema One Dark Pro de VS Code: interfaz, resaltado de código y terminal.
